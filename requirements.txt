@@ -1,0 +1,7 @@
+# wg-friend - WireGuard Peer Manager
+# Minimal dependencies for standalone operation
+
+rich>=13.0.0          # TUI framework
+paramiko>=3.0.0       # SSH operations
+segno>=1.6.0          # QR code generation
+pyyaml>=6.0           # Config file parsing
