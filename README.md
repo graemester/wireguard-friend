@@ -47,11 +47,13 @@ pip install -r requirements.txt
 # Setup from scratch (interactive wizard)
 ./wg-friend-onboard.py --wizard
 
-# Import existing WireGuard configs
-./wg-friend-onboard.py --scan /etc/wireguard
+# Import existing WireGuard configs (place .conf files in ./import/ first)
+mkdir import
+cp /path/to/*.conf import/
+./wg-friend-onboard.py --scan ./import
 
 # Import and recover missing peer configs
-./wg-friend-onboard.py --scan ~/backup --recover
+./wg-friend-onboard.py --scan ./import --recover
 ```
 
 The onboarding script will:

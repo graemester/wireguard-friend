@@ -624,6 +624,26 @@ class ImportOrchestrator:
 
     def run(self) -> bool:
         """Run import process"""
+        # Check if scan path exists, create if it's ./import
+        if not self.scan_path.exists():
+            if self.scan_path.name == 'import':
+                self.console.print(Panel(
+                    "[yellow]No import directory found![/yellow]\n\n"
+                    "To import existing WireGuard configs:\n"
+                    "1. Create an [cyan]import/[/cyan] directory\n"
+                    "2. Copy your .conf files there (coordinator, subnet router, clients)\n"
+                    "3. Run this script again\n\n"
+                    "Example:\n"
+                    "  [dim]mkdir import[/dim]\n"
+                    "  [dim]cp /path/to/coordinator-wg0.conf import/[/dim]\n"
+                    "  [dim]cp /path/to/icculus-wg0.conf import/[/dim]",
+                    title="📁 Import Directory",
+                    border_style="yellow"
+                ))
+            else:
+                self.console.print(f"[red]Error: Path not found: {self.scan_path}[/red]")
+            return False
+
         self.console.print(f"\n[bold cyan]🔍 Scanning {self.scan_path} for configs...[/bold cyan]\n")
 
         # Find configs
@@ -1107,11 +1127,11 @@ Examples:
   # Setup from scratch (interactive wizard)
   ./wg-friend-onboard.py --wizard
 
-  # Import existing configs
-  ./wg-friend-onboard.py --scan /etc/wireguard
+  # Import existing configs (place .conf files in ./import/ first)
+  ./wg-friend-onboard.py --scan ./import
 
   # Import and recover missing peer configs
-  ./wg-friend-onboard.py --scan ~/wireguard-backup --recover
+  ./wg-friend-onboard.py --scan ./import --recover
         """
     )
 
@@ -1124,7 +1144,7 @@ Examples:
     parser.add_argument(
         '--scan',
         type=Path,
-        help='Scan directory for existing WireGuard configs'
+        help='Scan directory for existing WireGuard configs (e.g., ./import)'
     )
 
     parser.add_argument(

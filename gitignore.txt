@@ -1,0 +1,28 @@
+# WireGuard configs (contain private keys!)
+import/
+*.conf
+
+# SSH keys for deployment
+.wg-friend/
+
+# Database with peer metadata
+*.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# QR codes
+*.png
+
+# Backup files
+*.backup.*
