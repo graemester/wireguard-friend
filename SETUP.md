@@ -19,6 +19,7 @@ pip3 install -r requirements.txt
 ### Step 2: Choose Your Setup Path
 
 **Option A: Import Existing Configs** (recommended if you already have WireGuard running)
+Note: You don't have the name the files any special way; the script will inspect them.
 ```bash
 # Gather your existing configs into import/ directory
 mkdir import
