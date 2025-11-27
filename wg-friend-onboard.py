@@ -385,6 +385,19 @@ class WireGuardOnboarder:
                 for lan in lan_networks:
                     console.print(f"  • {lan}")
 
+            # Display PostUp/PostDown rules for verification
+            if sn_interface.postup_rules:
+                console.print(f"\n[bold cyan]PostUp rules:[/bold cyan]")
+                console.print(f"[yellow]{sn_interface.postup_rules}[/yellow]")
+            else:
+                console.print(f"\n[dim]No PostUp rules[/dim]")
+
+            if sn_interface.postdown_rules:
+                console.print(f"\n[bold cyan]PostDown rules:[/bold cyan]")
+                console.print(f"[yellow]{sn_interface.postdown_rules}[/yellow]")
+            else:
+                console.print(f"\n[dim]No PostDown rules[/dim]")
+
             if not self._confirm("\nConfirm this subnet router?", default=True):
                 console.print("[yellow]Skipping[/yellow]")
                 continue
