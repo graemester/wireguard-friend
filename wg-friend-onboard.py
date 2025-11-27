@@ -180,24 +180,36 @@ class ConfigScanner:
         peers = config.peers
 
         has_listen_port = 'ListenPort' in interface
-        has_multiple_peers = len(peers) > 3
         has_postup = 'PostUp' in interface
         has_nat_rules = has_postup and 'MASQUERADE' in interface.get('PostUp', '')
 
-        if has_listen_port and has_multiple_peers and not peers:
-            return 'coordinator'
-        elif has_listen_port and has_nat_rules:
-            return 'subnet_router'
-        elif not has_listen_port and len(peers) == 1:
+        # Key insight: clients have a single peer WITH an Endpoint (they connect TO the server)
+        # Coordinators have multiple peers WITHOUT Endpoints (peers connect TO them)
+        single_peer_with_endpoint = (
+            len(peers) == 1 and
+            peers[0].get('Endpoint')
+        )
+
+        # Client: single peer with endpoint - strongest indicator
+        # (ListenPort may or may not be present - some generators add it unnecessarily)
+        if single_peer_with_endpoint:
             return 'client'
-        elif has_listen_port and len(peers) > 0:
-            # Could be coordinator or subnet router
-            if has_nat_rules:
-                return 'subnet_router'
-            else:
-                return 'coordinator'
-        else:
-            return 'unknown'
+
+        # Coordinator: has listen port and many peers (central hub accepting connections)
+        # Check this BEFORE subnet_router since coordinators may also have NAT rules
+        if has_listen_port and len(peers) > 3:
+            return 'coordinator'
+
+        # Subnet router: has NAT/masquerade rules for routing traffic to local subnet
+        # Typically has few peers (just the coordinator, maybe a couple others)
+        if has_listen_port and has_nat_rules:
+            return 'subnet_router'
+
+        # Coordinator with few peers (small setup)
+        if has_listen_port and len(peers) >= 1:
+            return 'coordinator'
+
+        return 'unknown'
 
 
 class WizardSetup:
