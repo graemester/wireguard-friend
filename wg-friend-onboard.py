@@ -227,15 +227,12 @@ class WireGuardOnboarder:
                 console.print("[yellow]PostDown rule editing not yet implemented[/yellow]")
                 return
 
-        # SSH Configuration
-        console.print("\n[bold cyan]SSH Configuration:[/bold cyan]")
+        # SSH Configuration for Coordination Server
+        console.print("\n[bold cyan]SSH Configuration (Coordination Server):[/bold cyan]")
+        console.print("[dim]Used for deploying updated configs to the server[/dim]")
 
-        # Try to extract hostname from endpoint if we have one
-        ssh_host_default = "UPDATE_ME"
-        for peer in cs.peers:
-            if peer.endpoint:
-                ssh_host_default = peer.endpoint.split(':')[0]
-                break
+        # Use the endpoint FQDN we already extracted
+        ssh_host_default = endpoint_fqdn if endpoint_fqdn else "UPDATE_ME"
 
         if self.auto_confirm:
             ssh_host = ssh_host_default
@@ -249,8 +246,8 @@ class WireGuardOnboarder:
             ssh_user = Prompt.ask("SSH username", default=getpass.getuser())
             ssh_port = IntPrompt.ask("SSH port", default=22)
 
-        # Derive endpoint from SSH host if not found
-        endpoint = ssh_host + ":51820"  # Default WireGuard port
+        # Use the endpoint we already have, or derive from SSH host
+        endpoint = f"{endpoint_fqdn}:{endpoint_port}" if endpoint_fqdn else f"{ssh_host}:51820"
 
         # Derive public key from private key
         try:
