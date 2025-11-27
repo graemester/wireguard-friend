@@ -183,8 +183,8 @@ class WireGuardOnboarder:
             console.print(f"  [yellow]No endpoint found in client configs[/yellow]")
             console.print(f"  Port: [yellow]{interface.listen_port or 51820}[/yellow]")
 
-        # Display VPN network configuration (internal addresses)
-        console.print("\n[bold cyan]VPN Network Configuration (Internal):[/bold cyan]")
+        # Display WireGuard network configuration (internal addresses)
+        console.print("\n[bold cyan]WireGuard Network Configuration (Internal):[/bold cyan]")
 
         table = Table(show_header=True, box=box.ROUNDED)
         table.add_column("Setting", style="cyan")
