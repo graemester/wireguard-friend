@@ -5,7 +5,6 @@ Import existing WireGuard configs or setup from scratch with wizard
 """
 
 import argparse
-import sys
 import yaml
 from pathlib import Path
 from datetime import datetime
@@ -21,13 +20,12 @@ from rich import box
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # Import wg-friend components
-sys.path.insert(0, str(Path(__file__).parent / 'src'))
-from keygen import generate_keypair, derive_public_key
-from peer_manager import WireGuardPeerManager
-from config_builder import WireGuardConfigBuilder
-from metadata_db import PeerDatabase
-from ssh_client import SSHClient
-from qr_generator import generate_qr_code
+from src.keygen import generate_keypair, derive_public_key
+from src.peer_manager import WireGuardPeerManager
+from src.config_builder import WireGuardConfigBuilder
+from src.metadata_db import PeerDatabase
+from src.ssh_client import SSHClient
+from src.qr_generator import generate_qr_code
 
 
 console = Console()
