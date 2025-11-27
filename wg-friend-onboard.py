@@ -138,8 +138,53 @@ class WireGuardOnboarder:
         interface = cs.interface
         network_info = self.extractor.extract_network_info(interface)
 
-        # Display network configuration
-        console.print("\n[bold cyan]Network Configuration:[/bold cyan]")
+        # Extract endpoint from client configs (they have the server endpoint)
+        endpoint_fqdn = None
+        endpoint_port = "51820"
+
+        # Check client configs for endpoint (they point to the CS)
+        for client_config in self.client_configs:
+            if client_config.peers and client_config.peers[0].endpoint:
+                endpoint = client_config.peers[0].endpoint
+                if ':' in endpoint:
+                    endpoint_fqdn, endpoint_port = endpoint.split(':', 1)
+                else:
+                    endpoint_fqdn = endpoint
+                break
+
+        # If no client configs, check subnet router configs
+        if not endpoint_fqdn:
+            for sn_config in self.sn_configs:
+                if sn_config.peers and sn_config.peers[0].endpoint:
+                    endpoint = sn_config.peers[0].endpoint
+                    if ':' in endpoint:
+                        endpoint_fqdn, endpoint_port = endpoint.split(':', 1)
+                    else:
+                        endpoint_fqdn = endpoint
+                    break
+
+        # Display Coordination Server public details first
+        console.print("\n[bold cyan]Coordination Server (Public Endpoint):[/bold cyan]")
+
+        if endpoint_fqdn:
+            console.print(f"  FQDN: [yellow]{endpoint_fqdn}[/yellow]")
+
+            # Try to resolve FQDN to IP
+            try:
+                import socket
+                resolved_ip = socket.gethostbyname(endpoint_fqdn)
+                console.print(f"  Resolved IP: [yellow]{resolved_ip}[/yellow] [dim](current DNS resolution)[/dim]")
+            except Exception as e:
+                console.print(f"  Resolved IP: [dim]Could not resolve ({e})[/dim]")
+
+            console.print(f"  Port: [yellow]{endpoint_port}[/yellow]")
+            console.print(f"  Full Endpoint: [yellow]{endpoint_fqdn}:{endpoint_port}[/yellow]")
+        else:
+            console.print(f"  [yellow]No endpoint found in client configs[/yellow]")
+            console.print(f"  Port: [yellow]{interface.listen_port or 51820}[/yellow]")
+
+        # Display VPN network configuration (internal addresses)
+        console.print("\n[bold cyan]VPN Network Configuration (Internal):[/bold cyan]")
 
         table = Table(show_header=True, box=box.ROUNDED)
         table.add_column("Setting", style="cyan")
@@ -148,8 +193,8 @@ class WireGuardOnboarder:
 
         table.add_row("IPv4 Network", network_info['network_ipv4'] or "Not set", "[E]dit")
         table.add_row("IPv6 Network", network_info['network_ipv6'] or "Not set", "[E]dit")
-        table.add_row("CS IPv4 Address", network_info['ipv4_address'] or "Not set", "[E]dit")
-        table.add_row("CS IPv6 Address", network_info['ipv6_address'] or "Not set", "[E]dit")
+        table.add_row("Coordination Server IPv4", network_info['ipv4_address'] or "Not set", "[E]dit")
+        table.add_row("Coordination Server IPv6", network_info['ipv6_address'] or "Not set", "[E]dit")
         table.add_row("ListenPort", str(interface.listen_port) if interface.listen_port else "Not set", "[E]dit")
 
         mtu_value = str(interface.mtu) if interface.mtu else "Not set (will use 1420)"
