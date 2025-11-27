@@ -180,24 +180,36 @@ class ConfigScanner:
         peers = config.peers
 
         has_listen_port = 'ListenPort' in interface
-        has_multiple_peers = len(peers) > 3
         has_postup = 'PostUp' in interface
         has_nat_rules = has_postup and 'MASQUERADE' in interface.get('PostUp', '')
 
-        if has_listen_port and has_multiple_peers and not peers:
-            return 'coordinator'
-        elif has_listen_port and has_nat_rules:
-            return 'subnet_router'
-        elif not has_listen_port and len(peers) == 1:
+        # Key insight: clients have a single peer WITH an Endpoint (they connect TO the server)
+        # Coordinators have multiple peers WITHOUT Endpoints (peers connect TO them)
+        single_peer_with_endpoint = (
+            len(peers) == 1 and
+            peers[0].get('Endpoint')
+        )
+
+        # Client: single peer with endpoint - strongest indicator
+        # (ListenPort may or may not be present - some generators add it unnecessarily)
+        if single_peer_with_endpoint:
             return 'client'
-        elif has_listen_port and len(peers) > 0:
-            # Could be coordinator or subnet router
-            if has_nat_rules:
-                return 'subnet_router'
-            else:
-                return 'coordinator'
-        else:
-            return 'unknown'
+
+        # Coordinator: has listen port and many peers (central hub accepting connections)
+        # Check this BEFORE subnet_router since coordinators may also have NAT rules
+        if has_listen_port and len(peers) > 3:
+            return 'coordinator'
+
+        # Subnet router: has NAT/masquerade rules for routing traffic to local subnet
+        # Typically has few peers (just the coordinator, maybe a couple others)
+        if has_listen_port and has_nat_rules:
+            return 'subnet_router'
+
+        # Coordinator with few peers (small setup)
+        if has_listen_port and len(peers) >= 1:
+            return 'coordinator'
+
+        return 'unknown'
 
 
 class WizardSetup:
@@ -620,6 +632,54 @@ class ImportOrchestrator:
         self.console = Console()
         self.scanner = ConfigScanner(scan_path)
 
+    def confirm_config_type(self, config: ParsedConfig, suggested_type: str) -> str:
+        """Show detected type and let user confirm or override"""
+        filename = config.path.name
+        interface = config.interface
+        peers = config.peers
+
+        # Build a brief summary for the user
+        has_endpoint = len(peers) == 1 and peers[0].get('Endpoint')
+        has_listen_port = 'ListenPort' in interface
+        has_nat = 'MASQUERADE' in str(interface.get('PostUp', ''))
+
+        # Describe why we think it's this type
+        hints = []
+        if has_endpoint:
+            hints.append("has Endpoint (connects to server)")
+        if has_listen_port:
+            hints.append("has ListenPort")
+        if has_nat:
+            hints.append("has NAT/MASQUERADE rules")
+        hints.append(f"{len(peers)} peer(s)")
+
+        type_icons = {
+            'coordinator': '🌐',
+            'subnet_router': '🔀',
+            'client': '📱',
+            'unknown': '❓'
+        }
+
+        self.console.print(f"\n[bold]{filename}[/bold]")
+        self.console.print(f"  [dim]{', '.join(hints)}[/dim]")
+        self.console.print(f"  Detected: {type_icons.get(suggested_type, '❓')} [cyan]{suggested_type}[/cyan]")
+
+        # Let user confirm or choose
+        choice = Prompt.ask(
+            "  Type",
+            choices=["coordinator", "subnet_router", "client", "skip"],
+            default=suggested_type
+        )
+
+        if choice == "skip":
+            self.console.print("  [dim]Skipping this config[/dim]")
+            return "skip"
+
+        if choice != suggested_type:
+            self.console.print(f"  [yellow]→ Changed to {choice}[/yellow]")
+
+        return choice
+
     def run(self) -> bool:
         """Run import process"""
         # Check if scan path exists, create if it's ./import
@@ -651,13 +711,16 @@ class ImportOrchestrator:
             self.console.print("[red]No .conf files found![/red]")
             return False
 
-        # Parse all configs
+        # Parse all configs and confirm types with user
         parsed_configs = []
         for config_file in config_files:
             parsed = self.scanner.parse_config(config_file)
             if parsed:
-                parsed.config_type = self.scanner.detect_config_type(parsed)
-                parsed_configs.append(parsed)
+                suggested_type = self.scanner.detect_config_type(parsed)
+                confirmed_type = self.confirm_config_type(parsed, suggested_type)
+                if confirmed_type != "skip":
+                    parsed.config_type = confirmed_type
+                    parsed_configs.append(parsed)
 
         # Find coordinator
         coordinator_config = None
