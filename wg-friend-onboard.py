@@ -573,7 +573,11 @@ class WireGuardOnboarder:
 
     def _phase5_verify_and_finalize(self):
         """Phase 5: Verify reconstructed configs match originals"""
-        console.print("\n[bold]Phase 5: Verification[/bold]")
+        console.print("\n[bold]Phase 5: Verification & Validation[/bold]")
+
+        # Basic validation checks
+        console.print("\n[bold cyan]Running validation checks...[/bold cyan]")
+        self._run_validation_checks()
 
         # Reconstruct CS config
         console.print("\n[bold cyan]Reconstructing coordination server config...[/bold cyan]")
@@ -597,6 +601,19 @@ class WireGuardOnboarder:
 
         console.print(f"\n[green]✓ Saved to {cs_output_file}[/green]")
 
+        # Reconstruct and save subnet router configs
+        cs = self.db.get_coordination_server()
+        subnet_routers = self.db.get_subnet_routers(cs['id'])
+        if subnet_routers:
+            console.print("\n[bold cyan]Reconstructing subnet router configs...[/bold cyan]")
+            for sn in subnet_routers:
+                reconstructed_sn = self.db.reconstruct_sn_config(sn['id'])
+                sn_output_file = output_dir / f"{sn['name']}.conf"
+                with open(sn_output_file, 'w') as f:
+                    f.write(reconstructed_sn)
+                sn_output_file.chmod(0o600)
+                console.print(f"[green]✓ Saved {sn['name']} to {sn_output_file}[/green]")
+
         if not self._confirm("\nFinalize import?", default=True):
             console.print("[yellow]Import cancelled, but data is saved in database[/yellow]")
             return
@@ -604,6 +621,115 @@ class WireGuardOnboarder:
         console.print("\n[bold green]✓ Import finalized successfully![/bold green]")
         console.print(f"Database: {self.db_path}")
         console.print(f"Configs: {output_dir}/")
+
+    def _run_validation_checks(self):
+        """Run basic validation checks on imported data"""
+        import re
+        import ipaddress
+        import subprocess
+
+        warnings = []
+        checks_passed = 0
+
+        cs = self.db.get_coordination_server()
+
+        # 1. Validate WireGuard key format (44 chars base64)
+        def validate_key(key: str, key_type: str, entity: str) -> bool:
+            if not key:
+                return True  # Optional keys are ok
+            if len(key) != 44:
+                warnings.append(f"  ⚠ {entity} {key_type}: Invalid length ({len(key)} chars, expected 44)")
+                return False
+            if not re.match(r'^[A-Za-z0-9+/]{43}=$', key):
+                warnings.append(f"  ⚠ {entity} {key_type}: Invalid base64 format")
+                return False
+            return True
+
+        # Validate CS keys
+        if validate_key(cs['public_key'], 'PublicKey', 'CS'):
+            checks_passed += 1
+        if validate_key(cs['private_key'], 'PrivateKey', 'CS'):
+            checks_passed += 1
+
+        # 2. Validate IP addresses and CIDR notation
+        def validate_ip(ip_str: str, ip_type: str, entity: str) -> bool:
+            if not ip_str:
+                return True  # Optional IPs are ok
+            try:
+                ipaddress.ip_address(ip_str)
+                return True
+            except ValueError:
+                warnings.append(f"  ⚠ {entity} {ip_type}: Invalid IP address '{ip_str}'")
+                return False
+
+        def validate_cidr(cidr_str: str, cidr_type: str, entity: str) -> bool:
+            if not cidr_str:
+                return True
+            try:
+                ipaddress.ip_network(cidr_str, strict=False)
+                return True
+            except ValueError:
+                warnings.append(f"  ⚠ {entity} {cidr_type}: Invalid CIDR '{cidr_str}'")
+                return False
+
+        # Validate CS networks
+        if validate_cidr(cs['network_ipv4'], 'IPv4 Network', 'CS'):
+            checks_passed += 1
+        if validate_cidr(cs['network_ipv6'], 'IPv6 Network', 'CS'):
+            checks_passed += 1
+        if validate_ip(cs['ipv4_address'], 'IPv4 Address', 'CS'):
+            checks_passed += 1
+        if validate_ip(cs['ipv6_address'], 'IPv6 Address', 'CS'):
+            checks_passed += 1
+
+        # Validate subnet routers
+        for sn in self.db.get_subnet_routers(cs['id']):
+            if validate_key(sn['public_key'], 'PublicKey', f"SN:{sn['name']}"):
+                checks_passed += 1
+            if validate_ip(sn['ipv4_address'], 'IPv4', f"SN:{sn['name']}"):
+                checks_passed += 1
+            if validate_ip(sn['ipv6_address'], 'IPv6', f"SN:{sn['name']}"):
+                checks_passed += 1
+
+            # Validate LAN networks
+            for lan in self.db.get_sn_lan_networks(sn['id']):
+                if validate_cidr(lan, 'LAN Network', f"SN:{sn['name']}"):
+                    checks_passed += 1
+
+        # Validate peers
+        for peer in self.db.get_peers(cs['id']):
+            if validate_key(peer['public_key'], 'PublicKey', f"Peer:{peer['name']}"):
+                checks_passed += 1
+            if validate_ip(peer['ipv4_address'], 'IPv4', f"Peer:{peer['name']}"):
+                checks_passed += 1
+            if validate_ip(peer['ipv6_address'], 'IPv6', f"Peer:{peer['name']}"):
+                checks_passed += 1
+
+        # 3. Ping CS endpoint (friendly check)
+        if cs['ssh_hostname']:
+            console.print(f"  Checking connectivity to {cs['ssh_hostname']}...", end=" ")
+            try:
+                result = subprocess.run(
+                    ['ping', '-c', '1', '-W', '2', cs['ssh_hostname']],
+                    capture_output=True,
+                    timeout=3
+                )
+                if result.returncode == 0:
+                    console.print("[green]✓ Reachable[/green]")
+                    checks_passed += 1
+                else:
+                    console.print("[yellow]✗ Not reachable[/yellow]")
+                    warnings.append(f"  ⚠ CS endpoint '{cs['ssh_hostname']}' is not reachable")
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                console.print("[dim]⊘ Ping unavailable[/dim]")
+
+        # Display results
+        if warnings:
+            console.print(f"\n[yellow]Validation warnings ({len(warnings)}):[/yellow]")
+            for warning in warnings:
+                console.print(warning)
+
+        console.print(f"[green]✓ {checks_passed} validation checks passed[/green]")
 
     def _mask_private_keys(self, config_text: str) -> str:
         """Mask PrivateKey values in config text for display"""
