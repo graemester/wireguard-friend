@@ -19,7 +19,7 @@ from rich import box
 from rich.syntax import Syntax
 
 from src.database import WireGuardDB
-from src.keygen import generate_keypair
+from src.keygen import generate_keypair, generate_preshared_key
 from src.qr_generator import generate_qr_code
 from src.ssh_client import SSHClient
 
@@ -403,14 +403,20 @@ class WireGuardMaintainer:
     def _manage_single_peer(self, peer: Dict):
         """Manage a single peer"""
         console.print(f"\n[bold cyan]Peer: {peer['name']}[/bold cyan]")
+
+        # Show current preshared key status
+        has_psk = "Yes" if peer.get('preshared_key') else "No"
+        console.print(f"  Preshared Key: {has_psk}")
+
         console.print("\n[bold]Actions:[/bold]")
         console.print("  [1] View Client Config")
         console.print("  [2] Generate QR Code")
         console.print("  [3] Rotate Keys")
         console.print("  [4] Export Config to File")
+        console.print("  [5] Add/Update Preshared Key")
         console.print("  [0] Back")
 
-        choice = Prompt.ask("\nSelect action", choices=["0", "1", "2", "3", "4"], default="0")
+        choice = Prompt.ask("\nSelect action", choices=["0", "1", "2", "3", "4", "5"], default="0")
 
         if choice == "1":
             self._view_peer_config(peer)
@@ -420,6 +426,8 @@ class WireGuardMaintainer:
             self._rotate_peer_keys(peer)
         elif choice == "4":
             self._export_peer_config(peer)
+        elif choice == "5":
+            self._add_preshared_key(peer)
 
     def _view_peer_config(self, peer: Dict):
         """View peer client config"""
@@ -537,6 +545,102 @@ class WireGuardMaintainer:
             """, (new_peer, peer['id']))
 
         console.print(f"[green]✓ Keys rotated successfully![/green]")
+        console.print(f"\n[bold]Next steps:[/bold]")
+        console.print(f"  1. Generate QR code or export config for {peer['name']}")
+        console.print(f"  2. Deploy updated coordination server config")
+
+    def _add_preshared_key(self, peer: Dict):
+        """Add or update preshared key for peer"""
+        action = "Update" if peer.get('preshared_key') else "Add"
+        console.print(f"\n[bold yellow]{action} preshared key for {peer['name']}[/bold yellow]")
+
+        if peer.get('preshared_key'):
+            console.print("[yellow]This peer already has a preshared key.[/yellow]")
+            console.print("Continuing will replace it with a new one.")
+
+        console.print("\nThis will:")
+        console.print("  1. Generate new preshared key")
+        console.print("  2. Update coordination server peer entry")
+        console.print("  3. Update peer client config (if exists)")
+
+        if not Confirm.ask("\nContinue?", default=False):
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+        # Generate preshared key
+        preshared_key = generate_preshared_key()
+        console.print(f"[green]✓ Generated preshared key[/green]")
+
+        # Update peer in database
+        with self.db._connection() as conn:
+            cursor = conn.cursor()
+
+            # Update preshared_key field
+            cursor.execute("""
+                UPDATE peer
+                SET preshared_key = ?
+                WHERE id = ?
+            """, (preshared_key, peer['id']))
+
+            # Update CS peer entry (raw_peer_block) - add/update PresharedKey line
+            old_peer_block = peer['raw_peer_block']
+            peer_lines = old_peer_block.split('\n')
+            new_peer_lines = []
+            psk_added = False
+
+            for line in peer_lines:
+                # Remove existing PresharedKey line if present
+                if line.strip().startswith('PresharedKey'):
+                    continue
+                new_peer_lines.append(line)
+                # Add PresharedKey after PublicKey
+                if line.strip().startswith('PublicKey') and not psk_added:
+                    new_peer_lines.append(f"PresharedKey = {preshared_key}")
+                    psk_added = True
+
+            new_peer_block = '\n'.join(new_peer_lines)
+
+            cursor.execute("""
+                UPDATE peer
+                SET raw_peer_block = ?
+                WHERE id = ?
+            """, (new_peer_block, peer['id']))
+
+            # Update client config (raw_interface_block) if it exists
+            if peer['raw_interface_block']:
+                old_interface = peer['raw_interface_block']
+                interface_lines = old_interface.split('\n')
+                new_interface_lines = []
+                in_peer_section = False
+                psk_added_client = False
+
+                for line in interface_lines:
+                    # Track if we're in [Peer] section
+                    if line.strip().startswith('[Peer]'):
+                        in_peer_section = True
+                        new_interface_lines.append(line)
+                        continue
+
+                    # Remove existing PresharedKey line if present
+                    if line.strip().startswith('PresharedKey'):
+                        continue
+
+                    new_interface_lines.append(line)
+
+                    # Add PresharedKey after Endpoint in [Peer] section
+                    if in_peer_section and line.strip().startswith('Endpoint') and not psk_added_client:
+                        new_interface_lines.append(f"PresharedKey = {preshared_key}")
+                        psk_added_client = True
+
+                new_interface = '\n'.join(new_interface_lines)
+
+                cursor.execute("""
+                    UPDATE peer
+                    SET raw_interface_block = ?
+                    WHERE id = ?
+                """, (new_interface, peer['id']))
+
+        console.print(f"[green]✓ Preshared key {action.lower()}d successfully![/green]")
         console.print(f"\n[bold]Next steps:[/bold]")
         console.print(f"  1. Generate QR code or export config for {peer['name']}")
         console.print(f"  2. Deploy updated coordination server config")

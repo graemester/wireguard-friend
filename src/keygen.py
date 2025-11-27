@@ -69,6 +69,33 @@ def derive_public_key(private_key: str) -> str:
         raise RuntimeError("WireGuard tools not installed")
 
 
+def generate_preshared_key() -> str:
+    """
+    Generate a WireGuard preshared key
+
+    Returns:
+        Preshared key string
+    """
+    try:
+        result = subprocess.run(
+            ['wg', 'genpsk'],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        preshared_key = result.stdout.strip()
+
+        logger.info("Generated preshared key")
+        return preshared_key
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to generate preshared key: {e}")
+        raise RuntimeError("Preshared key generation failed. Is 'wg' command available?")
+    except FileNotFoundError:
+        logger.error("WireGuard tools not found (wg command)")
+        raise RuntimeError("WireGuard tools not installed. Install with: sudo apt install wireguard-tools")
+
+
 def validate_key(key: str) -> bool:
     """
     Validate a WireGuard key format
