@@ -49,7 +49,7 @@
 
 ### Import Configs
 ```bash
-./wg-friend-onboard-v2.py --import-dir import/ --yes
+./wg-friend-onboard.py --import-dir import/ --yes
 ```
 
 ### Maintenance Mode
@@ -147,7 +147,7 @@ All source files have comprehensive docstrings:
 
 ### Scripts
 
-**wg-friend-onboard-v2.py**
+**wg-friend-onboard.py**
 - 5-phase import workflow
 - Raw block + structured data storage
 - Perfect fidelity verification
@@ -193,7 +193,7 @@ wireguard-friend/
 ├── DOCUMENTATION.md       ← This file
 ├── requirements.txt       ← Python deps
 │
-├── wg-friend-onboard-v2.py    ← Import script
+├── wg-friend-onboard.py    ← Import script
 ├── wg-friend-maintain.py      ← Maintenance script
 ├── wg-friend.db              ← SQLite database
 │

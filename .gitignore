@@ -29,3 +29,6 @@ env/
 
 # Generated configs
 output/
+
+# Legacy scripts
+wg-friend-onboard-legacy.py

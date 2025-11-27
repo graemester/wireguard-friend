@@ -30,7 +30,7 @@ Place your WireGuard configs in the `import/` directory:
 Run the import:
 
 ```bash
-./wg-friend-onboard-v2.py --import-dir import/ --yes
+./wg-friend-onboard.py --import-dir import/ --yes
 ```
 
 This will:
@@ -191,7 +191,7 @@ sqlite3 wg-friend.db "
 
 ```
 wireguard-friend/
-├── wg-friend-onboard-v2.py     # Import existing configs
+├── wg-friend-onboard.py     # Import existing configs
 ├── wg-friend-maintain.py       # Maintenance mode
 ├── wg-friend.db                # SQLite database
 ├── src/
@@ -243,7 +243,7 @@ diff import/coordination.conf output/coordination.conf
 
 ## Next Steps
 
-1. **Import your configs**: `./wg-friend-onboard-v2.py --import-dir import/ --yes`
+1. **Import your configs**: `./wg-friend-onboard.py --import-dir import/ --yes`
 2. **Verify reconstruction**: `diff import/coordination.conf output/coordination.conf`
 3. **Explore maintenance**: `./wg-friend-maintain.py`
 4. **Create new peer**: Follow interactive prompts
@@ -252,7 +252,7 @@ diff import/coordination.conf output/coordination.conf
 ## Troubleshooting
 
 ### "No coordination server found"
-- Run import first: `./wg-friend-onboard-v2.py --import-dir import/`
+- Run import first: `./wg-friend-onboard.py --import-dir import/`
 
 ### "Failed to derive public key"
 - Install WireGuard tools: `sudo apt install wireguard-tools`

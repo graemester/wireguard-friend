@@ -566,7 +566,7 @@ Typical network (50 peers):
 
 ```bash
 # Import → Reconstruct → Compare
-./wg-friend-onboard-v2.py --import-dir test/fixtures/
+./wg-friend-onboard.py --import-dir test/fixtures/
 diff test/fixtures/coordination.conf output/coordination.conf
 
 # Must be byte-for-byte identical

@@ -19,7 +19,7 @@ WireGuard Friend imports your existing WireGuard configurations, stores them in 
 
 ```bash
 # 1. Import existing configurations
-./wg-friend-onboard-v2.py --import-dir import/ --yes
+./wg-friend-onboard.py --import-dir import/ --yes
 
 # 2. Verify perfect reconstruction
 diff import/coordination.conf output/coordination.conf
@@ -62,7 +62,7 @@ See **[ARCHITECTURE.md](ARCHITECTURE.md)** for detailed design.
 
 ## Features
 
-### Import System (`wg-friend-onboard-v2.py`)
+### Import System (`wg-friend-onboard.py`)
 
 5-phase workflow:
 1. **Parse & Classify** - Auto-detect CS/SN/clients
@@ -96,7 +96,7 @@ Interactive menu:
 ### Import
 
 ```bash
-./wg-friend-onboard-v2.py [OPTIONS]
+./wg-friend-onboard.py [OPTIONS]
 
   --import-dir PATH     Config directory (default: import/)
   --db PATH            Database path (default: wg-friend.db)  
@@ -183,7 +183,7 @@ wireguard-friend/
 ├── README.md                    # This file
 ├── QUICK_START.md               # Detailed walkthrough
 ├── ARCHITECTURE.md              # Design decisions
-├── wg-friend-onboard-v2.py     # Import script
+├── wg-friend-onboard.py     # Import script
 ├── wg-friend-maintain.py       # Maintenance script
 ├── wg-friend.db                # SQLite database
 ├── src/
@@ -202,7 +202,7 @@ Verify perfect fidelity:
 
 ```bash
 # Import configs
-./wg-friend-onboard-v2.py --clear-db --import-dir import/ --yes
+./wg-friend-onboard.py --clear-db --import-dir import/ --yes
 
 # Verify byte-for-byte match
 diff import/coordination.conf output/coordination.conf
@@ -251,7 +251,7 @@ See **[QUICK_START.md](QUICK_START.md)** troubleshooting section for more.
 
 ```bash
 # Test import
-./wg-friend-onboard-v2.py --clear-db --import-dir import/ --yes
+./wg-friend-onboard.py --clear-db --import-dir import/ --yes
 
 # Run queries
 python3 test-maintain.py
