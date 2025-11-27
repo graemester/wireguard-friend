@@ -1,7 +1,21 @@
-# wg-friend - WireGuard Peer Manager
-# Minimal dependencies for standalone operation
+# WireGuard Friend - Python Dependencies
 
-rich>=13.0.0          # TUI framework
-paramiko>=3.0.0       # SSH operations
-segno>=1.6.0          # QR code generation
-pyyaml>=6.0           # Config file parsing
+# Terminal UI
+rich>=13.0.0
+
+# QR Code generation
+qrcode[pil]>=7.4.0
+Pillow>=10.0.0
+
+# SSH client (using paramiko)
+paramiko>=3.0.0
+
+# YAML parsing (for legacy config.yaml support)
+PyYAML>=6.0
+
+# No other dependencies - uses standard library for:
+# - sqlite3 (database)
+# - subprocess (wg command)
+# - pathlib (file operations)
+# - argparse (CLI)
+# - datetime (timestamps)

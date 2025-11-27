@@ -74,6 +74,7 @@ class WireGuardPeerManager:
         self.user = self.coordinator['user']
         self.config_path = self.coordinator['config_path']
         self.interface = self.coordinator['interface']
+        self.config = config  # Store full config for PostUp/PostDown rules
 
     def get_current_peers_from_wg_show(self) -> List[WireGuardPeerStatus]:
         """
@@ -573,7 +574,8 @@ class WireGuardPeerManager:
         Export full coordinator config with all active peers from database
 
         This generates a complete wg0.conf ready for deployment to the coordinator.
-        It preserves the Interface section and builds Peer blocks from the database.
+        It builds the Interface section from config.yaml (preserving PostUp/PostDown)
+        and Peer blocks from the database.
 
         Args:
             metadata_db: MetadataDB instance with peer data
@@ -583,26 +585,8 @@ class WireGuardPeerManager:
             True if successful
         """
         try:
-            # Get Interface section from current coordinator config
-            with SSHClient(
-                self.host,
-                self.user,
-                self.ssh_config['key_path'],
-                self.port
-            ) as ssh:
-                if not ssh.client:
-                    logger.error("Failed to connect to coordinator")
-                    return False
-
-                # Read current config to get Interface section
-                config_text = ssh.read_file(self.config_path, use_sudo=True)
-
-                if not config_text:
-                    logger.error("Failed to read coordinator config")
-                    return False
-
-                # Extract Interface section
-                interface_section = self._extract_interface_section(config_text)
+            # Build Interface section from config.yaml
+            interface_section = self._build_interface_section()
 
             # Get all active peers from database
             active_peers = metadata_db.get_active_peers()
@@ -632,8 +616,48 @@ class WireGuardPeerManager:
             logger.error(f"Failed to export coordinator config: {e}")
             return False
 
+    def _build_interface_section(self) -> str:
+        """Build [Interface] section from config.yaml"""
+        lines = ["[Interface]"]
+
+        # Add Address
+        ipv4 = self.coordinator['network']['ipv4']
+        ipv6 = self.coordinator['network']['ipv6']
+        lines.append(f"Address = {ipv4}")
+        lines.append(f"Address = {ipv6}")
+
+        # Add ListenPort
+        listen_port = self.coordinator.get('listen_port', 51820)
+        lines.append(f"ListenPort = {listen_port}")
+
+        # Add MTU if specified
+        mtu = self.coordinator.get('mtu', 1280)
+        lines.append(f"MTU = {mtu}")
+
+        # Add PrivateKey placeholder (should be manually set on server)
+        lines.append("PrivateKey = <UPDATE_ON_SERVER>")
+        lines.append("")
+
+        # Add PostUp rules from config.yaml (PRESERVED FROM IMPORT!)
+        postup_rules = self.coordinator.get('postup', [])
+        if postup_rules:
+            if isinstance(postup_rules, str):
+                postup_rules = [postup_rules]
+            for rule in postup_rules:
+                lines.append(f"PostUp = {rule}")
+
+        # Add PostDown rules from config.yaml (PRESERVED FROM IMPORT!)
+        postdown_rules = self.coordinator.get('postdown', [])
+        if postdown_rules:
+            if isinstance(postdown_rules, str):
+                postdown_rules = [postdown_rules]
+            for rule in postdown_rules:
+                lines.append(f"PostDown = {rule}")
+
+        return '\n'.join(lines)
+
     def _extract_interface_section(self, config_text: str) -> str:
-        """Extract [Interface] section from config"""
+        """Extract [Interface] section from config (legacy method)"""
         lines = []
         in_interface = False
 
