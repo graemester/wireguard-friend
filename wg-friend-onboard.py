@@ -134,6 +134,19 @@ class WireGuardOnboarder:
         """Phase 2: Coordination Server confirmation workflow"""
         console.print("\n[bold]Phase 2: Coordination Server Configuration[/bold]")
 
+        # Check if database already has data (for re-imports without --clear-db)
+        existing_cs = self.db.get_coordination_server()
+        if existing_cs:
+            console.print("[yellow]⚠ Database already contains imported data[/yellow]")
+            console.print("[yellow]  Re-importing will replace existing data[/yellow]")
+            if not self.auto_confirm:
+                if not Confirm.ask("Continue and replace existing data?", default=False):
+                    console.print("[yellow]Import cancelled. Use --clear-db to start fresh.[/yellow]")
+                    sys.exit(0)
+            # Clear existing data
+            self.db.clear_all_data()
+            console.print("[green]✓ Cleared existing data[/green]")
+
         cs = self.cs_config
         interface = cs.interface
         network_info = self.extractor.extract_network_info(interface)
@@ -383,6 +396,11 @@ class WireGuardOnboarder:
                 cursor.execute("""
                     DELETE FROM peer WHERE cs_id = ? AND public_key = ?
                 """, (self.cs_id, sn_public_key))
+
+                # Also delete existing subnet_router with same name (for re-imports)
+                cursor.execute("""
+                    DELETE FROM subnet_router WHERE cs_id = ? AND name = ?
+                """, (self.cs_id, friendly_name))
 
             # Save to subnet_router table
             sn_id = self.db.save_subnet_router(
