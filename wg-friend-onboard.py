@@ -476,18 +476,57 @@ class WireGuardOnboarder:
             console.print(f"  PresharedKey: {'Yes' if matching_peer.preshared_key else 'No'}")
             console.print(f"  PersistentKeepalive: {matching_peer.persistent_keepalive or 'Not set'}")
 
+            # Extract and analyze current AllowedIPs from client config
+            client_allowed_ips = ""
+            if client_config.peers and client_config.peers[0].allowed_ips:
+                client_allowed_ips = client_config.peers[0].allowed_ips
+
+            console.print(f"\n[bold cyan]Current Access (from client config):[/bold cyan]")
+            console.print(f"  AllowedIPs: [yellow]{client_allowed_ips}[/yellow]")
+
+            # Infer access level from current AllowedIPs
+            cs = self.db.get_coordination_server()
+            vpn_networks = {cs['network_ipv4'], cs['network_ipv6']}
+
+            # Get LAN networks from subnet routers
+            lan_networks = set()
+            for sn in self.db.get_subnet_routers(cs['id']):
+                lan_networks.update(self.db.get_sn_lan_networks(sn['id']))
+
+            # Parse client's current allowed IPs
+            client_networks = set(ip.strip() for ip in client_allowed_ips.split(',') if ip.strip())
+
+            # Infer access level
+            has_vpn = vpn_networks.issubset(client_networks)
+            has_lans = lan_networks.issubset(client_networks) if lan_networks else False
+
+            if has_lans and has_vpn:
+                inferred_level = 1  # full_access or lan_only
+                inferred_text = "Full access (has VPN + LAN networks)"
+            elif has_vpn and not has_lans:
+                inferred_level = 2  # vpn_only
+                inferred_text = "VPN only (only VPN networks, no LANs)"
+            elif has_lans:
+                inferred_level = 3  # lan_only
+                inferred_text = "LAN only (has LAN access)"
+            else:
+                inferred_level = 1  # Default to full_access if unclear
+                inferred_text = "Full access (default)"
+
+            console.print(f"  Inferred: [green]{inferred_text}[/green]")
+
             # Determine access level from AllowedIPs
-            console.print("\n[bold cyan]Access Level:[/bold cyan]")
+            console.print("\n[bold cyan]Select Access Level:[/bold cyan]")
             console.print("  [1] Full access (all AllowedIPs from CS peer)")
             console.print("  [2] VPN only (10.66.0.0/24, fd66:6666::/64)")
             console.print("  [3] LAN only (access via subnet routers)")
             console.print("  [4] Custom (specify - parking lot)")
 
             if self.auto_confirm:
-                access_choice = 1
-                console.print(f"  Selected: 1 (Full access) [dim](default)[/dim]")
+                access_choice = inferred_level
+                console.print(f"  Selected: {inferred_level} [dim](inferred)[/dim]")
             else:
-                access_choice = IntPrompt.ask("Select access level", default=1)
+                access_choice = IntPrompt.ask("Select access level", default=inferred_level)
 
             access_level_map = {
                 1: 'full_access',
