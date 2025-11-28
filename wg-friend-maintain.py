@@ -746,30 +746,40 @@ class WireGuardMaintainer:
             full_config += f"PersistentKeepalive = {sn['persistent_keepalive']}\n"
 
         console.print(f"\n[bold yellow]Deploy config for {sn['name']}[/bold yellow]")
-        console.print("\n[cyan]SSH Connection Details:[/cyan]")
 
-        # Prompt for SSH details
+        # Prompt for SSH details (or detect if local)
         ssh_host = Prompt.ask("SSH hostname/IP", default=sn.get('ipv4_address', ''))
-        ssh_port = int(Prompt.ask("SSH port", default="22"))
-        ssh_user = Prompt.ask("SSH username", default="root")
 
-        console.print(f"\n[bold yellow]Deploy to {ssh_user}@{ssh_host}:{ssh_port}[/bold yellow]")
+        # Check if deploying to localhost
+        is_local = is_local_host(ssh_host)
 
-        # Check SSH key
-        if not self.ssh_key_path.exists():
-            console.print(f"[red]✗ SSH key not found: {self.ssh_key_path}[/red]")
-            console.print("[yellow]SSH key-based authentication is required for deployment.[/yellow]")
+        if is_local:
+            console.print(f"\n[bold cyan]Deploy to localhost (detected)[/bold cyan]")
+            console.print(f"[dim]Target: /etc/wireguard/wg0.conf[/dim]")
+            ssh_port = None
+            ssh_user = None
+        else:
+            console.print("\n[cyan]SSH Connection Details:[/cyan]")
+            ssh_port = int(Prompt.ask("SSH port", default="22"))
+            ssh_user = Prompt.ask("SSH username", default="root")
 
-            if Confirm.ask("\nRun SSH setup wizard now?", default=True):
-                self._ssh_setup_wizard()
+            console.print(f"\n[bold yellow]Deploy to {ssh_user}@{ssh_host}:{ssh_port}[/bold yellow]")
 
-                # Check again after wizard
-                if not self.ssh_key_path.exists():
-                    console.print("[red]✗ SSH setup incomplete - cannot deploy[/red]")
+            # Check SSH key only if remote
+            if not self.ssh_key_path.exists():
+                console.print(f"[red]✗ SSH key not found: {self.ssh_key_path}[/red]")
+                console.print("[yellow]SSH key-based authentication is required for deployment.[/yellow]")
+
+                if Confirm.ask("\nRun SSH setup wizard now?", default=True):
+                    self._ssh_setup_wizard()
+
+                    # Check again after wizard
+                    if not self.ssh_key_path.exists():
+                        console.print("[red]✗ SSH setup incomplete - cannot deploy[/red]")
+                        return
+                else:
+                    console.print("[yellow]Deployment cancelled[/yellow]")
                     return
-            else:
-                console.print("[yellow]Deployment cancelled[/yellow]")
-                return
 
         if not Confirm.ask("Continue with deployment?", default=False):
             console.print("[yellow]Cancelled[/yellow]")
@@ -782,48 +792,100 @@ class WireGuardMaintainer:
         temp_file.chmod(0o600)
 
         try:
-            console.print("[cyan]Connecting to server...[/cyan]")
-            ssh = SSHClient(
-                hostname=ssh_host,
-                username=ssh_user,
-                ssh_key_path=str(self.ssh_key_path),
-                port=ssh_port
-            )
+            if is_local:
+                # Local deployment - use sudo, no SSH needed
+                console.print("[cyan]Deploying locally...[/cyan]")
 
-            if not ssh.connect():
-                console.print("[red]✗ Failed to connect to server[/red]")
-                return
+                # Check for sudo
+                if subprocess.run(['sudo', '-n', 'true'], capture_output=True).returncode != 0:
+                    console.print("[yellow]This deployment requires sudo privileges.[/yellow]")
+                    console.print("[yellow]You may be prompted for your password.[/yellow]")
 
-            # Backup existing config
-            console.print("[cyan]Creating backup of existing config...[/cyan]")
-            backup_result = ssh.run_command(
-                "cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.backup-$(date +%Y%m%d-%H%M%S)"
-            )
+                # Backup existing config
+                console.print("[cyan]Creating backup of existing config...[/cyan]")
+                backup_cmd = "sudo cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.backup-$(date +%Y%m%d-%H%M%S)"
+                subprocess.run(backup_cmd, shell=True, check=False)
 
-            # Upload new config
-            console.print("[cyan]Uploading new config...[/cyan]")
-            ssh.upload_file(str(temp_file), "/tmp/wg0.conf", use_sudo=False, mode="600")
+                # Copy new config
+                console.print("[cyan]Installing config...[/cyan]")
+                subprocess.run(['sudo', 'cp', str(temp_file), '/etc/wireguard/wg0.conf'], check=True)
+                subprocess.run(['sudo', 'chmod', '600', '/etc/wireguard/wg0.conf'], check=True)
+                console.print("[green]✓ Config installed[/green]")
 
-            # Move to proper location
-            console.print("[cyan]Installing config...[/cyan]")
-            ssh.run_command("mv /tmp/wg0.conf /etc/wireguard/wg0.conf")
-            ssh.run_command("chmod 600 /etc/wireguard/wg0.conf")
+                # Restart WireGuard
+                if Confirm.ask("Restart WireGuard service?", default=True):
+                    console.print("[cyan]Restarting wg-quick@wg0...[/cyan]")
+                    result = subprocess.run(
+                        ['sudo', 'systemctl', 'restart', 'wg-quick@wg0'],
+                        capture_output=True,
+                        text=True
+                    )
 
-            # Restart WireGuard
-            if Confirm.ask("Restart WireGuard service?", default=True):
-                console.print("[cyan]Restarting wg-quick@wg0...[/cyan]")
-                restart_result = ssh.run_command("systemctl restart wg-quick@wg0")
+                    if result.returncode == 0:
+                        console.print("[green]✓ WireGuard restarted[/green]")
 
-                # Verify
-                console.print("[cyan]Verifying WireGuard status...[/cyan]")
-                verify_result = ssh.run_command("wg show wg0")
-                if verify_result.strip():
-                    console.print("[green]✓ WireGuard is running[/green]")
-                else:
-                    console.print("[yellow]⚠ WireGuard may not be running - check manually[/yellow]")
+                        # Verify
+                        console.print("[cyan]Verifying WireGuard status...[/cyan]")
+                        verify = subprocess.run(
+                            ['sudo', 'wg', 'show', 'wg0'],
+                            capture_output=True,
+                            text=True
+                        )
 
-            ssh.disconnect()
-            console.print("[bold green]✓ Deployment complete![/bold green]")
+                        if verify.returncode == 0 and verify.stdout.strip():
+                            console.print("[green]✓ WireGuard is running[/green]")
+                        else:
+                            console.print("[yellow]⚠ WireGuard may not be running - check manually[/yellow]")
+                    else:
+                        console.print(f"[red]✗ Failed to restart: {result.stderr}[/red]")
+                        return
+
+                console.print("[bold green]✓ Local deployment complete![/bold green]")
+
+            else:
+                # Remote deployment via SSH
+                console.print("[cyan]Connecting to server...[/cyan]")
+                ssh = SSHClient(
+                    hostname=ssh_host,
+                    username=ssh_user,
+                    ssh_key_path=str(self.ssh_key_path),
+                    port=ssh_port
+                )
+
+                if not ssh.connect():
+                    console.print("[red]✗ Failed to connect to server[/red]")
+                    return
+
+                # Backup existing config
+                console.print("[cyan]Creating backup of existing config...[/cyan]")
+                backup_result = ssh.run_command(
+                    "cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.backup-$(date +%Y%m%d-%H%M%S)"
+                )
+
+                # Upload new config
+                console.print("[cyan]Uploading new config...[/cyan]")
+                ssh.upload_file(str(temp_file), "/tmp/wg0.conf", use_sudo=False, mode="600")
+
+                # Move to proper location
+                console.print("[cyan]Installing config...[/cyan]")
+                ssh.run_command("mv /tmp/wg0.conf /etc/wireguard/wg0.conf")
+                ssh.run_command("chmod 600 /etc/wireguard/wg0.conf")
+
+                # Restart WireGuard
+                if Confirm.ask("Restart WireGuard service?", default=True):
+                    console.print("[cyan]Restarting wg-quick@wg0...[/cyan]")
+                    restart_result = ssh.run_command("systemctl restart wg-quick@wg0")
+
+                    # Verify
+                    console.print("[cyan]Verifying WireGuard status...[/cyan]")
+                    verify_result = ssh.run_command("wg show wg0")
+                    if verify_result.strip():
+                        console.print("[green]✓ WireGuard is running[/green]")
+                    else:
+                        console.print("[yellow]⚠ WireGuard may not be running - check manually[/yellow]")
+
+                ssh.disconnect()
+                console.print("[bold green]✓ Remote deployment complete![/bold green]")
 
         except Exception as e:
             console.print(f"[red]✗ Deployment failed: {e}[/red]")
