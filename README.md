@@ -1,6 +1,6 @@
 # WireGuard Friend
 
-**Build and manage reliable Wireguard networks  Learn and have fun!**
+**Build and manage reliable Wireguard networks.  Learn and have fun!**
 
 WireGuard Friend helps you establish sophisticated WireGuard network topologies with a coordination server, subnet routers, and client peers. Import existing configurations or build from scratch, manage access levels, rotate keys, and deploy to servers—all through an intuitive command-line interface.  It can work from a setup you already have or help you build a complete set of configs from
 
