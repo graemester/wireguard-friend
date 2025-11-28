@@ -20,7 +20,7 @@ WireGuard Friend establishes this network architecture:
    ┌────┴─────┐                                  ┌────┴─────┐
    │  Subnet  │                                  │  Client  │
    │  Router  │  (Home/Office Gateway)           │  Peers   │
-   │ 10.20.0.20                                  │ 10.66.0.x │
+   │ 10.20.0.20                                  │ 10.20.0.x │
    └────┬─────┘                                  └──────────┘
         │                                          • Laptops
    192.168.1.0/24                                 • Phones
