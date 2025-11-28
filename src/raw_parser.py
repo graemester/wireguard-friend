@@ -29,7 +29,7 @@ class RawPeerBlock:
     # Structured data extracted for logic
     public_key: str
     preshared_key: Optional[str]
-    allowed_ips: str  # e.g., "10.20.0.20/32, 192.168.12.0/24, fd20::20/128"
+    allowed_ips: str  # e.g., "10.20.0.20/32, 192.168.10.0/24, fd20::20/128"
     endpoint: Optional[str]
     persistent_keepalive: Optional[int]
     comment_lines: List[str]  # Multi-line comments preserved

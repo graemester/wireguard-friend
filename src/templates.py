@@ -21,7 +21,7 @@ def get_client_template(
         address_ipv4: Client IPv4 address with CIDR (e.g., "10.20.0.50/24")
         address_ipv6: Client IPv6 address with CIDR (e.g., "fd20::50/64")
         private_key: Client private key
-        dns: DNS server (e.g., "192.168.12.20" for Pi-hole)
+        dns: DNS server (e.g., "192.168.10.20" for Pi-hole)
         peer_public_key: Coordinator public key
         peer_endpoint: Coordinator endpoint (e.g., "oh.higrae.me:51820")
         peer_allowed_ips: Allowed IPs for routing

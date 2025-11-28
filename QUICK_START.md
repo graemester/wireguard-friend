@@ -58,7 +58,7 @@ Coordination Server:
 
 Subnet Routers (1):
   Name      IPv4         IPv6            LANs
-  icculus   10.66.0.20   fd66:6666::20   192.168.12.0/24
+  icculus   10.66.0.20   fd66:6666::20   192.168.10.0/24
 
 Peers (10):
   Name            IPv4          IPv6           Access        Client Config
@@ -151,13 +151,13 @@ This will:
 When creating or updating peers, choose access level:
 
 - **full_access**: All networks (VPN + all LAN subnets)
-  - `AllowedIPs = 10.66.0.0/24, fd66:6666::/64, 192.168.12.0/24`
+  - `AllowedIPs = 10.20.0.0/24, fd20::/64, 192.168.10.0/24`
 
 - **vpn_only**: Just the VPN network
-  - `AllowedIPs = 10.66.0.0/24, fd66:6666::/64`
+  - `AllowedIPs = 10.20.0.0/24, fd20::/64`
 
 - **lan_only**: VPN + specific LAN subnets
-  - `AllowedIPs = 10.66.0.0/24, fd66:6666::/64, 192.168.12.0/24`
+  - `AllowedIPs = 10.20.0.0/24, fd20::/64, 192.168.10.0/24`
 
 - **custom**: Specific IPs (parking lot for future)
 

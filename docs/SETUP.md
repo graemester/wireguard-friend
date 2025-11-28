@@ -99,7 +99,7 @@ mkdir import
 scp -P 2223 user@oh.higrae.me:/etc/wireguard/wg0.conf import/coordinator-wg0.conf
 
 # From subnet router (home LAN gateway)
-scp user@192.168.12.20:/etc/wireguard/wg0.conf import/icculus-wg0.conf
+scp user@192.168.10.20:/etc/wireguard/wg0.conf import/icculus-wg0.conf
 
 # Optional: existing client configs
 cp ~/wireguard-backups/*.conf import/
@@ -191,7 +191,7 @@ Before you can deploy, run one-time setup:
 ✓ Public key installed
 ✓ Authentication test successful
 
-🏠 Setting up subnet router (192.168.12.20:22)
+🏠 Setting up subnet router (192.168.10.20:22)
   Enter SSH password: ********
 ✓ Public key installed
 ✓ Authentication test successful
@@ -253,7 +253,7 @@ After setup, deployment is a single command:
 ✓ Verified: 12 peers active
 
 🏠 Deploying to Subnet Router
-  Subnet Router: ged@192.168.12.20:22 (localhost detected)
+  Subnet Router: ged@192.168.10.20:22 (localhost detected)
   Config: /etc/wireguard/wg0.conf
   Interface: wg0
 
@@ -298,7 +298,7 @@ coordinator:
 
 subnet_router:
   name: icculus
-  host: 192.168.12.20
+  host: 192.168.10.20
   port: 22
   user: ged
   config_path: /etc/wireguard/wg0.conf
@@ -307,28 +307,28 @@ subnet_router:
     ipv4: 10.66.0.20
     ipv6: fd66:6666::20
   routed_subnets:
-    - 192.168.12.0/24
-  dns: 192.168.12.20
+    - 192.168.10.0/24
+  dns: 192.168.10.20
 
 peer_templates:
   mobile_client:
     description: Full access mobile device
     persistent_keepalive: 25
-    dns: 192.168.12.20
+    dns: 192.168.10.20
     allowed_ips:
       - 10.66.0.0/24
       - fd66:6666::/64
-      - 192.168.12.0/24
+      - 192.168.10.0/24
     mtu: 1280
 
   desktop_client:
     description: Desktop/laptop with full access
     persistent_keepalive: 25
-    dns: 192.168.12.20
+    dns: 192.168.10.20
     allowed_ips:
       - 10.66.0.0/24
       - fd66:6666::/64
-      - 192.168.12.0/24
+      - 192.168.10.0/24
     mtu: 1420
 
 ip_allocation:
@@ -542,7 +542,7 @@ sudo ./wg-friend-deploy.py
 
 ### Subnet Router Not Routing Traffic
 
-**Problem:** Can ping VPN IPs but not LAN IPs (e.g., 192.168.12.x).
+**Problem:** Can ping VPN IPs but not LAN IPs (e.g., 192.168.10.x).
 
 **Fix:**
 ```bash

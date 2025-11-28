@@ -24,11 +24,11 @@ coordinator:
   endpoint: oh.higrae.me:51820
   public_key: Yk+VD886XMnyu2EUGWFoLKXJAwkN7wtCauQzq32KUC8=
   network:
-    ipv4: 10.66.0.0/24
-    ipv6: fd66:6666::/64
+    ipv4: 10.20.0.0/24
+    ipv6: fd20::/64
   coordinator_ip:
-    ipv4: 10.66.0.1
-    ipv6: fd66:6666::1
+    ipv4: 10.20.0.1
+    ipv6: fd20::1
 
 # Subnet Router (Internal LAN Gateway)
 # - Behind NAT on private network
@@ -36,16 +36,16 @@ coordinator:
 # - Provides access to home network resources
 subnet_router:
   name: icculus
-  host: 192.168.12.20  # Internal IP
+  host: 192.168.10.20  # Internal IP
   user: ged
   config_path: /etc/wireguard/wg0.conf
   interface: wg0
   vpn_ip:
-    ipv4: 10.66.0.20
-    ipv6: fd66:6666::20
+    ipv4: 10.20.0.20
+    ipv6: fd20::20
   routed_subnets:
-    - 192.168.12.0/24  # Home LAN
-  dns: 192.168.12.20   # Pi-hole on subnet router
+    - 192.168.10.0/24  # Home LAN
+  dns: 192.168.10.20   # Pi-hole on subnet router
 
 # Peer Templates
 # These define standard configurations for different peer types
@@ -57,11 +57,11 @@ peer_templates:
   mobile_client:
     description: "Mobile/desktop device with full network access"
     persistent_keepalive: 25
-    dns: 192.168.12.20
+    dns: 192.168.10.20
     allowed_ips:
-      - 10.66.0.0/24        # VPN mesh
-      - fd66:6666::/64      # VPN mesh (IPv6)
-      - 192.168.12.0/24     # Home LAN
+      - 10.20.0.0/24        # VPN mesh
+      - fd20::/64           # VPN mesh (IPv6)
+      - 192.168.10.0/24     # Home LAN
     mtu: 1280
 
   # VPN-Only Client (Mesh Access Only)
@@ -71,10 +71,10 @@ peer_templates:
   mesh_only:
     description: "VPN mesh access only, no LAN"
     persistent_keepalive: 25
-    dns: 10.66.0.1
+    dns: 10.20.0.1
     allowed_ips:
-      - 10.66.0.0/24
-      - fd66:6666::/64
+      - 10.20.0.0/24
+      - fd20::/64
     mtu: 1280
 
   # Restricted External Peer (Limited Access)
@@ -84,10 +84,10 @@ peer_templates:
   restricted_external:
     description: "Restricted access to specific resources"
     persistent_keepalive: 25
-    dns: 10.66.0.1
+    dns: 10.20.0.1
     allowed_ips:
       # Define specific IPs/subnets in peer creation
-      - 10.66.0.0/24
+      - 10.20.0.0/24
     mtu: 1280
 
   # Server/Service Peer (Static Infrastructure)
@@ -98,21 +98,21 @@ peer_templates:
     description: "Server or service peer"
     persistent_keepalive: 0  # Not needed for servers
     allowed_ips:
-      - 10.66.0.0/24
-      - fd66:6666::/64
-      - 192.168.12.0/24
+      - 10.20.0.0/24
+      - fd20::/64
+      - 192.168.10.0/24
     mtu: 1280
 
 # IP Allocation
 # wg-friend auto-assigns IPs from these ranges
 ip_allocation:
-  start_ipv4: 10.66.0.50
-  end_ipv4: 10.66.0.254
-  start_ipv6: fd66:6666::50
+  start_ipv4: 10.20.0.50
+  end_ipv4: 10.20.0.254
+  start_ipv6: fd20::50
   # Reserved IPs
   reserved:
-    - 10.66.0.1   # Coordinator
-    - 10.66.0.20  # icculus (subnet router)
+    - 10.20.0.1   # Coordinator
+    - 10.20.0.20  # icculus (subnet router)
 
 # QR Code Settings
 qr_code:

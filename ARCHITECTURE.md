@@ -215,7 +215,7 @@ Stores LAN gateway configurations.
 - `has_endpoint` - Behind CGNAT?
 
 **Related tables**:
-- `sn_lan_networks` - LANs advertised (192.168.12.0/24)
+- `sn_lan_networks` - LANs advertised (192.168.10.0/24)
 - `sn_postup_rules` - Router's PostUp rules
 - `sn_postdown_rules` - Router's PostDown rules
 
