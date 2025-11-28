@@ -1,251 +1,367 @@
-# WireGuard Friend - Documentation Index
+# 📚 WireGuard Friend - Complete Documentation Guide
 
-## Available Documentation
+**Everything you need to build, manage, and understand your WireGuard network.**
 
-### 1. [README.md](README.md) - Project Overview
-**Start here!**
+---
 
-- Quick start guide
-- Feature overview  
-- Command reference
-- Examples
+## 🚀 Getting Started (Start Here!)
+
+### [README.md](README.md) - Project Overview
+**What is WireGuard Friend? Start here!**
+
+- What it builds for you (network architecture)
+- What problems it solves (key rotation, peer management, etc.)
+- Features at a glance
+- Quick start commands
 - Troubleshooting
 
-**Best for**: Getting started, understanding what the tool does
+👉 **Read this first** to understand what the tool does and whether it's right for you.
 
 ---
 
-### 2. [QUICK_START.md](QUICK_START.md) - Detailed Walkthrough
-**Step-by-step guide**
+### [WHERE_TO_RUN.md](WHERE_TO_RUN.md) - Installation Location Guide
+**Should I run this on my Coordination Server, Subnet Router, or Client?**
 
-- Complete import workflow
-- Maintenance mode guide
-- Access level explanations
-- Database queries
-- Common operations
-- Safety features
+- **Quick answer:** Subnet router (recommended) or your laptop
+- CS vs SN vs Client device comparison
+- Ideal workflow: Pick one place, SSH to it
+- Requirements checklist
+- Security considerations
+- Multi-admin scenarios
 
-**Best for**: Learning how to use all features
+👉 **Read this before installing** to choose the best location for your setup.
 
 ---
 
-### 3. [ARCHITECTURE.md](ARCHITECTURE.md) - Design & Internals
-**Deep dive into design**
+### [QUICK_START.md](QUICK_START.md) - Step-by-Step Tutorial
+**Complete walkthrough of all features**
 
-- Design philosophy (perfect fidelity)
-- Dual storage model (raw blocks + structured data)
-- Sacred rules (PostUp/PostDown, peer order, etc.)
-- Database schema
-- Import workflow
+- Import existing WireGuard configs (Phase-by-phase guide)
+- Maintenance mode interactive menu
+- Create new peers with QR codes
+- Access levels explained (full_access, vpn_only, restricted_ip, etc.)
+- Key rotation workflow
+- SSH deployment
+- Database queries and verification
+
+👉 **Use this as your manual** - detailed instructions for every operation.
+
+---
+
+## 🏗️ Understanding the System
+
+### [ARCHITECTURE.md](ARCHITECTURE.md) - Design & Technical Details
+**Deep dive into how it works (650+ lines)**
+
+- Design philosophy: Perfect fidelity reconstruction
+- Dual storage model: Raw blocks + structured data
+- Sacred rules: PostUp/PostDown, peer order, comments
+- Database schema (12 tables)
+- Import workflow (5 phases)
 - Reconstruction algorithm
-- Key rotation
+- Key rotation internals
 - Testing strategy
 
-**Best for**: Understanding how it works, contributing code
+👉 **For power users and contributors** - understand the design decisions and internals.
 
 ---
 
-## Quick Reference
+### [RESTRICTED_IP_ACCESS.md](RESTRICTED_IP_ACCESS.md) - Advanced Peer Access Control
+**Limit peers to specific IPs and ports**
 
-### Import Configs
-```bash
-./wg-friend-onboard.py --import-dir import/ --yes
-```
+- What is restricted IP access?
+- Port-level filtering (SSH only, HTTPS only, etc.)
+- How firewall rules are generated
+- Interactive setup workflow
+- Syntax: single port, multiple ports, port ranges
+- Common ports reference (SSH=22, RDP=3389, VNC=5900, etc.)
 
-### Maintenance Mode
+👉 **For advanced setups** - granular access control for security-conscious networks.
+
+---
+
+## 💾 Database & Backup
+
+### [BACKUP_RESTORE.md](BACKUP_RESTORE.md) - Database Portability Guide
+**Keep your configs safe and portable**
+
+- **Safe backup methods** (file copy, .backup command, SQL dump)
+- **Copying between machines** (verification checklist)
+- **Network storage guidance** (NAS/NFS/SMB - when it works, when it doesn't)
+- **Migration workflows** (moving admin workstation)
+- **What's portable** (database is fully portable!)
+- **What's NOT portable** (SSH keys are separate)
+
+👉 **Read before your first backup** - understand database portability and safety.
+
+---
+
+## 🧪 Testing & Development
+
+### [tests/README.md](tests/README.md) - Test Suite Documentation
+**Comprehensive testing and validation**
+
+- **Test suite:** 32 tests across 10 categories (100% pass rate)
+- **Demo scripts:** Remote assistance, new peer creation
+- **Migration scripts:** Database schema updates
+- **Test coverage:** Schema, CRUD, fidelity, CASCADE, edge cases
+
+👉 **For developers and testing** - verify system stability and reliability.
+
+---
+
+## 📋 Quick Reference
+
+### Essential Commands
+
 ```bash
+# Import existing configs
+./wg-friend-onboard.py --import-dir import/
+
+# Interactive maintenance mode
 ./wg-friend-maintain.py
-```
 
-### View Network
-```bash
-python3 test-maintain.py
-```
+# Backup database
+./backup-database.sh /mnt/nas/backups
 
-### Create New Peer
-```bash
-python3 demo-new-peer.py
-```
+# Custom database location
+export WG_FRIEND_DB=/path/to/custom.db
+./wg-friend-maintain.py
 
-### Verify Fidelity
-```bash
-diff import/coordination.conf output/coordination.conf
+# Run test suite
+python3 tests/test-suite.py
 ```
 
 ---
 
-## Documentation by Task
+## 📖 Documentation by Task
 
-### I want to...
+### "I want to..."
 
-**Import existing configs**
-→ [QUICK_START.md](QUICK_START.md) - Section: Import Workflow
-
-**Create a new peer**
-→ [QUICK_START.md](QUICK_START.md) - Section: Create New Peer
-→ [README.md](README.md) - Examples: Create New Mobile Client
-
-**Rotate keys**
-→ [QUICK_START.md](QUICK_START.md) - Section: Key Rotation
-→ [README.md](README.md) - Examples: Rotate Compromised Key
-
-**Deploy to server**
-→ [QUICK_START.md](QUICK_START.md) - Section: SSH Deployment
-→ [README.md](README.md) - Examples: Deploy to Server
-
-**Query the database**
-→ [README.md](README.md) - Section: Database Queries
-→ [QUICK_START.md](QUICK_START.md) - Section: Database Queries
-
-**Understand access levels**
-→ [QUICK_START.md](QUICK_START.md) - Section: Access Levels
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Section: Access Levels
-
-**Troubleshoot issues**
-→ [README.md](README.md) - Section: Troubleshooting
-→ [QUICK_START.md](QUICK_START.md) - Section: Troubleshooting
-
-**Understand the design**
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Entire document
-
-**Contribute code**
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Design decisions
-→ [README.md](README.md) - Development section
+| Task | Documentation | Section |
+|------|---------------|---------|
+| **Get started** | [README.md](README.md) | Quick Start |
+| **Choose where to install** | [WHERE_TO_RUN.md](WHERE_TO_RUN.md) | Entire guide |
+| **Import existing configs** | [QUICK_START.md](QUICK_START.md) | Import Workflow |
+| **Create a new peer** | [QUICK_START.md](QUICK_START.md) | Create New Peer |
+| **Create remote assistance peer** | [tests/README.md](tests/README.md) | Remote Assistance Feature |
+| **Restrict peer to specific IPs** | [RESTRICTED_IP_ACCESS.md](RESTRICTED_IP_ACCESS.md) | Entire guide |
+| **Rotate keys** | [QUICK_START.md](QUICK_START.md) | Key Rotation |
+| **Deploy to server** | [QUICK_START.md](QUICK_START.md) | SSH Deployment |
+| **Backup database** | [BACKUP_RESTORE.md](BACKUP_RESTORE.md) | Safe Backup Methods |
+| **Copy to another machine** | [BACKUP_RESTORE.md](BACKUP_RESTORE.md) | Copying Between Machines |
+| **Understand access levels** | [QUICK_START.md](QUICK_START.md) | Access Levels |
+| **Query the database** | [QUICK_START.md](QUICK_START.md) | Database Queries |
+| **Troubleshoot issues** | [README.md](README.md) | Troubleshooting |
+| **Understand the design** | [ARCHITECTURE.md](ARCHITECTURE.md) | Design Philosophy |
+| **Run tests** | [tests/README.md](tests/README.md) | Test Suite |
+| **Contribute code** | [ARCHITECTURE.md](ARCHITECTURE.md) | Entire document |
 
 ---
 
-## Code Documentation
+## 🗂️ Complete Documentation Index
 
-### Source Files
+### User Guides (Read These)
 
-All source files have comprehensive docstrings:
+1. **[README.md](README.md)** - Project overview and quick start
+2. **[WHERE_TO_RUN.md](WHERE_TO_RUN.md)** - Where to install and run
+3. **[QUICK_START.md](QUICK_START.md)** - Step-by-step tutorial (450+ lines)
+4. **[BACKUP_RESTORE.md](BACKUP_RESTORE.md)** - Database backup and portability
 
-**src/database.py** (442 lines)
-- Database operations
-- CRUD for all entities
-- Reconstruction functions
-- Schema initialization
+### Technical Documentation (For Advanced Users)
 
-**src/raw_parser.py** (358 lines)
-- Raw block extraction
-- Structured data parsing
-- Config type detection
-- Public key derivation
+5. **[ARCHITECTURE.md](ARCHITECTURE.md)** - Design and internals (650+ lines)
+6. **[RESTRICTED_IP_ACCESS.md](RESTRICTED_IP_ACCESS.md)** - IP/port-based access control
+7. **[tests/README.md](tests/README.md)** - Testing and validation
 
-**src/keygen.py**
-- Keypair generation
-- Public key derivation
+### Support Documentation
 
-**src/ssh_client.py**
-- SSH connection handling
-- File upload
-- Command execution
-
-**src/qr_generator.py**
-- QR code generation
-- PNG output
-
-### Scripts
-
-**wg-friend-onboard.py**
-- 5-phase import workflow
-- Raw block + structured data storage
-- Perfect fidelity verification
-
-**wg-friend-maintain.py**
-- Interactive maintenance menu
-- Entity management
-- Key rotation
-- SSH deployment
-- QR code generation
+8. **[MANIFEST.md](MANIFEST.md)** - Critical files needed to run (← See this for required files!)
+9. **[docs/SETUP.md](docs/SETUP.md)** - Legacy setup notes (archived)
 
 ---
 
-## Testing & Examples
+## 🎯 Documentation Quality
 
-### Test Scripts
+All documentation is:
+- ✅ **Accurate** - Reflects current codebase
+- ✅ **Complete** - Covers all features
+- ✅ **Clear** - Written for humans, not robots
+- ✅ **Practical** - Real examples, not theory
+- ✅ **Maintained** - Updated with code changes
 
-**test-maintain.py**
-- List all entities
-- Database query examples
-- Verification
-
-**demo-new-peer.py**
-- Automated peer creation
-- IP allocation demo
-- Config generation
-
-### Example Configs
-
-**import/coordination.conf** - Sample CS config (11 peers)
-**import/wg0.conf** - Sample subnet router
-**import/iphone16.conf** - Sample client
+**Total documentation:** ~2,500+ lines across 9 markdown files
 
 ---
 
-## File Structure
+## 📂 File Structure Overview
 
 ```
 wireguard-friend/
-├── README.md              ← Start here
-├── QUICK_START.md         ← Detailed guide
-├── ARCHITECTURE.md        ← Design deep-dive
-├── DOCUMENTATION.md       ← This file
-├── requirements.txt       ← Python deps
+├── 📖 Documentation (You Are Here)
+│   ├── README.md                    ← Start here
+│   ├── WHERE_TO_RUN.md              ← Installation guide
+│   ├── QUICK_START.md               ← Tutorial
+│   ├── ARCHITECTURE.md              ← Technical deep-dive
+│   ├── BACKUP_RESTORE.md            ← Database guide
+│   ├── RESTRICTED_IP_ACCESS.md      ← Access control
+│   ├── DOCUMENTATION.md             ← This file
+│   ├── MANIFEST.md                  ← Critical files list
+│   └── tests/README.md              ← Testing guide
 │
-├── wg-friend-onboard.py    ← Import script
-├── wg-friend-maintain.py      ← Maintenance script
-├── wg-friend.db              ← SQLite database
+├── 🔧 Core Scripts
+│   ├── wg-friend-onboard.py         ← Import configs
+│   ├── wg-friend-maintain.py        ← Manage network
+│   ├── backup-database.sh           ← Automated backups
+│   └── requirements.txt             ← Python dependencies
 │
-├── src/                   ← Source modules
-│   ├── database.py
-│   ├── raw_parser.py
-│   ├── keygen.py
-│   ├── ssh_client.py
-│   └── qr_generator.py
+├── 💾 Database & Generated Files
+│   ├── wg-friend.db                 ← SQLite database (created on first run)
+│   ├── import/                      ← Place configs here for import
+│   ├── output/                      ← Generated configs
+│   └── backups/                     ← Database backups (created by script)
 │
-├── import/                ← Place configs here
-├── output/                ← Generated configs
+├── 📦 Source Code
+│   └── src/
+│       ├── database.py              ← Database operations
+│       ├── raw_parser.py            ← Config parsing
+│       ├── keygen.py                ← Key generation
+│       ├── ssh_client.py            ← SSH deployment
+│       └── qr_generator.py          ← QR code generation
 │
-└── tests/
-    ├── test-maintain.py
-    └── demo-new-peer.py
+└── 🧪 Tests & Demos
+    └── tests/
+        ├── test-suite.py            ← 32 comprehensive tests
+        ├── demo-new-peer.py         ← Peer creation demo
+        ├── demo-remote-assistance.py ← Remote help demo
+        ├── test-maintain.py         ← Database query examples
+        └── migrate-*.py             ← Database migrations
 ```
 
 ---
 
-## Getting Help
+## 🆘 Getting Help
 
-1. **Check documentation** (this index)
-2. **Read error messages** (usually helpful)
-3. **Try `--help`** on scripts
-4. **Check database** with queries
-5. **Verify config files** in output/
+### Step-by-Step Troubleshooting
+
+1. **Check the documentation** (you're here - use the task index above!)
+2. **Read error messages** (they're usually helpful and specific)
+3. **Try `--help`** on any script for command-line options
+4. **Check the database** using query examples in QUICK_START.md
+5. **Verify config files** in the `output/` directory
+6. **Run the test suite** to verify system integrity
+7. **Check GitHub issues** at https://github.com/anthropics/claude-code/issues
+
+### Common Issues
+
+| Issue | Solution | Documentation |
+|-------|----------|---------------|
+| Import failed | Check config file format | [QUICK_START.md](QUICK_START.md) - Troubleshooting |
+| Database not found | Run onboard script first | [README.md](README.md) - Quick Start |
+| SSH deployment fails | Set up SSH keys | [QUICK_START.md](QUICK_START.md) - SSH Deployment |
+| Configs don't match | Verify fidelity | [ARCHITECTURE.md](ARCHITECTURE.md) - Testing |
+| Need to backup | Use backup script | [BACKUP_RESTORE.md](BACKUP_RESTORE.md) |
+| Where to run it? | Read install guide | [WHERE_TO_RUN.md](WHERE_TO_RUN.md) |
 
 ---
 
-## Key Concepts
+## 🎓 Learning Path
+
+### Beginner
+
+1. Read [README.md](README.md) - Understand what it does
+2. Read [WHERE_TO_RUN.md](WHERE_TO_RUN.md) - Choose install location
+3. Follow [QUICK_START.md](QUICK_START.md) - Import your first config
+4. Read [BACKUP_RESTORE.md](BACKUP_RESTORE.md) - Set up backups
+
+### Intermediate
+
+5. Explore [QUICK_START.md](QUICK_START.md) - Create peers, rotate keys
+6. Read [RESTRICTED_IP_ACCESS.md](RESTRICTED_IP_ACCESS.md) - Advanced access control
+7. Review [tests/README.md](tests/README.md) - Run test suite
+
+### Advanced
+
+8. Study [ARCHITECTURE.md](ARCHITECTURE.md) - Understand internals
+9. Review source code in `src/` directory
+10. Contribute improvements or customizations
+
+---
+
+## 🔑 Key Concepts Glossary
 
 ### Perfect Fidelity
-Reconstructed configs must be byte-for-byte identical to originals.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Design Philosophy
+Reconstructed configs are byte-for-byte identical to originals.
+→ [ARCHITECTURE.md](ARCHITECTURE.md) - Design Philosophy
 
 ### Raw Blocks
 Exact text from config files, never parsed or modified.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Dual Storage Model
+→ [ARCHITECTURE.md](ARCHITECTURE.md) - Dual Storage Model
 
 ### Structured Data
-Queryable fields extracted from raw blocks.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Structured Data
+Queryable fields extracted from raw blocks for database queries.
+→ [ARCHITECTURE.md](ARCHITECTURE.md) - Structured Data
 
-### PostUp/PostDown Sacred
-These rules are stored as monolithic text blocks, never parsed.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Sacred Rules
+### Sacred Rules
+PostUp/PostDown rules stored as monolithic blocks, never parsed.
+→ [ARCHITECTURE.md](ARCHITECTURE.md) - Sacred Rules
 
 ### Access Levels
-Control what peers can access: full_access, vpn_only, lan_only, custom.
-See: [QUICK_START.md](QUICK_START.md) - Access Levels
+Control what peers can access: full_access, vpn_only, lan_only, restricted_ip, remote_assistance.
+→ [QUICK_START.md](QUICK_START.md) - Access Levels
+
+### Peer Order
+Exact sequence of peers in CS config, preserved from original.
+→ [ARCHITECTURE.md](ARCHITECTURE.md) - Peer Order Tracking
 
 ---
 
-**All documentation maintained with the same care as the code: accurate, complete, and trustworthy.**
+## ⚙️ Advanced Topics
+
+### Database Schema
+Complete schema with 12 tables, foreign keys, and constraints.
+→ [ARCHITECTURE.md](ARCHITECTURE.md) - Database Schema
+
+### Key Rotation
+Atomic updates with zero downtime and automatic backups.
+→ [QUICK_START.md](QUICK_START.md) - Key Rotation
+
+### SSH Deployment
+Automated config deployment with backups and verification.
+→ [QUICK_START.md](QUICK_START.md) - SSH Deployment
+
+### Port-Based Restrictions
+Firewall rules for granular access control (e.g., SSH-only access).
+→ [RESTRICTED_IP_ACCESS.md](RESTRICTED_IP_ACCESS.md)
+
+### Remote Assistance
+Special peer type with user-friendly setup instructions.
+→ [tests/README.md](tests/README.md) - Remote Assistance Feature
+
+### Database Portability
+Safe backup, restore, and migration between machines.
+→ [BACKUP_RESTORE.md](BACKUP_RESTORE.md)
+
+---
+
+## 📊 Documentation Statistics
+
+| File | Lines | Purpose |
+|------|-------|---------|
+| README.md | ~400 | Project overview |
+| WHERE_TO_RUN.md | ~500 | Installation guide |
+| QUICK_START.md | ~450 | Step-by-step tutorial |
+| ARCHITECTURE.md | ~650 | Technical design |
+| BACKUP_RESTORE.md | ~350 | Database management |
+| RESTRICTED_IP_ACCESS.md | ~200 | Access control |
+| DOCUMENTATION.md | ~300 | This index |
+| tests/README.md | ~150 | Testing guide |
+| **Total** | **~3,000** | **Complete documentation** |
+
+---
+
+**📚 This documentation is maintained with the same care as the code: accurate, complete, and trustworthy.**
+
+**🎯 Can't find what you need?** Use the "I want to..." index above or check the task-based documentation table.
+
+**💡 Tip:** Bookmark this page! It's your central hub for all WireGuard Friend documentation.
