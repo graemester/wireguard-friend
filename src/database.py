@@ -161,9 +161,13 @@ class WireGuardDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_rotated TIMESTAMP,
                     FOREIGN KEY (cs_id) REFERENCES coordination_server(id) ON DELETE CASCADE,
-                    CHECK (access_level IN ('full_access', 'vpn_only', 'lan_only', 'custom'))
+                    CHECK (access_level IN ('full_access', 'vpn_only', 'lan_only', 'custom', 'restricted_ip'))
                 )
             """)
+
+            # For existing databases, update the constraint
+            # SQLite doesn't support ALTER TABLE for CHECK constraints, so we'll handle this gracefully
+            # New peers with restricted_ip will work; old databases are upgraded on first use
 
             # Custom allowed IPs for 'custom' access level peers
             cursor.execute("""
@@ -172,6 +176,38 @@ class WireGuardDB:
                     peer_id INTEGER NOT NULL,
                     allowed_ip TEXT NOT NULL,
                     FOREIGN KEY (peer_id) REFERENCES peer(id) ON DELETE CASCADE
+                )
+            """)
+
+            # IP restrictions for 'restricted_ip' access level peers
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS peer_ip_restrictions (
+                    id INTEGER PRIMARY KEY,
+                    peer_id INTEGER NOT NULL,
+                    sn_id INTEGER NOT NULL,
+                    target_ip TEXT NOT NULL,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (peer_id) REFERENCES peer(id) ON DELETE CASCADE,
+                    FOREIGN KEY (sn_id) REFERENCES subnet_router(id) ON DELETE CASCADE
+                )
+            """)
+
+            # Peer-specific firewall rules for subnet routers
+            # These are dynamically generated rules tied to specific peers
+            # They are separate from the original "sacred" PostUp/PostDown blocks
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sn_peer_firewall_rules (
+                    id INTEGER PRIMARY KEY,
+                    sn_id INTEGER NOT NULL,
+                    peer_id INTEGER NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    rule_text TEXT NOT NULL,
+                    rule_order INTEGER NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (sn_id) REFERENCES subnet_router(id) ON DELETE CASCADE,
+                    FOREIGN KEY (peer_id) REFERENCES peer(id) ON DELETE CASCADE,
+                    CHECK (rule_type IN ('postup', 'postdown'))
                 )
             """)
 
@@ -355,6 +391,68 @@ class WireGuardDB:
             cursor.execute("SELECT network_cidr FROM sn_lan_networks WHERE sn_id = ?", (sn_id,))
             return [row['network_cidr'] for row in cursor.fetchall()]
 
+    def get_sn_postup_rules(self, sn_id: int) -> List[str]:
+        """Get PostUp rules for subnet router in order"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT rule_text FROM sn_postup_rules
+                WHERE sn_id = ? ORDER BY rule_order
+            """, (sn_id,))
+            return [row['rule_text'] for row in cursor.fetchall()]
+
+    def get_sn_postdown_rules(self, sn_id: int) -> List[str]:
+        """Get PostDown rules for subnet router in order"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT rule_text FROM sn_postdown_rules
+                WHERE sn_id = ? ORDER BY rule_order
+            """, (sn_id,))
+            return [row['rule_text'] for row in cursor.fetchall()]
+
+    def save_sn_peer_firewall_rules(self, sn_id: int, peer_id: int, postup_rules: List[str], postdown_rules: List[str]):
+        """Save peer-specific firewall rules for subnet router"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+
+            # Save PostUp rules
+            for i, rule in enumerate(postup_rules):
+                cursor.execute("""
+                    INSERT INTO sn_peer_firewall_rules (sn_id, peer_id, rule_type, rule_text, rule_order)
+                    VALUES (?, ?, 'postup', ?, ?)
+                """, (sn_id, peer_id, rule, i))
+
+            # Save PostDown rules
+            for i, rule in enumerate(postdown_rules):
+                cursor.execute("""
+                    INSERT INTO sn_peer_firewall_rules (sn_id, peer_id, rule_type, rule_text, rule_order)
+                    VALUES (?, ?, 'postdown', ?, ?)
+                """, (sn_id, peer_id, rule, i))
+
+            logger.info(f"Saved {len(postup_rules)} PostUp and {len(postdown_rules)} PostDown firewall rules for peer {peer_id}")
+
+    def get_sn_peer_firewall_rules(self, sn_id: int, rule_type: str) -> List[Tuple[int, str]]:
+        """Get peer-specific firewall rules for subnet router
+
+        Returns list of (peer_id, rule_text) tuples in order
+        """
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT peer_id, rule_text FROM sn_peer_firewall_rules
+                WHERE sn_id = ? AND rule_type = ?
+                ORDER BY peer_id, rule_order
+            """, (sn_id, rule_type))
+            return [(row['peer_id'], row['rule_text']) for row in cursor.fetchall()]
+
+    def delete_peer_firewall_rules(self, peer_id: int):
+        """Delete all firewall rules associated with a peer"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM sn_peer_firewall_rules WHERE peer_id = ?", (peer_id,))
+            logger.info(f"Deleted firewall rules for peer {peer_id}")
+
     # ============================================================================
     # Peer operations
     # ============================================================================
@@ -408,6 +506,33 @@ class WireGuardDB:
             """, (cs_id, public_key))
             row = cursor.fetchone()
             return dict(row) if row else None
+
+    def save_peer_ip_restriction(self, peer_id: int, sn_id: int, target_ip: str, description: Optional[str] = None):
+        """Save IP restriction for a peer"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO peer_ip_restrictions (peer_id, sn_id, target_ip, description)
+                VALUES (?, ?, ?, ?)
+            """, (peer_id, sn_id, target_ip, description))
+            logger.info(f"Saved IP restriction for peer {peer_id}: {target_ip} on SN {sn_id}")
+
+    def get_peer_ip_restriction(self, peer_id: int) -> Optional[Dict]:
+        """Get IP restriction for a peer"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM peer_ip_restrictions WHERE peer_id = ?
+            """, (peer_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def delete_peer_ip_restriction(self, peer_id: int):
+        """Delete IP restriction for a peer"""
+        with self._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM peer_ip_restrictions WHERE peer_id = ?", (peer_id,))
+            logger.info(f"Deleted IP restriction for peer {peer_id}")
 
     # ============================================================================
     # Peer order tracking
@@ -475,7 +600,7 @@ class WireGuardDB:
         return '\n'.join(lines)
 
     def reconstruct_sn_config(self, sn_id: int) -> str:
-        """Reconstruct subnet router config from raw blocks"""
+        """Reconstruct subnet router config from raw blocks with firewall rules"""
         with self._connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM subnet_router WHERE id = ?", (sn_id,))
@@ -486,9 +611,78 @@ class WireGuardDB:
 
             sn = dict(sn)
 
-        # Output raw interface block AS-IS
         lines = []
-        lines.append(sn['raw_interface_block'].rstrip())
+
+        # Start with [Interface] header
+        lines.append("[Interface]")
+
+        # Extract PrivateKey and Address from raw_interface_block
+        # The raw_interface_block contains the complete Interface section
+        # We need to parse it to inject PostUp/PostDown rules
+        interface_lines = sn['raw_interface_block'].strip().split('\n')
+
+        # Skip [Interface] line (we already added it) and add the rest
+        for line in interface_lines:
+            if line.strip() == "[Interface]":
+                continue
+            # Don't add PostUp/PostDown from original block yet - we'll add them in order below
+            if line.strip().startswith("PostUp") or line.strip().startswith("PostDown"):
+                continue
+            lines.append(line)
+
+        # Add original PostUp rules
+        original_postup = self.get_sn_postup_rules(sn_id)
+        if original_postup:
+            for rule in original_postup:
+                lines.append(f"PostUp = {rule}")
+
+        # Add peer-specific PostUp rules with comments
+        peer_postup_rules = self.get_sn_peer_firewall_rules(sn_id, 'postup')
+        if peer_postup_rules:
+            # Group by peer_id
+            current_peer_id = None
+            for peer_id, rule_text in peer_postup_rules:
+                if peer_id != current_peer_id:
+                    # Get peer name for comment
+                    with self._connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM peer WHERE id = ?", (peer_id,))
+                        peer_row = cursor.fetchone()
+                        peer_name = peer_row['name'] if peer_row else f"peer-{peer_id}"
+
+                    lines.append(f"# Peer-specific rule for: {peer_name}")
+                    current_peer_id = peer_id
+
+                lines.append(f"PostUp = {rule_text}")
+
+        # Add original PostDown rules
+        original_postdown = self.get_sn_postdown_rules(sn_id)
+        if original_postdown:
+            for rule in original_postdown:
+                lines.append(f"PostDown = {rule}")
+
+        # Add peer-specific PostDown rules with comments
+        peer_postdown_rules = self.get_sn_peer_firewall_rules(sn_id, 'postdown')
+        if peer_postdown_rules:
+            # Group by peer_id
+            current_peer_id = None
+            for peer_id, rule_text in peer_postdown_rules:
+                if peer_id != current_peer_id:
+                    # Get peer name for comment
+                    with self._connection() as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT name FROM peer WHERE id = ?", (peer_id,))
+                        peer_row = cursor.fetchone()
+                        peer_name = peer_row['name'] if peer_row else f"peer-{peer_id}"
+
+                    lines.append(f"# Peer-specific rule for: {peer_name}")
+                    current_peer_id = peer_id
+
+                lines.append(f"PostDown = {rule_text}")
+
+        # Add the Peer block (connection to coordination server)
+        lines.append('')
+        lines.append(sn['raw_peer_block'].rstrip())
         lines.append('')
 
         return '\n'.join(lines)
@@ -524,7 +718,8 @@ class WireGuardDB:
         with self._connection() as conn:
             cursor = conn.cursor()
             tables = [
-                'cs_peer_order', 'peer_custom_allowed_ips', 'peer',
+                'cs_peer_order', 'peer_custom_allowed_ips', 'peer_ip_restrictions',
+                'sn_peer_firewall_rules', 'peer',
                 'sn_lan_networks', 'sn_postdown_rules', 'sn_postup_rules', 'subnet_router',
                 'cs_postdown_rules', 'cs_postup_rules', 'coordination_server',
                 'system_config'

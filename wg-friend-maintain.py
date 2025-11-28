@@ -1251,9 +1251,29 @@ class WireGuardMaintainer:
             console.print("[red]Name mismatch. Deletion cancelled.[/red]")
             return
 
+        # Check if peer has IP restriction (need to know which SN to re-deploy)
+        restriction = self.db.get_peer_ip_restriction(peer['id'])
+        affected_sn = None
+        if restriction:
+            with self.db._connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT name FROM subnet_router WHERE id = ?", (restriction['sn_id'],))
+                sn_row = cursor.fetchone()
+                if sn_row:
+                    affected_sn = sn_row['name']
+
         # Delete from database
         with self.db._connection() as conn:
             cursor = conn.cursor()
+
+            # Delete IP restrictions (explicit, even though CASCADE handles it)
+            if restriction:
+                self.db.delete_peer_ip_restriction(peer['id'])
+                console.print(f"[cyan]  • Removed IP restriction for {restriction['target_ip']}[/cyan]")
+
+            # Delete firewall rules (explicit, even though CASCADE handles it)
+            self.db.delete_peer_firewall_rules(peer['id'])
+            console.print(f"[cyan]  • Removed firewall rules[/cyan]")
 
             # Delete from peer table
             cursor.execute("""
@@ -1270,7 +1290,11 @@ class WireGuardMaintainer:
         console.print(f"[green]✓ Peer '{peer['name']}' deleted successfully[/green]")
         console.print(f"\n[bold]Next steps:[/bold]")
         console.print(f"  1. Deploy updated coordination server config to remove peer")
-        console.print(f"  2. Revoke access on the physical device")
+        if affected_sn:
+            console.print(f"  2. Deploy updated subnet router config ({affected_sn}) to remove firewall rules")
+            console.print(f"  3. Revoke access on the physical device")
+        else:
+            console.print(f"  2. Revoke access on the physical device")
 
     def _create_new_peer(self):
         """Create a new peer"""
@@ -1339,13 +1363,45 @@ class WireGuardMaintainer:
 
         # Access level
         console.print("\n[bold]Access Level:[/bold]")
-        console.print("  [1] Full access")
+        console.print("  [1] Full access (VPN + all LANs)")
         console.print("  [2] VPN only")
-        console.print("  [3] LAN only")
+        console.print("  [3] LAN only (VPN + all LANs, deprecated)")
+        console.print("  [4] Restricted IP (access to ONE specific IP only)")
 
         access_choice = IntPrompt.ask("Select", default=1)
-        access_map = {1: 'full_access', 2: 'vpn_only', 3: 'lan_only'}
+        access_map = {1: 'full_access', 2: 'vpn_only', 3: 'lan_only', 4: 'restricted_ip'}
         access_level = access_map.get(access_choice, 'full_access')
+
+        # Handle restricted_ip access level
+        target_sn_id = None
+        target_ip = None
+        if access_level == 'restricted_ip':
+            # Select subnet router
+            if not existing_sn:
+                console.print("[red]No subnet routers found. Cannot create restricted IP peer.[/red]")
+                return
+
+            console.print("\n[bold]Select Subnet Router:[/bold]")
+            for i, sn in enumerate(existing_sn, 1):
+                lans = self.db.get_sn_lan_networks(sn['id'])
+                lan_str = ", ".join(lans) if lans else "no LANs"
+                console.print(f"  [{i}] {sn['name']} ({lan_str})")
+
+            sn_choice = IntPrompt.ask("Select subnet router", default=1)
+            if sn_choice < 1 or sn_choice > len(existing_sn):
+                console.print("[red]Invalid choice[/red]")
+                return
+
+            target_sn = existing_sn[sn_choice - 1]
+            target_sn_id = target_sn['id']
+
+            # Prompt for target IP
+            target_ip = Prompt.ask("\nTarget IP address (e.g., 192.168.10.50)")
+            console.print(f"\n[yellow]This peer will ONLY be able to access {target_ip}[/yellow]")
+            console.print(f"[yellow]Firewall rules will be added to {target_sn['name']}[/yellow]")
+
+            if not Confirm.ask("Continue?", default=True):
+                return
 
         # Generate keypair
         private_key, public_key = generate_keypair()
@@ -1384,6 +1440,9 @@ class WireGuardMaintainer:
                 lans = self.db.get_sn_lan_networks(sn['id'])
                 all_networks.extend(lans)
             allowed_ips = ", ".join(all_networks)
+        elif access_level == 'restricted_ip':
+            # Only the target IP + VPN network for connectivity
+            allowed_ips = f"{cs['network_ipv4']}, {cs['network_ipv6']}, {target_ip}/32"
 
         client_config += f"AllowedIPs = {allowed_ips}\n"
         client_config += f"PersistentKeepalive = 25\n"
@@ -1407,10 +1466,46 @@ class WireGuardMaintainer:
         next_position = len(peer_order) + 1
         self.db.save_peer_order(cs['id'], public_key, next_position, is_subnet_router=False)
 
+        # Handle restricted_ip access level - save restriction and firewall rules
+        if access_level == 'restricted_ip':
+            # Save IP restriction
+            self.db.save_peer_ip_restriction(
+                peer_id=peer_id,
+                sn_id=target_sn_id,
+                target_ip=target_ip,
+                description=f"Restricted access to {target_ip} only"
+            )
+
+            # Generate firewall rules
+            # PostUp: Allow ONLY traffic from this peer to the target IP, drop everything else
+            postup_rules = [
+                f"iptables -I FORWARD -s {ipv4}/32 -d {target_ip}/32 -j ACCEPT",
+                f"iptables -I FORWARD -s {ipv4}/32 -j DROP"
+            ]
+
+            # PostDown: Remove the rules
+            postdown_rules = [
+                f"iptables -D FORWARD -s {ipv4}/32 -d {target_ip}/32 -j ACCEPT",
+                f"iptables -D FORWARD -s {ipv4}/32 -j DROP"
+            ]
+
+            # Save firewall rules
+            self.db.save_sn_peer_firewall_rules(
+                sn_id=target_sn_id,
+                peer_id=peer_id,
+                postup_rules=postup_rules,
+                postdown_rules=postdown_rules
+            )
+
+            console.print(f"[green]✓ IP restriction saved: {target_ip}[/green]")
+            console.print(f"[green]✓ Firewall rules added to {target_sn['name']}[/green]")
+
         console.print(f"\n[green]✓ Peer '{name}' created successfully![/green]")
         console.print(f"\n[bold]Next steps:[/bold]")
         console.print(f"  1. Export client config or generate QR code")
         console.print(f"  2. Deploy updated coordination server config")
+        if access_level == 'restricted_ip':
+            console.print(f"  3. Deploy updated subnet router config ({target_sn['name']})")
 
         # Offer to export now
         if Confirm.ask("\nExport client config now?", default=True):
