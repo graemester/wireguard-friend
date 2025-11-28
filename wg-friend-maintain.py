@@ -40,6 +40,10 @@ class WireGuardMaintainer:
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
 
+        # SSH key path for deployments
+        self.ssh_key_dir = Path.home() / ".ssh"
+        self.ssh_key_path = self.ssh_key_dir / "id_ed25519"
+
     def run(self):
         """Run maintenance mode interactive menu"""
         console.print(Panel.fit(
@@ -179,7 +183,17 @@ class WireGuardMaintainer:
         cs = self.db.get_coordination_server()
         config = self.db.reconstruct_cs_config()
 
-        console.print(f"\n[bold yellow]Deploy to {cs['ssh_user']}@{cs['ssh_host']}[/bold yellow]")
+        console.print(f"\n[bold yellow]Deploy to {cs['ssh_user']}@{cs['ssh_host']}:{cs['ssh_port']}[/bold yellow]")
+
+        # Check SSH key
+        if not self.ssh_key_path.exists():
+            console.print(f"[red]✗ SSH key not found: {self.ssh_key_path}[/red]")
+            console.print("[yellow]Make sure you have SSH key-based authentication set up.[/yellow]")
+            console.print(f"[yellow]You can generate a key with:[/yellow]")
+            console.print(f"  ssh-keygen -t ed25519 -f {self.ssh_key_path}")
+            console.print(f"[yellow]Then copy it to the server with:[/yellow]")
+            console.print(f"  ssh-copy-id -i {self.ssh_key_path}.pub -p {cs['ssh_port']} {cs['ssh_user']}@{cs['ssh_host']}")
+            return
 
         if not Confirm.ask("Continue with deployment?", default=False):
             console.print("[yellow]Cancelled[/yellow]")
@@ -192,33 +206,53 @@ class WireGuardMaintainer:
         temp_file.chmod(0o600)
 
         try:
-            ssh = SSHClient(cs['ssh_host'], cs['ssh_user'], cs['ssh_port'])
+            console.print("[cyan]Connecting to server...[/cyan]")
+            ssh = SSHClient(
+                hostname=cs['ssh_host'],
+                username=cs['ssh_user'],
+                ssh_key_path=str(self.ssh_key_path),
+                port=cs['ssh_port']
+            )
+
+            if not ssh.connect():
+                console.print("[red]✗ Failed to connect to server[/red]")
+                return
 
             # Backup existing config
-            console.print("Creating backup of existing config...")
+            console.print("[cyan]Creating backup of existing config...[/cyan]")
             backup_result = ssh.run_command(
-                "sudo cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.backup-$(date +%Y%m%d-%H%M%S)"
+                "cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.backup-$(date +%Y%m%d-%H%M%S)"
             )
 
             # Upload new config
-            console.print("Uploading new config...")
-            ssh.upload_file(str(temp_file), "/tmp/wg0.conf")
+            console.print("[cyan]Uploading new config...[/cyan]")
+            ssh.upload_file(str(temp_file), "/tmp/wg0.conf", use_sudo=False, mode="600")
 
             # Move to proper location
-            console.print("Installing config...")
-            ssh.run_command("sudo mv /tmp/wg0.conf /etc/wireguard/wg0.conf")
-            ssh.run_command("sudo chmod 600 /etc/wireguard/wg0.conf")
+            console.print("[cyan]Installing config...[/cyan]")
+            ssh.run_command("mv /tmp/wg0.conf /etc/wireguard/wg0.conf")
+            ssh.run_command("chmod 600 /etc/wireguard/wg0.conf")
 
             # Restart WireGuard
             if Confirm.ask("Restart WireGuard service?", default=True):
-                console.print("Restarting wg-quick@wg0...")
-                restart_result = ssh.run_command("sudo systemctl restart wg-quick@wg0")
-                console.print(restart_result)
+                console.print("[cyan]Restarting wg-quick@wg0...[/cyan]")
+                restart_result = ssh.run_command("systemctl restart wg-quick@wg0")
 
+                # Verify
+                console.print("[cyan]Verifying WireGuard status...[/cyan]")
+                verify_result = ssh.run_command("wg show wg0")
+                if verify_result.strip():
+                    console.print("[green]✓ WireGuard is running[/green]")
+                else:
+                    console.print("[yellow]⚠ WireGuard may not be running - check manually[/yellow]")
+
+            ssh.disconnect()
             console.print("[bold green]✓ Deployment complete![/bold green]")
 
         except Exception as e:
-            console.print(f"[red]Deployment failed: {e}[/red]")
+            console.print(f"[red]✗ Deployment failed: {e}[/red]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
     def _manage_subnet_routers(self):
         """Manage subnet routers"""
@@ -255,9 +289,10 @@ class WireGuardMaintainer:
         console.print("  [1] View Client Config")
         console.print("  [2] Rotate Keys")
         console.print("  [3] Export Config to File")
+        console.print("  [4] Deploy to Server")
         console.print("  [0] Back")
 
-        choice = Prompt.ask("\nSelect action", choices=["0", "1", "2", "3"], default="0")
+        choice = Prompt.ask("\nSelect action", choices=["0", "1", "2", "3", "4"], default="0")
 
         if choice == "1":
             self._view_sn_config(sn)
@@ -265,6 +300,8 @@ class WireGuardMaintainer:
             self._rotate_sn_keys(sn)
         elif choice == "3":
             self._export_sn_config(sn)
+        elif choice == "4":
+            self._deploy_sn_config(sn)
 
     def _view_sn_config(self, sn: Dict):
         """View subnet router client config"""
@@ -306,6 +343,98 @@ class WireGuardMaintainer:
         output_file.chmod(0o600)
 
         console.print(f"[green]✓ Exported to {output_file}[/green]")
+
+    def _deploy_sn_config(self, sn: Dict):
+        """Deploy subnet router config to server via SSH"""
+        config = self.db.reconstruct_sn_config(sn['id'])
+
+        # Add peer section for full config
+        cs = self.db.get_coordination_server()
+        full_config = config + "\n[Peer]\n"
+        full_config += f"PublicKey = {cs['public_key']}\n"
+        full_config += f"Endpoint = {cs['endpoint']}\n"
+        full_config += f"AllowedIPs = {sn['allowed_ips']}\n"
+        if sn.get('persistent_keepalive'):
+            full_config += f"PersistentKeepalive = {sn['persistent_keepalive']}\n"
+
+        console.print(f"\n[bold yellow]Deploy config for {sn['name']}[/bold yellow]")
+        console.print("\n[cyan]SSH Connection Details:[/cyan]")
+
+        # Prompt for SSH details
+        ssh_host = Prompt.ask("SSH hostname/IP", default=sn.get('ipv4_address', ''))
+        ssh_port = int(Prompt.ask("SSH port", default="22"))
+        ssh_user = Prompt.ask("SSH username", default="root")
+
+        console.print(f"\n[bold yellow]Deploy to {ssh_user}@{ssh_host}:{ssh_port}[/bold yellow]")
+
+        # Check SSH key
+        if not self.ssh_key_path.exists():
+            console.print(f"[red]✗ SSH key not found: {self.ssh_key_path}[/red]")
+            console.print("[yellow]Make sure you have SSH key-based authentication set up.[/yellow]")
+            console.print(f"[yellow]You can generate a key with:[/yellow]")
+            console.print(f"  ssh-keygen -t ed25519 -f {self.ssh_key_path}")
+            console.print(f"[yellow]Then copy it to the server with:[/yellow]")
+            console.print(f"  ssh-copy-id -i {self.ssh_key_path}.pub -p {ssh_port} {ssh_user}@{ssh_host}")
+            return
+
+        if not Confirm.ask("Continue with deployment?", default=False):
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+        # Create temporary file
+        temp_file = self.output_dir / f"{sn['name']}-deploy.conf"
+        with open(temp_file, 'w') as f:
+            f.write(full_config)
+        temp_file.chmod(0o600)
+
+        try:
+            console.print("[cyan]Connecting to server...[/cyan]")
+            ssh = SSHClient(
+                hostname=ssh_host,
+                username=ssh_user,
+                ssh_key_path=str(self.ssh_key_path),
+                port=ssh_port
+            )
+
+            if not ssh.connect():
+                console.print("[red]✗ Failed to connect to server[/red]")
+                return
+
+            # Backup existing config
+            console.print("[cyan]Creating backup of existing config...[/cyan]")
+            backup_result = ssh.run_command(
+                "cp /etc/wireguard/wg0.conf /etc/wireguard/wg0.conf.backup-$(date +%Y%m%d-%H%M%S)"
+            )
+
+            # Upload new config
+            console.print("[cyan]Uploading new config...[/cyan]")
+            ssh.upload_file(str(temp_file), "/tmp/wg0.conf", use_sudo=False, mode="600")
+
+            # Move to proper location
+            console.print("[cyan]Installing config...[/cyan]")
+            ssh.run_command("mv /tmp/wg0.conf /etc/wireguard/wg0.conf")
+            ssh.run_command("chmod 600 /etc/wireguard/wg0.conf")
+
+            # Restart WireGuard
+            if Confirm.ask("Restart WireGuard service?", default=True):
+                console.print("[cyan]Restarting wg-quick@wg0...[/cyan]")
+                restart_result = ssh.run_command("systemctl restart wg-quick@wg0")
+
+                # Verify
+                console.print("[cyan]Verifying WireGuard status...[/cyan]")
+                verify_result = ssh.run_command("wg show wg0")
+                if verify_result.strip():
+                    console.print("[green]✓ WireGuard is running[/green]")
+                else:
+                    console.print("[yellow]⚠ WireGuard may not be running - check manually[/yellow]")
+
+            ssh.disconnect()
+            console.print("[bold green]✓ Deployment complete![/bold green]")
+
+        except Exception as e:
+            console.print(f"[red]✗ Deployment failed: {e}[/red]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
 
     def _rotate_sn_keys(self, sn: Dict):
         """Rotate subnet router keypair"""

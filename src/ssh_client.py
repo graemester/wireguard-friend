@@ -174,6 +174,49 @@ class SSHClient:
         logger.info(f"Restarted WireGuard interface {interface}")
         return True
 
+    def run_command(self, command: str, use_sudo: bool = True) -> str:
+        """
+        Alias for execute_command that returns stdout (for compatibility)
+
+        Args:
+            command: Command to execute
+            use_sudo: Prefix command with sudo
+
+        Returns:
+            stdout output as string
+        """
+        exit_code, stdout, stderr = self.execute_command(command, use_sudo=use_sudo)
+
+        if exit_code != 0:
+            logger.warning(f"Command failed with exit code {exit_code}: {stderr}")
+
+        return stdout
+
+    def upload_file(self, local_path: str, remote_path: str, use_sudo: bool = False, mode: str = "644") -> bool:
+        """
+        Upload file to remote host
+
+        Args:
+            local_path: Path to local file
+            remote_path: Destination path on remote host
+            use_sudo: Use sudo for final move (not used for initial upload)
+            mode: File permissions (default: 644)
+
+        Returns:
+            True if successful
+        """
+        try:
+            # Read local file
+            with open(local_path, 'r') as f:
+                content = f.read()
+
+            # Write to remote (write_file handles sudo internally)
+            return self.write_file(remote_path, content, use_sudo=use_sudo, mode=mode)
+
+        except Exception as e:
+            logger.error(f"Failed to upload file: {e}")
+            return False
+
     def __enter__(self):
         """Context manager entry"""
         self.connect()
