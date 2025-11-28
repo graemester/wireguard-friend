@@ -325,17 +325,12 @@ Cloud VPS (CS) ←→ Office Router (SN, advertises 10.0.0.0/24)
 
 WireGuard Friend stores configurations in two forms:
 
-1. **Raw text blocks** - Exact original configuration text
+1. **Text blocks** - Original configuration text
 2. **Structured data** - Extracted fields (IPs, keys, networks) for queries
-
-**Why both?**
-- Raw blocks enable reconstruction without data loss
-- Structured data enables queries, logic, IP allocation
-- Reconstruction preserves all original formatting and settings
 
 ### PostUp/PostDown Rules
 
-Subnet router firewall rules are stored as-is, never parsed:
+Subnet router firewall rules are stored as text:
 - IP forwarding settings
 - NAT/Masquerading rules
 - MSS clamping for PMTU

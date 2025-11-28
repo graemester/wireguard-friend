@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 wg-friend Onboarding Script v2
-Import existing WireGuard configs with raw block preservation
+Import existing WireGuard configs or create new ones
 """
 
 import argparse
@@ -29,7 +29,7 @@ console = Console()
 
 
 class WireGuardOnboarder:
-    """Import WireGuard configs with raw block preservation"""
+    """Import WireGuard configs or create new ones via wizard"""
 
     def __init__(self, import_dir: Path, db_path: Path, auto_confirm: bool = False):
         self.import_dir = Path(import_dir)
@@ -310,7 +310,6 @@ class WireGuardOnboarder:
             self.db.save_cs_postdown_rules(self.cs_id, interface.postdown_rules)
 
         # Save ALL peers from CS config (even if we don't have their client configs)
-        # This preserves the original CS config perfectly
         for position, peer in enumerate(cs.peers, start=1):
             # Save peer order
             self.db.save_peer_order(self.cs_id, peer.public_key, position, is_subnet_router=False)
