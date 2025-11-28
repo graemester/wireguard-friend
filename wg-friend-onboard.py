@@ -549,7 +549,7 @@ class WireGuardOnboarder:
             # Determine access level from AllowedIPs
             console.print("\n[bold cyan]Select Access Level:[/bold cyan]")
             console.print("  [1] Full access (all AllowedIPs from CS peer)")
-            console.print("  [2] VPN only (10.66.0.0/24, fd66:6666::/64)")
+            console.print("  [2] VPN only (VPN network only)")
             console.print("  [3] LAN only (access via subnet routers)")
             console.print("  [4] Custom (specify - parking lot)")
 
@@ -805,8 +805,8 @@ class WireGuardOnboarder:
         port = IntPrompt.ask("WireGuard port", default=51820)
 
         # VPN networks
-        vpn_v4 = Prompt.ask("VPN IPv4 network", default="10.66.0.0/24")
-        vpn_v6 = Prompt.ask("VPN IPv6 network", default="fd66::/64")
+        vpn_v4 = Prompt.ask("VPN IPv4 network", default="10.20.0.0/24")
+        vpn_v6 = Prompt.ask("VPN IPv6 network", default="fd20::/64")
         use_ipv6 = Confirm.ask("Use IPv6?", default=True)
 
         # CS addresses (first IP in networks)
