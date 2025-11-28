@@ -14,17 +14,40 @@
 
 set -e
 
-VERSION="${1:-$(date +v%Y%m%d)}"
-DIST_DIR="dist"
-
 # Colors
 GREEN='\033[0;32m'
 CYAN='\033[0;36m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 echo -e "${CYAN}WireGuard Friend - Distribution Package Creator${NC}"
-echo -e "${CYAN}Version: $VERSION${NC}"
+echo ""
+
+# Get version from argument or prompt
+if [ -z "$1" ]; then
+    echo -e "${YELLOW}Enter release version (e.g., v1.0.0, v1.2.3):${NC}"
+    read -p "> " VERSION
+
+    # Validate version format
+    if [ -z "$VERSION" ]; then
+        echo -e "${RED}Error: Version cannot be empty${NC}"
+        exit 1
+    fi
+
+    # Add 'v' prefix if not present
+    if [[ ! "$VERSION" =~ ^v ]]; then
+        VERSION="v$VERSION"
+        echo -e "${CYAN}Adding 'v' prefix: $VERSION${NC}"
+    fi
+else
+    VERSION="$1"
+fi
+
+DIST_DIR="dist"
+
+echo ""
+echo -e "${GREEN}Creating distribution packages for version: $VERSION${NC}"
 echo ""
 
 # Clean and create dist directory
