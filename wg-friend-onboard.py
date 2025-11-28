@@ -1048,6 +1048,8 @@ class WireGuardOnboarder:
 
 
 def main():
+    import os
+
     parser = argparse.ArgumentParser(
         description="Import existing WireGuard configurations"
     )
@@ -1057,11 +1059,15 @@ def main():
         default=Path("import"),
         help="Directory containing .conf files to import"
     )
+
+    # Default database path: check environment variable first, then use default
+    default_db = os.environ.get('WG_FRIEND_DB', 'wg-friend.db')
+
     parser.add_argument(
         "--db",
         type=Path,
-        default=Path("wg-friend.db"),
-        help="SQLite database path"
+        default=Path(default_db),
+        help="SQLite database path (default: wg-friend.db, or $WG_FRIEND_DB if set)"
     )
     parser.add_argument(
         "--clear-db",
