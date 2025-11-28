@@ -1,0 +1,28 @@
+# Git attributes for WireGuard Friend
+#
+# This file controls what gets included in GitHub Release archives
+# when users download the "Source code (zip/tar.gz)" from Releases page.
+#
+# Files marked with "export-ignore" are excluded from release archives
+# but remain in the git repository for development.
+
+# Development and testing files (exclude from releases)
+tests/ export-ignore
+archive/ export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
+
+# Keep these files (documentation is important for end users)
+# README.md (keep)
+# DOCUMENTATION.md (keep)
+# QUICK_START.md (keep)
+# WHERE_TO_RUN.md (keep)
+# BACKUP_RESTORE.md (keep)
+# MANIFEST.md (keep)
+# ARCHITECTURE.md (keep - useful for advanced users)
+# RESTRICTED_IP_ACCESS.md (keep)
+
+# Note: When creating a GitHub Release, the auto-generated
+# "Source code (zip)" will automatically exclude the files above.
+#
+# For custom distribution packages, use create-distribution.sh
