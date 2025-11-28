@@ -65,6 +65,22 @@ class WireGuardOnboarder:
         ))
 
         try:
+            # Check if import directory is empty - offer wizard mode
+            if not self.import_dir.exists() or not list(self.import_dir.glob("*.conf")):
+                console.print(f"\n[yellow]No WireGuard configs found in {self.import_dir}/[/yellow]")
+
+                if self.auto_confirm:
+                    console.print("[yellow]Auto-confirm mode: Cannot run wizard mode non-interactively[/yellow]")
+                    console.print(f"[yellow]Place .conf files in {self.import_dir}/ and run again[/yellow]")
+                    sys.exit(0)
+
+                if Confirm.ask("\n[bold]Create new WireGuard network from scratch?[/bold]", default=False):
+                    self._wizard_mode()
+                    # Wizard creates configs in import/, now continue with normal import
+                else:
+                    console.print(f"\n[yellow]Place your WireGuard .conf files in {self.import_dir}/ and run again[/yellow]")
+                    sys.exit(0)
+
             # Phase 1: Parse and classify
             self._phase1_parse_configs()
 
@@ -732,6 +748,284 @@ class WireGuardOnboarder:
                 console.print(warning)
 
         console.print(f"[green]✓ {checks_passed} validation checks passed[/green]")
+
+    def _wizard_mode(self):
+        """Wizard mode for creating configs from scratch"""
+        from src.keygen import generate_keypair
+
+        console.print("\n[bold cyan]═══ Create New WireGuard Network ═══[/bold cyan]")
+        console.print("\nThis wizard will help you create WireGuard configurations from scratch.\n")
+
+        # Ensure import directory exists
+        self.import_dir.mkdir(exist_ok=True)
+
+        # Step 1: Create Coordination Server
+        console.print("[bold]Step 1: Coordination Server[/bold]")
+        console.print("This runs on your cloud VPS or dedicated server with a public IP.\n")
+
+        cs_config = self._wizard_create_coordination_server()
+
+        # Step 2: Create Subnet Routers (optional)
+        subnet_routers = []
+        if Confirm.ask("\n[bold]Add subnet router(s)?[/bold]", default=False):
+            while True:
+                sr_config = self._wizard_create_subnet_router(cs_config)
+                if sr_config:
+                    subnet_routers.append(sr_config)
+                if not Confirm.ask("\nAdd another subnet router?", default=False):
+                    break
+
+        # Step 3: Create Client Peers (optional)
+        client_peers = []
+        if Confirm.ask("\n[bold]Create initial client peer(s)?[/bold]", default=False):
+            while True:
+                peer_config = self._wizard_create_client_peer(cs_config, subnet_routers)
+                if peer_config:
+                    client_peers.append(peer_config)
+                if not Confirm.ask("\nAdd another peer?", default=False):
+                    break
+
+        # Summary
+        console.print("\n[bold cyan]═══ Summary ═══[/bold cyan]")
+        console.print(f"\nCreated {1 + len(subnet_routers) + len(client_peers)} configuration(s):")
+        console.print(f"  ✓ {self.import_dir}/coordination.conf")
+        for sr in subnet_routers:
+            console.print(f"  ✓ {self.import_dir}/{sr['name']}.conf")
+        for peer in client_peers:
+            console.print(f"  ✓ {self.import_dir}/{peer['name']}.conf")
+
+        console.print("\n[green]Proceeding with import...[/green]\n")
+
+    def _wizard_create_coordination_server(self):
+        """Create coordination server config"""
+        from src.keygen import generate_keypair
+
+        # Get server details
+        endpoint = Prompt.ask("Public IP or hostname", default="UPDATE_ME")
+        port = IntPrompt.ask("WireGuard port", default=51820)
+
+        # VPN networks
+        vpn_v4 = Prompt.ask("VPN IPv4 network", default="10.66.0.0/24")
+        vpn_v6 = Prompt.ask("VPN IPv6 network", default="fd66::/64")
+        use_ipv6 = Confirm.ask("Use IPv6?", default=True)
+
+        # CS addresses (first IP in networks)
+        cs_ipv4 = ".".join(vpn_v4.split("/")[0].split(".")[:3]) + ".1"
+        cs_ipv6 = vpn_v6.split("/")[0].rstrip(":") + "::1"
+
+        # Generate keys
+        private_key, public_key = generate_keypair()
+
+        # Build config
+        config_lines = ["[Interface]"]
+        config_lines.append(f"PrivateKey = {private_key}")
+        config_lines.append(f"Address = {cs_ipv4}/24" + (f", {cs_ipv6}/64" if use_ipv6 else ""))
+        config_lines.append(f"ListenPort = {port}")
+        config_lines.append("")
+
+        # Save config
+        cs_path = self.import_dir / "coordination.conf"
+        with open(cs_path, 'w') as f:
+            f.write("\n".join(config_lines) + "\n")
+        cs_path.chmod(0o600)
+
+        console.print(f"\n[green]✓ Coordination server config created: {cs_path}[/green]")
+
+        return {
+            'endpoint': f"{endpoint}:{port}",
+            'public_key': public_key,
+            'vpn_v4': vpn_v4,
+            'vpn_v6': vpn_v6 if use_ipv6 else None,
+            'cs_ipv4': cs_ipv4,
+            'cs_ipv6': cs_ipv6 if use_ipv6 else None,
+        }
+
+    def _wizard_create_subnet_router(self, cs_config):
+        """Create subnet router config"""
+        from src.keygen import generate_keypair
+
+        console.print("\n[bold cyan]═══ Subnet Router Configuration ═══[/bold cyan]")
+
+        name = Prompt.ask("\nRouter name (e.g., 'home-router', 'office-gateway')")
+
+        # LAN network
+        console.print("\n[bold]LAN Network[/bold]")
+        console.print("Example: 192.168.1.0/24")
+        lan_network = Prompt.ask("Network CIDR")
+
+        # LAN interface with detailed instructions
+        console.print("\n[bold yellow]⚠  LAN Interface Name (on the subnet router host)[/bold yellow]")
+        console.print("\n[dim]This is the network interface ON THE SUBNET ROUTER HOST, not this machine.[/dim]\n")
+        console.print("To find the interface name, SSH to your subnet router and run:\n")
+        console.print("  [cyan]ip link show[/cyan]        # Lists all network interfaces")
+        console.print("  [cyan]ip addr show[/cyan]        # Shows IPs assigned to each interface\n")
+        console.print("Look for the interface connected to your LAN network.\n")
+        console.print("[bold]Common examples:[/bold]")
+        console.print("  • eth0, eth1          (traditional naming)")
+        console.print("  • enp1s0, ens18       (predictable naming)")
+        console.print("  • br0                 (bridge interface)\n")
+
+        lan_iface = Prompt.ask("LAN interface name (on subnet router host)")
+
+        # Generate PostUp/PostDown
+        gen_rules = Confirm.ask("\nGenerate default NAT rules?", default=True)
+
+        if gen_rules:
+            console.print("\n[dim]Default rules will include:")
+            console.print("  ✓ Enable IP forwarding")
+            console.print("  ✓ NAT/Masquerade for VPN → LAN traffic")
+            if cs_config['vpn_v6']:
+                console.print("  ✓ IPv6 support")
+            console.print("\nℹ  Advanced rules (FORWARD chains, MSS clamping, port forwarding)")
+            console.print("   can be added manually after import.[/dim]\n")
+
+        # Generate keys
+        private_key, public_key = generate_keypair()
+
+        # Allocate IP (next after CS)
+        sr_ipv4 = ".".join(cs_config['cs_ipv4'].split(".")[:3]) + ".20"  # Simple allocation
+        sr_ipv6 = cs_config['cs_ipv6'].rsplit(":", 1)[0] + ":20" if cs_config['vpn_v6'] else None
+
+        # Build config
+        config_lines = ["[Interface]"]
+        config_lines.append(f"PrivateKey = {private_key}")
+        config_lines.append(f"Address = {sr_ipv4}/24" + (f", {sr_ipv6}/64" if sr_ipv6 else ""))
+
+        if gen_rules:
+            postup, postdown = self._generate_default_postup_postdown(
+                lan_iface,
+                cs_config['vpn_v4'],
+                cs_config['vpn_v6'],
+                bool(cs_config['vpn_v6'])
+            )
+            for rule in postup:
+                config_lines.append(f"PostUp = {rule}")
+            for rule in postdown:
+                config_lines.append(f"PostDown = {rule}")
+
+        config_lines.append("")
+        config_lines.append("[Peer]")
+        config_lines.append(f"PublicKey = {cs_config['public_key']}")
+        config_lines.append(f"Endpoint = {cs_config['endpoint']}")
+        config_lines.append(f"AllowedIPs = {cs_config['vpn_v4']}" + (f", {cs_config['vpn_v6']}" if cs_config['vpn_v6'] else ""))
+        config_lines.append("PersistentKeepalive = 25")
+        config_lines.append("")
+
+        # Save config
+        sr_path = self.import_dir / f"{name}.conf"
+        with open(sr_path, 'w') as f:
+            f.write("\n".join(config_lines) + "\n")
+        sr_path.chmod(0o600)
+
+        console.print(f"\n[green]✓ Subnet router config created: {sr_path}[/green]")
+
+        # Update coordination.conf with this peer
+        cs_path = self.import_dir / "coordination.conf"
+        with open(cs_path, 'a') as f:
+            f.write(f"# {name}\n")
+            f.write(f"[Peer]\n")
+            f.write(f"PublicKey = {public_key}\n")
+            f.write(f"AllowedIPs = {sr_ipv4}/32" + (f", {sr_ipv6}/128" if sr_ipv6 else "") + f", {lan_network}\n")
+            f.write("\n")
+
+        return {
+            'name': name,
+            'lan_network': lan_network,
+            'ipv4': sr_ipv4,
+            'ipv6': sr_ipv6,
+        }
+
+    def _wizard_create_client_peer(self, cs_config, subnet_routers):
+        """Create client peer config"""
+        from src.keygen import generate_keypair
+
+        console.print("\n[bold cyan]═══ Client Peer Configuration ═══[/bold cyan]")
+
+        name = Prompt.ask("\nPeer name (e.g., 'alice-laptop', 'my-phone')")
+
+        # Allocate IP (simple: .10+)
+        peer_num = 10  # Could track this better
+        peer_ipv4 = ".".join(cs_config['cs_ipv4'].split(".")[:3]) + f".{peer_num}"
+        peer_ipv6 = cs_config['cs_ipv6'].rsplit(":", 1)[0] + f":{peer_num:x}" if cs_config['vpn_v6'] else None
+
+        # Access level
+        console.print("\n[bold]Access Level:[/bold]")
+        console.print("  [1] Full access (VPN + all LANs)")
+        console.print("  [2] VPN only")
+        console.print("  [3] LAN only")
+        access = IntPrompt.ask("Select", default=1)
+
+        # Calculate AllowedIPs
+        allowed_ips = [cs_config['vpn_v4']]
+        if cs_config['vpn_v6']:
+            allowed_ips.append(cs_config['vpn_v6'])
+
+        if access in [1, 3]:  # full_access or lan_only
+            for sr in subnet_routers:
+                allowed_ips.append(sr['lan_network'])
+
+        # Generate keys
+        private_key, public_key = generate_keypair()
+
+        # Build client config
+        config_lines = ["[Interface]"]
+        config_lines.append(f"PrivateKey = {private_key}")
+        config_lines.append(f"Address = {peer_ipv4}/24" + (f", {peer_ipv6}/64" if peer_ipv6 else ""))
+        config_lines.append(f"DNS = {cs_config['cs_ipv4']}")
+        config_lines.append("")
+        config_lines.append("[Peer]")
+        config_lines.append(f"PublicKey = {cs_config['public_key']}")
+        config_lines.append(f"Endpoint = {cs_config['endpoint']}")
+        config_lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
+        config_lines.append("PersistentKeepalive = 25")
+        config_lines.append("")
+
+        # Save client config
+        peer_path = self.import_dir / f"{name}.conf"
+        with open(peer_path, 'w') as f:
+            f.write("\n".join(config_lines) + "\n")
+        peer_path.chmod(0o600)
+
+        console.print(f"\n[green]✓ Client peer config created: {peer_path}[/green]")
+
+        # Update coordination.conf with this peer
+        cs_path = self.import_dir / "coordination.conf"
+        with open(cs_path, 'a') as f:
+            f.write(f"# {name}\n")
+            f.write(f"[Peer]\n")
+            f.write(f"PublicKey = {public_key}\n")
+            f.write(f"AllowedIPs = {peer_ipv4}/32" + (f", {peer_ipv6}/128\n" if peer_ipv6 else "\n"))
+            f.write("\n")
+
+        return {
+            'name': name,
+            'ipv4': peer_ipv4,
+            'ipv6': peer_ipv6,
+        }
+
+    def _generate_default_postup_postdown(self, lan_iface, vpn_v4_network, vpn_v6_network, use_ipv6):
+        """Generate minimal working PostUp/PostDown rules for subnet router"""
+
+        postup = [
+            "sysctl -w net.ipv4.ip_forward=1",
+        ]
+
+        if use_ipv6:
+            postup.append("sysctl -w net.ipv6.conf.all.forwarding=1")
+
+        postup.append(f"iptables -t nat -A POSTROUTING -o {lan_iface} -s {vpn_v4_network} -j MASQUERADE")
+
+        if use_ipv6:
+            postup.append(f"ip6tables -t nat -A POSTROUTING -o {lan_iface} -s {vpn_v6_network} -j MASQUERADE")
+
+        postdown = [
+            f"iptables -t nat -D POSTROUTING -o {lan_iface} -s {vpn_v4_network} -j MASQUERADE",
+        ]
+
+        if use_ipv6:
+            postdown.append(f"ip6tables -t nat -D POSTROUTING -o {lan_iface} -s {vpn_v6_network} -j MASQUERADE")
+
+        return postup, postdown
 
     def _mask_private_keys(self, config_text: str) -> str:
         """Mask PrivateKey values in config text for display"""
