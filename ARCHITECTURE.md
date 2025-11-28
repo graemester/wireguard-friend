@@ -152,14 +152,14 @@ CREATE TABLE cs_peer_order (
 
 ```
 [Peer]
-# icculus
+# somehomeserver
 # no endpoint == behind CGNAT == initiates connection
 PublicKey = ...
 ```
 
 Stored as:
 ```python
-comment_lines = ["icculus", "no endpoint == behind CGNAT == initiates connection"]
+comment_lines = ["somehomeserver", "no endpoint == behind CGNAT == initiates connection"]
 ```
 
 Reconstructed as:
@@ -194,7 +194,7 @@ Stores the VPS hub configuration.
 - `raw_interface_block` - Entire [Interface] section
 
 **Structured data**:
-- `endpoint` - wireguard.graeme.host:51820
+- `endpoint` - your.vpshost.com:51820
 - `network_ipv4/ipv6` - Network ranges
 - `ipv4/ipv6_address` - CS addresses
 - `public_key`, `private_key` - CS keys
@@ -209,7 +209,7 @@ Stores LAN gateway configurations.
 - `raw_peer_block` - Entry in CS config
 
 **Structured data**:
-- `name` - Friendly name (e.g., "icculus")
+- `name` - Friendly name (e.g., "somehomeserver")
 - `ipv4/ipv6_address` - Router addresses
 - `allowed_ips` - Networks advertised to CS
 - `has_endpoint` - Behind CGNAT?
@@ -272,11 +272,11 @@ Multi-line comments stored as single string with newlines:
 
 ```python
 # Original:
-# # icculus
+# # somehomeserver
 # # no endpoint == behind CGNAT == initiates connection
 
 # Stored as:
-comment = "icculus\nno endpoint == behind CGNAT == initiates connection"
+comment = "somehomeserver\nno endpoint == behind CGNAT == initiates connection"
 
 # Reconstructed:
 for line in comment.split('\n'):

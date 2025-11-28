@@ -68,7 +68,7 @@ Now you're ready for the streamlined workflow:
 
 ```bash
 # 1. Add a new peer (TUI or CLI)
-./wg-friend.py add iphone-graeme --qr
+./wg-friend.py add iphone-alice --qr
 
 # 2. Export coordinator config with all active peers
 ./wg-friend.py export
@@ -96,10 +96,10 @@ The import workflow is designed for users with existing WireGuard setups:
 mkdir import
 
 # From coordinator (public VPS)
-scp -P 2223 user@oh.higrae.me:/etc/wireguard/wg0.conf import/coordinator-wg0.conf
+scp -P 2223 user@your.vpshost.com:/etc/wireguard/wg0.conf import/coordinator-wg0.conf
 
 # From subnet router (home LAN gateway)
-scp user@192.168.10.20:/etc/wireguard/wg0.conf import/icculus-wg0.conf
+scp user@192.168.10.20:/etc/wireguard/wg0.conf import/somehomeserver-wg0.conf
 
 # Optional: existing client configs
 cp ~/wireguard-backups/*.conf import/
@@ -186,7 +186,7 @@ Before you can deploy, run one-time setup:
 🔐 SSH Key Setup
 ✓ Generated keypair: ~/.wg-friend/ssh/wg-friend-deploy
 
-🌐 Setting up coordinator (oh.higrae.me:2223)
+🌐 Setting up coordinator (your.vpshost.com:2223)
   Enter SSH password: ********
 ✓ Public key installed
 ✓ Authentication test successful
@@ -242,7 +242,7 @@ After setup, deployment is a single command:
 🚀 wg-friend Deployment
 
 🌐 Deploying to Coordinator
-  Coordinator: ged@oh.higrae.me:2223
+  Coordinator: bob@your.vpshost.com:2223
   Config: /etc/wireguard/wg0.conf
   Interface: wg0
 
@@ -253,7 +253,7 @@ After setup, deployment is a single command:
 ✓ Verified: 12 peers active
 
 🏠 Deploying to Subnet Router
-  Subnet Router: ged@192.168.10.20:22 (localhost detected)
+  Subnet Router: bob@192.168.10.20:22 (localhost detected)
   Config: /etc/wireguard/wg0.conf
   Interface: wg0
 
@@ -280,13 +280,13 @@ After onboarding, you'll have `~/.wg-friend/config.yaml`:
 
 ```yaml
 coordinator:
-  name: oh.higrae.me
-  host: oh.higrae.me
+  name: your.vpshost.com
+  host: your.vpshost.com
   port: 2223
-  user: ged
+  user: bob
   config_path: /etc/wireguard/wg0.conf
   interface: wg0
-  endpoint: oh.higrae.me:51820
+  endpoint: your.vpshost.com:51820
   public_key: Yk+VD886XMnyu2EUGWFoLKXJAwkN7wtCauQzq32KUC8=
   local_config_path: ~/.wg-friend/coordinator-wg0.conf
   vpn_ip:
@@ -297,10 +297,10 @@ coordinator:
     ipv6: fd66:6666::/64
 
 subnet_router:
-  name: icculus
+  name: somehomeserver
   host: 192.168.10.20
   port: 22
-  user: ged
+  user: bob
   config_path: /etc/wireguard/wg0.conf
   interface: wg0
   vpn_ip:
@@ -347,7 +347,7 @@ metadata_db: ~/.wg-friend/peers.db
 
 ```bash
 # Mobile client with QR code
-./wg-friend.py add iphone-graeme --qr
+./wg-friend.py add iphone-alice --qr
 
 # Desktop client (no QR code)
 ./wg-friend.py add laptop-work
@@ -385,7 +385,7 @@ This generates the full coordinator config with all active peers from the databa
 
 ```bash
 # Rotate a specific peer
-./wg-friend.py rotate iphone-graeme --qr
+./wg-friend.py rotate iphone-alice --qr
 
 # The old keys are marked as revoked in the database
 ```
@@ -394,7 +394,7 @@ This generates the full coordinator config with all active peers from the databa
 
 ```bash
 # Revoke peer (removes from coordinator and subnet router)
-./wg-friend.py revoke iphone-graeme
+./wg-friend.py revoke iphone-alice
 ```
 
 **Note:** After rotate or revoke, run `./wg-friend.py export && ./wg-friend-deploy.py` to update infrastructure.

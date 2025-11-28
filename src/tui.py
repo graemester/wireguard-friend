@@ -142,7 +142,7 @@ class WGFriendTUI:
         self.console.print("\n[bold]Add New Peer[/bold]\n")
 
         # Get peer name
-        name = Prompt.ask("Peer name (e.g., iphone-graeme)")
+        name = Prompt.ask("Peer name (e.g., iphone-alice)")
 
         # Check if name already exists
         existing = self.db.get_peer(name)

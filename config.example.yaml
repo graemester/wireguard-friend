@@ -15,13 +15,13 @@ ssh:
 # - Central hub for all peers
 # - Usually runs on VPS with static IP
 coordinator:
-  name: oh.higrae.me
-  host: oh.higrae.me
+  name: your.vpshost.com
+  host: your.vpshost.com
   port: 2223
-  user: ged
+  user: bob
   config_path: /etc/wireguard/wg0.conf
   interface: wg0
-  endpoint: oh.higrae.me:51820
+  endpoint: your.vpshost.com:51820
   public_key: Yk+VD886XMnyu2EUGWFoLKXJAwkN7wtCauQzq32KUC8=
   network:
     ipv4: 10.20.0.0/24
@@ -35,9 +35,9 @@ coordinator:
 # - Routes LAN traffic to VPN peers
 # - Provides access to home network resources
 subnet_router:
-  name: icculus
+  name: somehomeserver
   host: 192.168.10.20  # Internal IP
-  user: ged
+  user: bob
   config_path: /etc/wireguard/wg0.conf
   interface: wg0
   vpn_ip:
@@ -112,7 +112,7 @@ ip_allocation:
   # Reserved IPs
   reserved:
     - 10.20.0.1   # Coordinator
-    - 10.20.0.20  # icculus (subnet router)
+    - 10.20.0.20  # somehomeserver (subnet router)
 
 # QR Code Settings
 qr_code:

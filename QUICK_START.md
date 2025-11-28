@@ -52,18 +52,18 @@ python3 test-maintain.py
 Output:
 ```
 Coordination Server:
-  Endpoint: wireguard.graeme.host:51820
+  Endpoint: your.vpshost.com:51820
   Network: 10.66.0.0/24, fd66:6666::/64
-  SSH: ged@wireguard.graeme.host:22
+  SSH: bob@your.vpshost.com:22
 
 Subnet Routers (1):
   Name      IPv4         IPv6            LANs
-  icculus   10.66.0.20   fd66:6666::20   192.168.10.0/24
+  somehomeserver   10.66.0.20   fd66:6666::20   192.168.10.0/24
 
 Peers (10):
   Name            IPv4          IPv6           Access        Client Config
   iphone16pro     10.66.0.9     fd66:6666::9   full_access   Yes
-  mba15m2         10.66.0.10    fd66:6666::10  full_access   No
+  macbook         10.66.0.10    fd66:6666::10  full_access   No
   ...
 ```
 
@@ -208,7 +208,7 @@ Both deployment methods:
 Run on coordination server itself:
 ```bash
 # SSH to your VPS first
-ssh user@wireguard.graeme.host
+ssh user@your.vpshost.com
 ./wg-friend-maintain.py
 
 Deploy to localhost (detected)  # Uses sudo, no SSH!
@@ -218,7 +218,7 @@ Run on your laptop:
 ```bash
 ./wg-friend-maintain.py
 
-Deploy to user@wireguard.graeme.host:2223  # Uses SSH
+Deploy to user@your.vpshost.com:2223  # Uses SSH
 ```
 
 ## Access Levels
