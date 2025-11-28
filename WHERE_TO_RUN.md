@@ -1,10 +1,27 @@
 # Where Should I Run WireGuard Friend?
 
-## TL;DR - Quick Answer
+## The Most Important Question First
 
-**Pragmatic choice: Run it on your subnet router.**
+**Should I run it on my Coordination Server, Subnet Router, or Client device?**
 
-But wireguard-friend is flexible - run it anywhere you have SSH access to your WireGuard hosts!
+### Quick Answer
+
+```
+Coordination Server:  ⚠️  Possible, but not recommended
+Subnet Router:        ✅  YES - Best choice for most setups
+Client (Laptop):      ✅  YES - Great for power users
+```
+
+**Recommended: Pick ONE location and stick with it.** SSH into that machine when you need to manage your network.
+
+### Why This Matters
+
+You have three types of WireGuard devices in your network:
+1. **Coordination Server** (CS) - Cloud VPS, central hub
+2. **Subnet Router** (SN) - Home/office gateway advertising LANs
+3. **Client Peers** - Laptops, phones, tablets
+
+WireGuard Friend can run on any of them (or somewhere else entirely), but **where you run it affects your workflow.**
 
 ## The Philosophy
 
@@ -15,6 +32,8 @@ WireGuard Friend is a **management tool**, not a runtime service. It:
 - Deploys configs to your servers via SSH
 
 **It doesn't need to run 24/7.** Run it when you need to manage your network, then it sits idle.
+
+**Ideal workflow:** Pick one machine, install it there, SSH to that machine when you need to make changes. Don't move the database around unless you have a good reason.
 
 ## Option 1: Subnet Router (Recommended ⭐)
 
@@ -183,27 +202,42 @@ Your Network:
 
 **The beauty of wireguard-friend:**
 
-Because the database is portable and management is over SSH, you can:
+Because the database is portable and management is over SSH, you **technically** can run it anywhere.
+
+**BUT - and this is important - the ideal workflow is:**
 
 ```bash
-# Work on laptop at home
-laptop$ python3 wg-friend-maintain.py
+# Pick ONE location (e.g., your subnet router)
+# Install wireguard-friend there once
+# Then when you need to manage your network:
 
-# Copy database to desktop at office
-laptop$ scp wg-friend.db desktop:~/wireguard-friend/
-desktop$ python3 wg-friend-maintain.py
-
-# Backup to NAS
-$ ./backup-database.sh /mnt/nas/backups
-
-# Emergency: SSH to subnet router and work there
 $ ssh subnet-router
-subnet-router$ cd /tmp
-subnet-router$ scp laptop:~/wireguard-friend/wg-friend.db .
+subnet-router$ cd ~/wireguard-friend
 subnet-router$ python3 wg-friend-maintain.py
+# Make changes, deploy configs
+# Exit SSH
 ```
 
-**The database goes wherever you go!**
+**This is better than moving the database around!**
+
+**However**, the portability is valuable for:
+
+```bash
+# Backup to NAS (regularly)
+$ ./backup-database.sh /mnt/nas/backups
+
+# Migration to new admin machine (occasionally)
+$ scp wg-friend-backup.tar.gz new-machine:~/
+
+# Emergency: Database corrupted, restore from backup
+$ tar xzf /mnt/nas/backups/wg-friend-backup-*.tar.gz
+
+# Testing changes safely (without affecting production)
+$ cp wg-friend.db wg-friend-test.db
+$ python3 wg-friend-maintain.py --db wg-friend-test.db
+```
+
+**Recommendation:** Pick one "home" for wireguard-friend. SSH to it when needed. Use portability for backups and emergencies, not daily workflow.
 
 ## Requirements Checklist
 
@@ -415,19 +449,36 @@ A: Run on your workstation or a dedicated admin machine.
 
 ## The Real Answer
 
-**It doesn't really matter!**
+**Pick one place. Stick with it. SSH to it when needed.**
 
-Pick what's convenient for you. The database is portable, SSH works from anywhere, and you can always move it later.
+The database is portable and you *can* move it around, but the ideal workflow is:
 
-Start somewhere, and if it doesn't work for you, just copy the database somewhere else.
+1. **Choose a location** (subnet router for most people, workstation for power users)
+2. **Install wireguard-friend there once**
+3. **SSH to that machine** when you need to manage your network
+4. **Make changes, deploy configs, exit**
+5. **Repeat when needed**
 
-**Pragmatic default:** Subnet router.
+**Don't** copy the database around for daily use. Do use portability for:
+- Regular backups
+- Migration to new hardware
+- Emergency recovery
+- Testing changes safely
 
-**Power user default:** Your laptop.
+**Recommended defaults:**
 
-**Enterprise default:** Dedicated admin server.
+| Your Situation | Run It Here | Access Via |
+|----------------|-------------|------------|
+| Home network | Subnet router | `ssh subnet-router` |
+| Power user / Developer | Your workstation | Direct (or SSH if remote) |
+| Team / Enterprise | Dedicated admin box | `ssh admin-server` |
+| CS-only network | Your workstation | Direct |
 
-**The key:** Wherever you run it, **back it up regularly!**
+**The keys:**
+- ✅ Pick one "home" for the database
+- ✅ Back it up regularly to NAS/cloud
+- ✅ SSH to the admin machine when needed
+- ❌ Don't move database around for daily use
 
 ```bash
 ./backup-database.sh /mnt/nas/backups
