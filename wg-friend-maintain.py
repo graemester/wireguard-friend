@@ -212,10 +212,66 @@ class WireGuardMaintainer:
             console.print(f"[red]✗ Error generating keypair: {e}[/red]")
             return False
 
+    def _test_existing_keys(self, host: str, port: int, user: str) -> Optional[Path]:
+        """Test all existing wg-friend keys to see if any already work"""
+        existing_keys = sorted(self.ssh_key_dir.glob("wg-friend-*"))
+
+        # Filter to only get private keys (not .pub files)
+        private_keys = [k for k in existing_keys if not str(k).endswith('.pub')]
+
+        if not private_keys:
+            return None
+
+        console.print(f"[cyan]Found {len(private_keys)} existing wg-friend key(s), testing...[/cyan]")
+
+        import paramiko
+        for key_path in private_keys:
+            try:
+                console.print(f"[dim]  Testing {key_path.name}...[/dim]")
+
+                ssh = paramiko.SSHClient()
+                ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+                private_key = paramiko.Ed25519Key.from_private_key_file(str(key_path))
+
+                ssh.connect(
+                    hostname=host,
+                    port=port,
+                    username=user,
+                    pkey=private_key,
+                    timeout=5
+                )
+
+                stdin, stdout, stderr = ssh.exec_command("echo 'test'")
+                output = stdout.read().decode().strip()
+
+                ssh.close()
+
+                if output == "test":
+                    console.print(f"[green]  ✓ {key_path.name} works![/green]")
+                    return key_path
+
+            except Exception:
+                # This key doesn't work, try next one
+                continue
+
+        console.print("[yellow]  No existing keys work for this host[/yellow]")
+        return None
+
     def _install_ssh_key_to_host(self, host: str, port: int, user: str):
         """Install SSH public key to remote host"""
         try:
             console.print(f"\n[cyan]Installing SSH key to {user}@{host}:{port}[/cyan]")
+
+            # First, check if any existing keys already work
+            working_key = self._test_existing_keys(host, port, user)
+            if working_key:
+                console.print(f"[green]✓ Already have working SSH key: {working_key.name}[/green]")
+                console.print(f"[green]✓ Skipping installation (already authenticated)[/green]")
+
+                # Update the main ssh_key_path to use this working key
+                self.ssh_key_path = working_key
+                return True
 
             # Read public key
             pub_key_path = Path(f"{self.ssh_key_path}.pub")
