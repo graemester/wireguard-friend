@@ -14,7 +14,7 @@ class RawInterfaceBlock:
     """Raw Interface block with structured data extracted"""
     raw_text: str  # EXACT text from file
     # Structured data extracted for logic
-    addresses: List[str]  # e.g., ["10.66.0.1/24", "fd66:6666::1/64"]
+    addresses: List[str]  # e.g., ["10.20.0.1/24", "fd20::1/64"]
     private_key: Optional[str]
     listen_port: Optional[int]
     mtu: Optional[int]
@@ -29,7 +29,7 @@ class RawPeerBlock:
     # Structured data extracted for logic
     public_key: str
     preshared_key: Optional[str]
-    allowed_ips: str  # e.g., "10.66.0.20/32, 192.168.12.0/24, fd66:6666::20/128"
+    allowed_ips: str  # e.g., "10.20.0.20/32, 192.168.12.0/24, fd20::20/128"
     endpoint: Optional[str]
     persistent_keepalive: Optional[int]
     comment_lines: List[str]  # Multi-line comments preserved
@@ -264,7 +264,7 @@ class StructuredDataExtractor:
 
         for addr in interface.addresses:
             if '.' in addr:  # IPv4
-                # e.g., "10.66.0.1/24" -> address=10.66.0.1, network=10.66.0.0/24
+                # e.g., "10.20.0.1/24" -> address=10.20.0.1, network=10.20.0.0/24
                 parts = addr.split('/')
                 ipv4_address = parts[0]
                 if len(parts) > 1:
@@ -278,7 +278,7 @@ class StructuredDataExtractor:
                     else:
                         network_ipv4 = addr  # Keep as-is for other prefixes
             elif ':' in addr:  # IPv6
-                # e.g., "fd66:6666::1/64" -> address=fd66:6666::1, network=fd66:6666::/64
+                # e.g., "fd20::1/64" -> address=fd20::1, network=fd20::/64
                 parts = addr.split('/')
                 ipv6_address = parts[0]
                 if len(parts) > 1:
@@ -328,8 +328,9 @@ class StructuredDataExtractor:
             # Skip /32 and /128 (those are individual addresses, not networks)
             if allowed_ip.endswith('/32') or allowed_ip.endswith('/128'):
                 continue
-            # Skip common VPN networks (10.66.0.0/24, fd66:6666::/64)
-            if '10.66.0.0/24' in allowed_ip or 'fd66:6666::/64' in allowed_ip:
+            # Skip common VPN networks - check if it's a /24 or /64 CIDR
+            # This heuristic assumes VPN network is the /24 or /64, LAN networks have different sizes
+            if '/24' in allowed_ip or '/64' in allowed_ip:
                 continue
             if allowed_ip:
                 lan_networks.append(allowed_ip)

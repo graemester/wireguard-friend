@@ -18,8 +18,8 @@ def get_client_template(
     Generate WireGuard client configuration
 
     Args:
-        address_ipv4: Client IPv4 address with CIDR (e.g., "10.66.0.50/24")
-        address_ipv6: Client IPv6 address with CIDR (e.g., "fd66:6666::50/64")
+        address_ipv4: Client IPv4 address with CIDR (e.g., "10.20.0.50/24")
+        address_ipv6: Client IPv6 address with CIDR (e.g., "fd20::50/64")
         private_key: Client private key
         dns: DNS server (e.g., "192.168.12.20" for Pi-hole)
         peer_public_key: Coordinator public key
@@ -59,8 +59,8 @@ def get_coordinator_peer_template(
     Args:
         client_name: Name of the client
         public_key: Client's public key
-        allowed_ip_v4: IPv4 with /32 CIDR (e.g., "10.66.0.50/32")
-        allowed_ip_v6: IPv6 with /128 CIDR (e.g., "fd66:6666::50/128")
+        allowed_ip_v4: IPv4 with /32 CIDR (e.g., "10.20.0.50/32")
+        allowed_ip_v6: IPv6 with /128 CIDR (e.g., "fd20::50/128")
         comment: Optional comment
 
     Returns:

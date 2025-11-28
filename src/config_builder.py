@@ -41,8 +41,8 @@ class WireGuardConfigBuilder:
 
         Args:
             client_name: Name for this client (e.g., "iphone-graeme")
-            client_ipv4: IPv4 address for client (e.g., "10.66.0.50")
-            client_ipv6: IPv6 address for client (e.g., "fd66:6666::50")
+            client_ipv4: IPv4 address for client (e.g., "10.20.0.50")
+            client_ipv6: IPv6 address for client (e.g., "fd20::50")
             peer_type: Template type (mobile_client, mesh_only, restricted_external, server_peer)
             private_key: Use existing private key, or None to generate
             public_key: Use existing public key, or None to derive/generate
@@ -78,7 +78,7 @@ class WireGuardConfigBuilder:
             address_ipv4=f"{client_ipv4}/24",
             address_ipv6=f"{client_ipv6}/64",
             private_key=private_key,
-            dns=template.get('dns', self.coordinator.get('coordinator_ip', {}).get('ipv4', '10.66.0.1')),
+            dns=template.get('dns', self.coordinator.get('coordinator_ip', {}).get('ipv4', '10.20.0.1')),
             peer_public_key=self.coordinator['public_key'],
             peer_endpoint=self.coordinator['endpoint'],
             peer_allowed_ips=allowed_ips,
@@ -154,10 +154,10 @@ class WireGuardConfigBuilder:
         Derive IPv6 address from IPv4
 
         Args:
-            ipv4: IPv4 address (e.g., "10.66.0.50")
+            ipv4: IPv4 address (e.g., "10.20.0.50")
 
         Returns:
-            Corresponding IPv6 address (e.g., "fd66:6666::50")
+            Corresponding IPv6 address (e.g., "fd20::50")
         """
         # Extract last octet from IPv4
         last_octet = ipv4.split('.')[-1]
