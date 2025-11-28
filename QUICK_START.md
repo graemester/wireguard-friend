@@ -2,21 +2,7 @@
 
 ## Overview
 
-WireGuard Friend is a complete management system for WireGuard VPN networks with **perfect configuration fidelity**. It imports existing configs, stores them in SQLite with raw block preservation, and provides powerful maintenance capabilities.
-
-## Architecture
-
-### Raw Block Storage + Structured Data
-- **Raw Blocks**: Exact text from config files preserved byte-for-byte
-- **Structured Data**: Queryable fields extracted for logic (IPs, keys, access levels)
-- **Perfect Reconstruction**: Generated configs are **identical** to originals
-
-### Database Schema
-- **coordination_server**: VPS hub configuration
-- **subnet_router**: Internal LAN gateways
-- **peer**: Client devices
-- **Raw blocks preserved** for Interface sections and Peer entries
-- **PostUp/PostDown rules** stored as sacred monolithic blocks
+WireGuard Friend is a management system for WireGuard VPN networks. It imports existing configs or helps you create new ones, stores everything in SQLite, and provides tools for peer management, key rotation, and deployment.
 
 ## Quick Start
 
@@ -51,11 +37,9 @@ The wizard will guide you through:
 
 Both routes will:
 - ✅ Parse and classify configs (CS, subnet routers, clients)
-- ✅ Extract raw blocks + structured data
 - ✅ Derive public keys from private keys
 - ✅ Match clients to CS peers
 - ✅ Save everything to SQLite database
-- ✅ Reconstruct and verify configs (byte-for-byte match)
 
 ### 2. View Your Network
 
@@ -117,26 +101,19 @@ The wizard is smart about keys:
 ### Create a New Peer
 
 ```bash
-python3 demo-new-peer.py
+./wg-friend-maintain.py
+# Select [4] Create New Peer
 ```
 
-This demonstrates:
-1. Finding next available IP addresses
-2. Generating new keypair
-3. Building client config with proper access level
-4. Adding peer to coordination server
-5. Saving configs to `output/`
-
-Result:
-```
-✓ Peer 'demo-device' created with ID 12
-✓ Client config saved to output/demo-device.conf
-✓ Updated CS config saved to output/coordination-updated.conf (12 peers)
-```
+This will:
+1. Find next available IP addresses
+2. Generate new keypair
+3. Build client config with proper access level
+4. Add peer to coordination server
+5. Save configs to `output/`
 
 ### Rotate Peer Keys
 
-Interactive mode:
 ```bash
 ./wg-friend-maintain.py
 # Select [3] Manage Peers
@@ -207,24 +184,6 @@ Both deployment methods:
 | On the VPS (CS) | **Local (sudo)** | SSH to router |
 | On subnet router | SSH to VPS | **Local (sudo)** |
 
-**Examples:**
-
-Run on coordination server itself:
-```bash
-# SSH to your VPS first
-ssh user@your.vpshost.com
-./wg-friend-maintain.py
-
-Deploy to localhost (detected)  # Uses sudo, no SSH!
-```
-
-Run on your laptop:
-```bash
-./wg-friend-maintain.py
-
-Deploy to user@your.vpshost.com:2223  # Uses SSH
-```
-
 ## Access Levels
 
 When creating or updating peers, choose access level:
@@ -238,7 +197,7 @@ When creating or updating peers, choose access level:
 - **lan_only**: VPN + specific LAN subnets
   - `AllowedIPs = 10.20.0.0/24, fd20::/64, 192.168.10.0/24`
 
-- **custom**: Specific IPs (parking lot for future)
+- **restricted_ip**: Access to specific IPs/ports only
 
 ## Database Queries
 
@@ -257,79 +216,41 @@ sqlite3 wg-friend.db "
   FROM subnet_router sn
   JOIN sn_lan_networks lan ON sn.id = lan.sn_id;
 "
-
-# Check peer order
-sqlite3 wg-friend.db "
-  SELECT position, peer_public_key, is_subnet_router
-  FROM cs_peer_order
-  ORDER BY position;
-"
 ```
 
 ## File Structure
 
 ```
 wireguard-friend/
-├── wg-friend-onboard.py     # Import existing configs
+├── wg-friend-onboard.py        # Import existing configs or create new
 ├── wg-friend-maintain.py       # Maintenance mode
 ├── wg-friend.db                # SQLite database
 ├── src/
 │   ├── database.py             # Database operations
-│   ├── raw_parser.py           # Raw block extraction
 │   ├── keygen.py               # Key generation
 │   ├── ssh_client.py           # SSH deployment
 │   └── qr_generator.py         # QR code generation
 ├── import/                     # Place configs here for import
-│   ├── coordination.conf
-│   ├── wg0.conf
-│   └── *.conf
 └── output/                     # Generated configs
-    ├── coordination.conf
-    ├── demo-device.conf
-    └── *.conf
 ```
 
 ## Key Features
 
-✅ **Perfect Fidelity**: Reconstructed configs are byte-for-byte identical to originals
-✅ **Raw Block Storage**: Exact text preserved, never parsed or modified
-✅ **PostUp/PostDown Sacred**: Rules stored as monolithic blocks
-✅ **Multi-line Comments**: Preserved perfectly
-✅ **Peer Order**: Original sequence maintained
-✅ **Key Rotation**: Update both peer and CS configs atomically
-✅ **Auto IP Allocation**: Finds next available IP addresses
-✅ **QR Code Generation**: For easy mobile device setup
-✅ **Smart Deployment**: Automatic local/remote detection
-✅ **SSH Wizard**: Interactive key setup with testing
-✅ **Key Reuse**: Tests existing keys before creating new ones
-✅ **Proper Permissions**: All sensitive files secured (600)
-✅ **Access Levels**: Control what peers can access
-
-## Verification
-
-Import preserves ALL peers:
-
-```bash
-# Original coordination.conf had 11 peers
-wc -c import/coordination.conf
-# 2358 import/coordination.conf
-
-# Reconstructed config is IDENTICAL
-wc -c output/coordination.conf
-# 2358 output/coordination.conf
-
-# Byte-for-byte match
-diff import/coordination.conf output/coordination.conf
-# (no output = perfect match)
-```
+- **Key Rotation**: Update both peer and CS configs atomically
+- **Auto IP Allocation**: Finds next available IP addresses
+- **QR Code Generation**: For easy mobile device setup
+- **Smart Deployment**: Automatic local/remote detection
+- **SSH Wizard**: Interactive key setup with testing
+- **Proper Permissions**: All sensitive files secured (600)
+- **Access Levels**: Control what peers can access
+- **Restricted IP Access**: Limit peers to specific IPs and ports
 
 ## Next Steps
 
-1. **Import your configs**: `./wg-friend-onboard.py --import-dir import/ --yes`
-2. **Verify reconstruction**: `diff import/coordination.conf output/coordination.conf`
-3. **Explore maintenance**: `./wg-friend-maintain.py`
-4. **Create new peer**: Follow interactive prompts
-5. **Deploy to server**: Use SSH deployment feature
+1. **Import your configs**: `./wg-friend-onboard.py --import-dir import/`
+2. **Explore maintenance**: `./wg-friend-maintain.py`
+3. **Create new peer**: Follow interactive prompts
+4. **Deploy to server**: Use SSH deployment feature
 
 ## Troubleshooting
 
@@ -360,11 +281,6 @@ diff import/coordination.conf output/coordination.conf
 - **SSH Keys**: Private keys 600, public keys 644
 - **Timestamped Backups**: Before every deployment
 - **Confirmation Prompts**: For key rotation and deployment
-- **Original Preservation**: Raw blocks never modified
 - **Secure Storage**: Private keys stored securely in database
 - **Smart Detection**: Automatically uses local or remote deployment
 - **Key Testing**: Tests authentication before declaring success
-
----
-
-**Built with perfect configuration fidelity in mind.**
