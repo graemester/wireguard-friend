@@ -40,7 +40,7 @@ class WireGuardConfigBuilder:
         Build a complete WireGuard client configuration
 
         Args:
-            client_name: Name for this client (e.g., "iphone-graeme")
+            client_name: Name for this client (e.g., "iphone-alice")
             client_ipv4: IPv4 address for client (e.g., "10.20.0.50")
             client_ipv6: IPv6 address for client (e.g., "fd20::50")
             peer_type: Template type (mobile_client, mesh_only, restricted_external, server_peer)

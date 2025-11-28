@@ -20,20 +20,36 @@ WireGuard Friend is a complete management system for WireGuard VPN networks with
 
 ## Quick Start
 
-### 1. Import Existing Configurations
+### 1. Choose Your Setup Path
 
-Place your WireGuard configs in the `import/` directory:
-- `coordination.conf` - Your coordination server config
-- `wg0.conf` - Subnet router config (optional)
-- `*.conf` - Client configs (optional)
-
-Run the import:
+**Option A: Import Existing Configs** (if you already have WireGuard running)
 
 ```bash
-./wg-friend-onboard.py --import-dir import/ --yes
+# Gather your existing configs into import/ directory
+mkdir -p import
+scp user@your-vps:/etc/wireguard/wg0.conf import/coordination.conf
+scp user@your-router:/etc/wireguard/wg0.conf import/router.conf
+cp ~/your-client-configs/*.conf import/  # Optional
+
+# Run onboarding (detects and imports everything)
+./wg-friend-onboard.py --import-dir import/
 ```
 
-This will:
+**Option B: Create from Scratch** (new WireGuard setup)
+
+```bash
+# Just run onboarding with empty import/ directory
+mkdir -p import
+./wg-friend-onboard.py --import-dir import/
+# → Wizard mode activates automatically when no configs found
+```
+
+The wizard will guide you through:
+1. **Coordination Server** - Public VPS endpoint, VPN networks
+2. **Subnet Routers** - Optional LAN gateways with PostUp/PostDown rules
+3. **Initial Peers** - Client devices with access levels
+
+Both routes will:
 - ✅ Parse and classify configs (CS, subnet routers, clients)
 - ✅ Extract raw blocks + structured data
 - ✅ Derive public keys from private keys
@@ -43,28 +59,16 @@ This will:
 
 ### 2. View Your Network
 
-List all entities:
+Use maintenance mode to view your network:
 
 ```bash
-python3 test-maintain.py
+./wg-friend-maintain.py
+# Select [5] List All Entities
 ```
 
-Output:
-```
-Coordination Server:
-  Endpoint: wireguard.graeme.host:51820
-  Network: 10.66.0.0/24, fd66:6666::/64
-  SSH: ged@wireguard.graeme.host:22
-
-Subnet Routers (1):
-  Name      IPv4         IPv6            LANs
-  icculus   10.66.0.20   fd66:6666::20   192.168.10.0/24
-
-Peers (10):
-  Name            IPv4          IPv6           Access        Client Config
-  iphone16pro     10.66.0.9     fd66:6666::9   full_access   Yes
-  mba15m2         10.66.0.10    fd66:6666::10  full_access   No
-  ...
+Or query the database directly:
+```bash
+sqlite3 wg-friend.db "SELECT name, ipv4_address, access_level FROM peer;"
 ```
 
 ### 3. Maintenance Mode
@@ -208,7 +212,7 @@ Both deployment methods:
 Run on coordination server itself:
 ```bash
 # SSH to your VPS first
-ssh user@wireguard.graeme.host
+ssh user@your.vpshost.com
 ./wg-friend-maintain.py
 
 Deploy to localhost (detected)  # Uses sudo, no SSH!
@@ -218,7 +222,7 @@ Run on your laptop:
 ```bash
 ./wg-friend-maintain.py
 
-Deploy to user@wireguard.graeme.host:2223  # Uses SSH
+Deploy to user@your.vpshost.com:2223  # Uses SSH
 ```
 
 ## Access Levels

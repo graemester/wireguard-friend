@@ -250,8 +250,8 @@ def main():
 Examples:
   wg-friend tui                           Launch interactive TUI
   wg-friend status                        Show peer status
-  wg-friend add iphone-graeme --qr        Add peer with QR code
-  wg-friend revoke iphone-graeme          Revoke a peer
+  wg-friend add iphone-alice --qr         Add peer with QR code
+  wg-friend revoke iphone-alice           Revoke a peer
   wg-friend list                          List all peers
         """
     )

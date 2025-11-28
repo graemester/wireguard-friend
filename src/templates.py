@@ -23,7 +23,7 @@ def get_client_template(
         private_key: Client private key
         dns: DNS server (e.g., "192.168.10.20" for Pi-hole)
         peer_public_key: Coordinator public key
-        peer_endpoint: Coordinator endpoint (e.g., "oh.higrae.me:51820")
+        peer_endpoint: Coordinator endpoint (e.g., "your.vpshost.com:51820")
         peer_allowed_ips: Allowed IPs for routing
         persistent_keepalive: Keepalive interval in seconds
         mtu: MTU size (default 1280 for mobile compatibility)
