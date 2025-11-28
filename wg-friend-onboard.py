@@ -387,14 +387,16 @@ class WireGuardOnboarder:
 
             # Display PostUp/PostDown rules for verification
             if sn_interface.postup_rules:
-                console.print(f"\n[bold cyan]PostUp rules:[/bold cyan]")
-                console.print(f"[yellow]{sn_interface.postup_rules}[/yellow]")
+                console.print(f"\n[bold cyan]PostUp rules ({len(sn_interface.postup_rules)}):[/bold cyan]")
+                for i, rule in enumerate(sn_interface.postup_rules, 1):
+                    console.print(f"  [{i}] [yellow]{rule}[/yellow]")
             else:
                 console.print(f"\n[dim]No PostUp rules[/dim]")
 
             if sn_interface.postdown_rules:
-                console.print(f"\n[bold cyan]PostDown rules:[/bold cyan]")
-                console.print(f"[yellow]{sn_interface.postdown_rules}[/yellow]")
+                console.print(f"\n[bold cyan]PostDown rules ({len(sn_interface.postdown_rules)}):[/bold cyan]")
+                for i, rule in enumerate(sn_interface.postdown_rules, 1):
+                    console.print(f"  [{i}] [yellow]{rule}[/yellow]")
             else:
                 console.print(f"\n[dim]No PostDown rules[/dim]")
 
@@ -706,11 +708,11 @@ class WireGuardOnboarder:
                 checks_passed += 1
 
         # 3. Ping CS endpoint (friendly check)
-        if cs['ssh_hostname']:
-            console.print(f"  Checking connectivity to {cs['ssh_hostname']}...", end=" ")
+        if cs['ssh_host']:
+            console.print(f"  Checking connectivity to {cs['ssh_host']}...", end=" ")
             try:
                 result = subprocess.run(
-                    ['ping', '-c', '1', '-W', '2', cs['ssh_hostname']],
+                    ['ping', '-c', '1', '-W', '2', cs['ssh_host']],
                     capture_output=True,
                     timeout=3
                 )
@@ -719,7 +721,7 @@ class WireGuardOnboarder:
                     checks_passed += 1
                 else:
                     console.print("[yellow]✗ Not reachable[/yellow]")
-                    warnings.append(f"  ⚠ CS endpoint '{cs['ssh_hostname']}' is not reachable")
+                    warnings.append(f"  ⚠ CS endpoint '{cs['ssh_host']}' is not reachable")
             except (subprocess.TimeoutExpired, FileNotFoundError):
                 console.print("[dim]⊘ Ping unavailable[/dim]")
 
