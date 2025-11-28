@@ -1,8 +1,8 @@
 # WireGuard Friend
 
-**Build and manage hub-and-spoke WireGuard VPN networks.**
+**Build and manage reliable Wireguard networks  Learn and have fun!**
 
-WireGuard Friend helps you establish professional WireGuard network topologies with a coordination server, subnet routers, and client peers. Import existing configurations or build from scratch, manage access levels, rotate keys, and deploy to servers—all through an intuitive command-line interface.
+WireGuard Friend helps you establish sophisticated WireGuard network topologies with a coordination server, subnet routers, and client peers. Import existing configurations or build from scratch, manage access levels, rotate keys, and deploy to servers—all through an intuitive command-line interface.  It can work from a setup you already have or help you build a complete set of configs from
 
 ## What It Builds For You
 
@@ -12,7 +12,7 @@ WireGuard Friend establishes this network architecture:
                     ┌─────────────────────┐
                     │  Coordination Server │  (Cloud VPS)
                     │  Public: 1.2.3.4     │
-                    │  VPN: 10.66.0.1      │
+                    │  VPN: 10.20.0.1      │
                     └──────────┬───────────┘
                                │
         ┏━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┓
@@ -20,10 +20,10 @@ WireGuard Friend establishes this network architecture:
    ┌────┴─────┐                                  ┌────┴─────┐
    │  Subnet  │                                  │  Client  │
    │  Router  │  (Home/Office Gateway)           │  Peers   │
-   │ 10.66.0.20                                  │ 10.66.0.x │
+   │ 10.20.0.20                                  │ 10.66.0.x │
    └────┬─────┘                                  └──────────┘
         │                                          • Laptops
-   192.168.12.0/24                                 • Phones
+   192.168.1.0/24                                 • Phones
    (LAN devices)                                   • Tablets
 ```
 
@@ -49,7 +49,7 @@ WireGuard Friend establishes this network architecture:
 
 ## What Problems It Solves
 
-### For Existing WireGuard Networks
+### For EXISTING WireGuard Networks
 
 You already have WireGuard running but:
 - Key rotation requires manual config editing
@@ -65,7 +65,7 @@ You already have WireGuard running but:
 - Manage access levels without editing configs
 - One-command SSH deployment with backups
 
-### For New WireGuard Networks
+### For NEW WireGuard Networks
 
 You want to build a WireGuard network but:
 - Hub-and-spoke topology is complex to plan
@@ -82,7 +82,7 @@ You want to build a WireGuard network but:
 - QR code generation for mobile devices
 - SSH deployment automation
 
-**Wizard mode:** If `import/` is empty, the onboard script offers to create a network from scratch through an interactive wizard.
+**Wizard mode:** If `import/` is empty, the onboard script **offers to create a network from scratch** through an interactive wizard.
 
 ## Use Cases
 
@@ -128,8 +128,8 @@ You want to build a WireGuard network but:
 
 **Setup:**
 - Cloud VPS as coordination server
-- Subnet router at data center
-- Subnet router at office
+- Subnet router at data center/office location #1
+- Subnet router at office location #2
 - Employee laptops + cloud services
 
 **What you get:**
@@ -460,8 +460,4 @@ wireguard-friend/
 
 ## License
 
-[Add your license here]
-
----
-
-**Build professional WireGuard networks. Manage them with confidence.**
+MIT License
