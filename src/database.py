@@ -175,7 +175,7 @@ class WireGuardDB:
                 )
             """)
 
-            # Track peer order in CS config for perfect reconstruction
+            # Track peer order in CS config
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS cs_peer_order (
                     id INTEGER PRIMARY KEY,
