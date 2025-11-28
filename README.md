@@ -1,12 +1,12 @@
 # WireGuard Friend
 
-**Configuration management system for WireGuard VPN networks with perfect fidelity.**
+**Build and manage hub-and-spoke WireGuard VPN networks.**
 
-WireGuard Friend helps you build, manage, and maintain hub-and-spoke WireGuard VPN topologies. Import existing configs or build from scratch, manage peers and subnet routers, rotate keys, and deploy—all while ensuring perfect byte-for-byte configuration fidelity.
+WireGuard Friend helps you establish professional WireGuard network topologies with a coordination server, subnet routers, and client peers. Import existing configurations or build from scratch, manage access levels, rotate keys, and deploy to servers—all through an intuitive command-line interface.
 
-## What It Does
+## What It Builds For You
 
-WireGuard Friend manages this network architecture:
+WireGuard Friend establishes this network architecture:
 
 ```
                     ┌─────────────────────┐
@@ -27,150 +27,140 @@ WireGuard Friend manages this network architecture:
    (LAN devices)                                   • Tablets
 ```
 
-### Network Topology
+### Network Components
 
 **Coordination Server (CS)**
 - Cloud VPS or dedicated server with public IP
-- Hub of the WireGuard network
-- All peers connect here
-- Routes traffic between peers and subnet routers
+- Central hub of your WireGuard network
+- All peers connect here for routing
+- Deployed and managed via SSH
 
 **Subnet Routers (SN)**
 - WireGuard peers that advertise LAN networks
-- Gateway to home/office networks
-- Handle NAT and forwarding via PostUp/PostDown rules
-- Multiple subnet routers supported
+- Gateway between VPN and home/office networks
+- Handle NAT, forwarding, and firewall rules
+- Support for multiple sites
 
 **Client Peers**
 - Individual devices (laptops, phones, tablets)
-- Access levels: full (VPN+LANs), vpn_only, lan_only, custom
-- Mobile device support with QR codes
+- Configurable access levels (full, VPN-only, LAN-only, custom)
+- QR code generation for mobile setup
+- Automatic IP allocation
 
-## Use Cases
+## What Problems It Solves
 
-### 1. **Existing WireGuard Setup** (Import & Manage)
+### For Existing WireGuard Networks
 
-You already have WireGuard configs running. Import them to get:
-- Centralized management in SQLite database
-- Key rotation without manual config editing
-- Access level management
+You already have WireGuard running but:
+- Key rotation requires manual config editing
+- Adding peers means editing files on the server
+- Managing access levels is error-prone
+- No centralized view of your network
+- Deployment is manual SSH + file copying
+
+**WireGuard Friend fixes this:**
+- Import your existing configs into SQLite database
+- Rotate keys through interactive menu
+- Create/delete peers with automatic config updates
+- Manage access levels without editing configs
+- One-command SSH deployment with backups
+
+### For New WireGuard Networks
+
+You want to build a WireGuard network but:
+- Hub-and-spoke topology is complex to plan
+- IP allocation across subnet routers is tedious
+- PostUp/PostDown rules are hard to get right
+- No template for coordination server setup
+- Mobile device onboarding is manual
+
+**WireGuard Friend helps:**
+- Wizard mode for creating configs from scratch
+- Structured approach to network topology
+- Automatic IP allocation for all peers
+- Subnet router setup with default NAT rules
 - QR code generation for mobile devices
 - SSH deployment automation
 
-```bash
-# Place your configs in import/
-./wg-friend-onboard.py --import-dir import/ --yes
+**Wizard mode:** If `import/` is empty, the onboard script offers to create a network from scratch through an interactive wizard.
 
-# Start managing
-./wg-friend-maintain.py
-```
+## Use Cases
 
-**Preserves everything:** PostUp/PostDown rules, comments, peer order, all settings.
+### 1. **Remote Access to Home/Office**
 
-### 2. **New WireGuard Network** (De Novo Setup)
+**Setup:**
+- Cloud VPS as coordination server
+- Subnet router at home/office
+- Client devices (laptop, phone, tablet)
 
-Building from scratch:
-1. Create coordination server config manually or from template
-2. Import the CS config
-3. Use maintenance mode to:
-   - Add subnet routers with advertised networks
-   - Create client peers with auto IP allocation
-   - Generate QR codes for mobile devices
-   - Deploy to servers via SSH
+**What you get:**
+- Access home devices from anywhere
+- Secure tunnel for internet browsing
+- No port forwarding needed on home router
+- Automatic routing between VPN and LAN
 
-### 3. **Hybrid Setup** (Mix of Import + New)
+### 2. **Multi-Site Corporate Network**
 
-Common scenario:
-- Import existing coordination server + subnet routers
-- Add new client peers as needed
-- Expand network by adding subnet routers
-- Rotate compromised keys
-- Change access levels
+**Setup:**
+- Cloud VPS as coordination server
+- Subnet router at each office location
+- Employee devices with appropriate access levels
 
-### 4. **Multi-Site Network**
+**What you get:**
+- All offices connected via VPN
+- Employees can access any office network (if permitted)
+- Contractors can be restricted to VPN-only
+- Centralized management of all peers
 
-Multiple offices/homes connected:
-- One coordination server (cloud VPS)
-- Subnet router at each site
-- Each site advertises its LAN networks
-- Clients can access all sites (or restricted by access level)
-- Centralized management of the entire topology
+### 3. **Personal VPN Service**
 
-### 5. **Access Level Control**
+**Setup:**
+- Cloud VPS as coordination server
+- Client devices only (no subnet routers)
 
-Different peers need different access:
-- **IT staff**: Full access to all networks
-- **Remote workers**: VPN + specific LAN subnets
-- **Contractors**: VPN only, no LAN access
-- **IoT devices**: Custom restricted access
+**What you get:**
+- Secure internet browsing via VPS
+- All traffic encrypted
+- Easy device onboarding via QR codes
+- Key rotation for compromised devices
 
-Change access levels without manual config editing.
+### 4. **Hybrid Cloud + On-Premise**
 
-## Key Features
+**Setup:**
+- Cloud VPS as coordination server
+- Subnet router at data center
+- Subnet router at office
+- Employee laptops + cloud services
 
-### Perfect Configuration Fidelity
+**What you get:**
+- Cloud services can reach on-premise resources
+- Employees can access both cloud and on-premise
+- Secure inter-site communication
+- Managed access levels per user/service
 
-Generated configs are **byte-for-byte identical** to originals:
-- Raw block storage preserves exact text
-- PostUp/PostDown rules never parsed
-- Multi-line comments preserved
-- Peer order maintained
-- No loss of any configuration data
+## Key Capabilities
 
-### Dual Storage Model
-
-```
-Config File → ┌─ Raw Blocks (exact text preservation)
-              └─ Structured Data (queryable IPs, keys, networks)
-
-Database → Reconstructor → Identical Config File
-```
-
-**Why both?**
-- Raw blocks ensure perfect reconstruction
-- Structured data enables queries, logic, IP allocation
-- Best of both worlds: fidelity + functionality
-
-### Complete Management Workflow
-
-**Import** (`wg-friend-onboard.py`)
-1. Auto-detect coordination server, subnet routers, clients
-2. Extract and preserve raw blocks + structured data
-3. Verify byte-for-byte reconstruction
-4. Store in SQLite database
-
-**Maintain** (`wg-friend-maintain.py`)
-- View and export configs
-- Rotate keys atomically (peer + CS updated together)
-- Add/remove peers
-- Generate QR codes
-- Add preshared keys
-- Deploy to servers via SSH
-- Manage access levels
-
-## Quick Start
-
-### Import Existing Configs
+### Import & Manage Existing Configs
 
 ```bash
-# 1. Place configs in import/
-cp /etc/wireguard/wg0.conf import/coordination.conf
-cp ~/wireguard-configs/*.conf import/
-
-# 2. Import
+# Import your existing WireGuard configs
 ./wg-friend-onboard.py --import-dir import/ --yes
 
-# 3. Verify perfect fidelity
-diff import/coordination.conf output/coordination.conf
-# (no output = perfect match)
+# Database now contains:
+# - Coordination server with all settings
+# - Subnet routers with advertised networks
+# - Client peers with access levels
+# - All PostUp/PostDown rules preserved
 ```
 
-### Maintenance Mode
+The import process preserves everything exactly as-is - no data loss, no reformatting.
+
+### Interactive Maintenance
 
 ```bash
 ./wg-friend-maintain.py
 
-# Interactive menu:
+# Menu-driven interface for:
 # [1] Manage Coordination Server - view, export, deploy
 # [2] Manage Subnet Routers - configs, key rotation
 # [3] Manage Peers - QR codes, keys, access, delete
@@ -179,31 +169,9 @@ diff import/coordination.conf output/coordination.conf
 # [6] Deploy Configs - SSH deployment
 ```
 
-### Create New Peer
+### Access Level Management
 
-```bash
-./wg-friend-maintain.py
-# [4] Create New Peer
-# → Auto-assigns next available IP
-# → Generates keypair
-# → Creates client config
-# → Generates QR code (optional)
-# → Updates coordination server config
-```
-
-## Architecture Highlights
-
-### PostUp/PostDown Rules
-
-Subnet routers use iptables/ip6tables rules for:
-- IP forwarding
-- NAT/Masquerading
-- MSS clamping for PMTU
-- Custom firewall rules
-
-**WireGuard Friend never parses these.** Stored as exact text blocks.
-
-### Access Levels
+Control what each peer can reach:
 
 | Level | Networks | Use Case |
 |-------|----------|----------|
@@ -212,20 +180,114 @@ Subnet routers use iptables/ip6tables rules for:
 | `lan_only` | VPN + specific LANs | Remote workers |
 | `custom` | User-defined | IoT, restricted devices |
 
+Change access levels through maintenance menu - configs update automatically.
+
 ### Key Rotation
 
-Rotate a peer's keys:
-1. Generate new keypair
-2. Update peer's client config (raw block)
-3. Update CS peer entry (raw block)
-4. Mark rotation timestamp
-5. Deploy both configs
+Rotate a compromised peer's keys:
+1. Select peer in maintenance menu
+2. Choose "Rotate Keys"
+3. New keypair generated
+4. Peer's client config updated
+5. Coordination server peer entry updated
+6. Deploy both configs
 
-**Atomic operation.** Both sides updated together.
+Both sides stay in sync - no manual editing.
 
-## Network Examples
+### Mobile Device Support
 
-### Simple: VPS + Clients
+Add a phone or tablet:
+1. Create new peer (auto-assigned IPs)
+2. Generate QR code
+3. Scan with WireGuard mobile app
+4. Deploy updated coordination server config
+5. Device is connected
+
+No typing long keys or IPs on mobile keyboards.
+
+### SSH Deployment
+
+Deploy configs to servers:
+- Automatic backup of existing config
+- Upload via SSH
+- Set proper permissions (600)
+- Optional WireGuard service restart
+- Works with any SSH-accessible server
+
+## Quick Start
+
+### Create New Network (Wizard Mode)
+
+```bash
+# Run with empty import directory
+./wg-friend-onboard.py
+
+# Wizard will ask:
+# → Create new WireGuard network from scratch? [y/N]: y
+# → Walks through:
+#    • Coordination server setup
+#    • Subnet routers (optional, with default NAT rules)
+#    • Client peers (optional)
+# → Generates configs in import/
+# → Automatically proceeds with import
+```
+
+### Import Existing Network
+
+```bash
+# 1. Place your configs in import/
+cp /etc/wireguard/wg0.conf import/coordination.conf
+cp ~/configs/*.conf import/
+
+# 2. Import into database
+./wg-friend-onboard.py --import-dir import/ --yes
+
+# 3. Verify import
+./wg-friend-maintain.py
+# → [5] List All Entities
+
+# 4. View generated configs
+ls -la output/
+```
+
+### Add a New Peer
+
+```bash
+./wg-friend-maintain.py
+
+# [4] Create New Peer
+# → Name: alice-laptop
+# → Auto-assigned: 10.66.0.25, fd66:6666::25
+# → Access: [1] Full access
+# → Generate QR code: Yes
+
+# Result:
+# - output/alice-laptop.conf (client config)
+# - output/alice-laptop-qr.png (QR code)
+# - Coordination server updated in database
+
+# [1] Manage Coordination Server → [3] Deploy
+# → Uploads new config to VPS
+```
+
+### Rotate Compromised Keys
+
+```bash
+./wg-friend-maintain.py
+
+# [3] Manage Peers → Select peer → [3] Rotate Keys
+# → New keypair generated
+# → Client config updated
+# → CS config updated
+
+# Deploy both:
+# 1. Export peer config and send to user
+# 2. Deploy CS config to server
+```
+
+## Network Architecture Examples
+
+### Simple: Personal VPN
 
 ```
 Cloud VPS (CS) ←→ Laptop
@@ -233,9 +295,9 @@ Cloud VPS (CS) ←→ Laptop
                ←→ Tablet
 ```
 
-Use case: Personal VPN for secure browsing
+**What you get:** Secure browsing, encrypted traffic, privacy
 
-### Standard: VPS + Home Network + Clients
+### Standard: Remote Home Access
 
 ```
 Cloud VPS (CS) ←→ Home Router (SN, advertises 192.168.1.0/24)
@@ -243,32 +305,68 @@ Cloud VPS (CS) ←→ Home Router (SN, advertises 192.168.1.0/24)
                ←→ Phone (can access home devices)
 ```
 
-Use case: Remote access to home network
+**What you get:** Remote access to home network, file servers, IoT devices
 
-### Advanced: Multi-Site + Clients
+### Advanced: Multi-Site Business
 
 ```
 Cloud VPS (CS) ←→ Office Router (SN, advertises 10.0.0.0/24)
-               ←→ Home Router (SN, advertises 192.168.1.0/24)
-               ←→ Branch Router (SN, advertises 172.16.0.0/24)
-               ←→ Employee Laptops (full access)
+               ←→ Home Office (SN, advertises 192.168.1.0/24)
+               ←→ Branch Office (SN, advertises 172.16.0.0/24)
+               ←→ Employee Laptops (full_access)
                ←→ Contractor Laptops (vpn_only)
 ```
 
-Use case: Corporate network with multiple locations
+**What you get:** All sites interconnected, flexible access control, centralized management
+
+## Technical Details
+
+### Storage Architecture
+
+WireGuard Friend stores configurations in two forms:
+
+1. **Raw text blocks** - Exact original configuration text
+2. **Structured data** - Extracted fields (IPs, keys, networks) for queries
+
+**Why both?**
+- Raw blocks enable reconstruction without data loss
+- Structured data enables queries, logic, IP allocation
+- Reconstruction preserves all original formatting and settings
+
+### PostUp/PostDown Rules
+
+Subnet router firewall rules are stored as-is, never parsed:
+- IP forwarding settings
+- NAT/Masquerading rules
+- MSS clamping for PMTU
+- Port forwarding
+- Custom iptables rules
+
+Import preserves your exact rules. No risk of modification or loss.
+
+### Database Schema
+
+SQLite database with tables for:
+- Coordination server (endpoint, networks, SSH info)
+- Subnet routers (with advertised LAN networks)
+- Peers (with access levels and client configs)
+- Peer ordering (maintains original config order)
+- PostUp/PostDown rules (stored separately)
+
+Query with standard SQL:
+```bash
+sqlite3 wg-friend.db "SELECT name, ipv4_address, access_level FROM peer;"
+```
 
 ## Documentation
 
-Comprehensive documentation for all use cases:
+Comprehensive guides for all use cases:
 
-- **[QUICK_START.md](QUICK_START.md)** - Step-by-step walkthrough with examples
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Deep dive into design decisions
-- **[DOCUMENTATION.md](DOCUMENTATION.md)** - Documentation index and guide
+- **[QUICK_START.md](QUICK_START.md)** - Step-by-step walkthrough
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Design decisions and internals
+- **[DOCUMENTATION.md](DOCUMENTATION.md)** - Documentation index
 
-**In-code documentation:**
-- src/database.py (442 lines) - Database operations with full docstrings
-- src/raw_parser.py (358 lines) - Raw block extraction and parsing
-- All functions fully documented
+All source code is fully documented with docstrings.
 
 ## Requirements
 
@@ -285,68 +383,79 @@ pip install -r requirements.txt
 sudo apt install wireguard-tools
 ```
 
+## Installation
+
+```bash
+git clone https://github.com/graemester/wireguard-friend.git
+cd wireguard-friend
+pip install -r requirements.txt
+
+# Verify WireGuard tools
+which wg wg-quick
+```
+
 ## Project Structure
 
 ```
 wireguard-friend/
-├── README.md                    # This file (overview)
+├── README.md                    # This file
 ├── QUICK_START.md               # Detailed walkthrough
 ├── ARCHITECTURE.md              # Design deep-dive
 ├── DOCUMENTATION.md             # Documentation index
 ├── requirements.txt             # Python dependencies
 │
 ├── wg-friend-onboard.py         # Import existing configs
-├── wg-friend-maintain.py        # Maintenance mode
+├── wg-friend-maintain.py        # Maintenance interface
 ├── wg-friend.db                 # SQLite database
 │
 ├── src/                         # Source modules
 │   ├── database.py              # Database operations
-│   ├── raw_parser.py            # Raw block extraction
+│   ├── raw_parser.py            # Configuration parsing
 │   ├── keygen.py                # Key generation
 │   ├── ssh_client.py            # SSH deployment
 │   └── qr_generator.py          # QR code generation
 │
-├── import/                      # Place configs here for import
+├── import/                      # Place configs here
 └── output/                      # Generated configs
 ```
 
 ## Why WireGuard Friend?
 
 **For existing WireGuard users:**
-- Centralized management without losing manual control
-- Perfect fidelity means configs always match originals
-- Key rotation without manual editing
-- Access level management
-- Deployment automation
+- Stop manually editing config files on servers
+- Key rotation through simple menu interface
+- Access level management without config editing
+- QR codes for mobile devices
+- Automated SSH deployment with backups
 
-**For new WireGuard deployments:**
-- Structured approach to building hub-and-spoke topology
-- Auto IP allocation
-- QR code generation for mobile
-- Built-in best practices (PostUp/PostDown templates)
-- SQLite database for queries and reporting
+**For new deployments:**
+- Structured approach to hub-and-spoke topology
+- Automatic IP allocation
+- Subnet router management
+- Network overview and reporting
+- Foundation for growing your VPN network
 
 **For everyone:**
-- No YAML configuration files to maintain
-- No Git repository required (though you can version control the DB)
-- Pure SQLite + raw blocks = simple, reliable, portable
-- Command-line interface, no web dashboard bloat
-- Works with any WireGuard setup (wg-quick, systemd, etc.)
+- SQLite database = portable, queryable, reliable
+- Command-line interface = scriptable, automatable
+- No web dashboard = no security surface, no dependencies
+- Works with standard WireGuard tools
+- Import existing configs = no migration pain
 
-## Security Notes
+## Security Considerations
 
-- Configs saved with `600` permissions (owner read/write only)
-- Private keys stored in database (protect `wg-friend.db`)
-- Keys masked in terminal display
-- Deployment creates backups before overwriting
-- No keys transmitted except via SSH (encrypted)
+- Configs saved with `600` permissions (owner-only access)
+- Private keys stored in database - protect `wg-friend.db` appropriately
+- Keys masked in terminal display (shown as *****)
+- SSH deployment creates backups before overwriting
+- All key transmission happens over SSH (encrypted)
 
 ## Getting Help
 
-1. Check **[DOCUMENTATION.md](DOCUMENTATION.md)** for index of all docs
-2. Read **[QUICK_START.md](QUICK_START.md)** for detailed examples
-3. Review **[ARCHITECTURE.md](ARCHITECTURE.md)** for design rationale
-4. Check troubleshooting sections in docs
+1. **[DOCUMENTATION.md](DOCUMENTATION.md)** - Documentation index
+2. **[QUICK_START.md](QUICK_START.md)** - Detailed examples
+3. **[ARCHITECTURE.md](ARCHITECTURE.md)** - Design rationale
+4. Troubleshooting sections in each doc
 5. Open an issue on GitHub
 
 ## License
@@ -355,6 +464,4 @@ wireguard-friend/
 
 ---
 
-**Built with perfect configuration fidelity in mind.**
-
-No YAML. No Git. Just SQLite + Raw Blocks. 🎯
+**Build professional WireGuard networks. Manage them with confidence.**
