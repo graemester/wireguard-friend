@@ -414,9 +414,10 @@ class WireGuardMaintainer:
         console.print("  [3] Rotate Keys")
         console.print("  [4] Export Config to File")
         console.print("  [5] Add/Update Preshared Key")
+        console.print("  [6] Delete Peer")
         console.print("  [0] Back")
 
-        choice = Prompt.ask("\nSelect action", choices=["0", "1", "2", "3", "4", "5"], default="0")
+        choice = Prompt.ask("\nSelect action", choices=["0", "1", "2", "3", "4", "5", "6"], default="0")
 
         if choice == "1":
             self._view_peer_config(peer)
@@ -428,6 +429,8 @@ class WireGuardMaintainer:
             self._export_peer_config(peer)
         elif choice == "5":
             self._add_preshared_key(peer)
+        elif choice == "6":
+            self._delete_peer(peer)
 
     def _view_peer_config(self, peer: Dict):
         """View peer client config"""
@@ -644,6 +647,48 @@ class WireGuardMaintainer:
         console.print(f"\n[bold]Next steps:[/bold]")
         console.print(f"  1. Generate QR code or export config for {peer['name']}")
         console.print(f"  2. Deploy updated coordination server config")
+
+    def _delete_peer(self, peer: Dict):
+        """Delete a peer"""
+        console.print(f"\n[bold red]Delete peer: {peer['name']}[/bold red]")
+        console.print(f"  IPv4: {peer['ipv4_address']}")
+        console.print(f"  IPv6: {peer['ipv6_address']}")
+
+        console.print("\n[bold yellow]Warning:[/bold yellow]")
+        console.print("  This will permanently delete the peer from the database.")
+        console.print("  The peer will be removed from the coordination server config.")
+        console.print("  This action cannot be undone.")
+
+        if not Confirm.ask("\n[bold]Are you sure you want to delete this peer?[/bold]", default=False):
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+        # Double confirmation for destructive action
+        confirm_name = Prompt.ask(f"Type the peer name '{peer['name']}' to confirm deletion")
+        if confirm_name != peer['name']:
+            console.print("[red]Name mismatch. Deletion cancelled.[/red]")
+            return
+
+        # Delete from database
+        with self.db._connection() as conn:
+            cursor = conn.cursor()
+
+            # Delete from peer table
+            cursor.execute("""
+                DELETE FROM peer
+                WHERE id = ?
+            """, (peer['id'],))
+
+            # Delete from cs_peer_order table
+            cursor.execute("""
+                DELETE FROM cs_peer_order
+                WHERE cs_id = ? AND peer_public_key = ?
+            """, (peer['cs_id'], peer['public_key']))
+
+        console.print(f"[green]✓ Peer '{peer['name']}' deleted successfully[/green]")
+        console.print(f"\n[bold]Next steps:[/bold]")
+        console.print(f"  1. Deploy updated coordination server config to remove peer")
+        console.print(f"  2. Revoke access on the physical device")
 
     def _create_new_peer(self):
         """Create a new peer"""
