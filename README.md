@@ -386,7 +386,7 @@ sudo apt install wireguard-tools
 ## Installation
 
 ```bash
-git clone https://github.com/yourname/wireguard-friend.git
+git clone https://github.com/graemester/wireguard-friend.git
 cd wireguard-friend
 pip install -r requirements.txt
 
