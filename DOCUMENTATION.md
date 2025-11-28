@@ -6,7 +6,7 @@
 **Start here!**
 
 - Quick start guide
-- Feature overview  
+- Feature overview
 - Command reference
 - Examples
 - Troubleshooting
@@ -19,6 +19,7 @@
 **Step-by-step guide**
 
 - Complete import workflow
+- Wizard mode for new setups
 - Maintenance mode guide
 - Access level explanations
 - Database queries
@@ -32,14 +33,12 @@
 ### 3. [ARCHITECTURE.md](ARCHITECTURE.md) - Design & Internals
 **Deep dive into design**
 
-- Design philosophy (perfect fidelity)
-- Dual storage model (raw blocks + structured data)
-- Sacred rules (PostUp/PostDown, peer order, etc.)
+- Dual storage model (text blocks + structured data)
+- Design rules (PostUp/PostDown, peer order, etc.)
 - Database schema
 - Import workflow
-- Reconstruction algorithm
 - Key rotation
-- Testing strategy
+- Access levels
 
 **Best for**: Understanding how it works, contributing code
 
@@ -49,27 +48,19 @@
 
 ### Import Configs
 ```bash
-./wg-friend-onboard.py --import-dir import/ --yes
+./wg-friend-onboard.py --import-dir import/
+```
+
+### Create from Scratch
+```bash
+mkdir -p import
+./wg-friend-onboard.py --import-dir import/
+# Wizard mode activates when no configs found
 ```
 
 ### Maintenance Mode
 ```bash
 ./wg-friend-maintain.py
-```
-
-### View Network
-```bash
-python3 test-maintain.py
-```
-
-### Create New Peer
-```bash
-python3 demo-new-peer.py
-```
-
-### Verify Fidelity
-```bash
-diff import/coordination.conf output/coordination.conf
 ```
 
 ---
@@ -79,38 +70,31 @@ diff import/coordination.conf output/coordination.conf
 ### I want to...
 
 **Import existing configs**
-→ [QUICK_START.md](QUICK_START.md) - Section: Import Workflow
+→ [QUICK_START.md](QUICK_START.md) - Section: Choose Your Setup Path
+
+**Create a new network from scratch**
+→ [QUICK_START.md](QUICK_START.md) - Section: Option B (Wizard)
 
 **Create a new peer**
 → [QUICK_START.md](QUICK_START.md) - Section: Create New Peer
-→ [README.md](README.md) - Examples: Create New Mobile Client
 
 **Rotate keys**
-→ [QUICK_START.md](QUICK_START.md) - Section: Key Rotation
-→ [README.md](README.md) - Examples: Rotate Compromised Key
+→ [QUICK_START.md](QUICK_START.md) - Section: Rotate Peer Keys
 
 **Deploy to server**
-→ [QUICK_START.md](QUICK_START.md) - Section: SSH Deployment
-→ [README.md](README.md) - Examples: Deploy to Server
+→ [QUICK_START.md](QUICK_START.md) - Section: Deploy Configuration
 
 **Query the database**
-→ [README.md](README.md) - Section: Database Queries
 → [QUICK_START.md](QUICK_START.md) - Section: Database Queries
 
 **Understand access levels**
 → [QUICK_START.md](QUICK_START.md) - Section: Access Levels
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Section: Access Levels
 
 **Troubleshoot issues**
-→ [README.md](README.md) - Section: Troubleshooting
 → [QUICK_START.md](QUICK_START.md) - Section: Troubleshooting
 
 **Understand the design**
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Entire document
-
-**Contribute code**
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Design decisions
-→ [README.md](README.md) - Development section
+→ [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ---
 
@@ -118,19 +102,11 @@ diff import/coordination.conf output/coordination.conf
 
 ### Source Files
 
-All source files have comprehensive docstrings:
-
-**src/database.py** (442 lines)
+**src/database.py**
 - Database operations
 - CRUD for all entities
-- Reconstruction functions
+- Config generation
 - Schema initialization
-
-**src/raw_parser.py** (358 lines)
-- Raw block extraction
-- Structured data parsing
-- Config type detection
-- Public key derivation
 
 **src/keygen.py**
 - Keypair generation
@@ -148,9 +124,9 @@ All source files have comprehensive docstrings:
 ### Scripts
 
 **wg-friend-onboard.py**
-- 5-phase import workflow
-- Raw block + structured data storage
-- Perfect fidelity verification
+- Import workflow
+- Wizard mode for new setups
+- Database storage
 
 **wg-friend-maintain.py**
 - Interactive maintenance menu
@@ -158,28 +134,6 @@ All source files have comprehensive docstrings:
 - Key rotation
 - SSH deployment
 - QR code generation
-
----
-
-## Testing & Examples
-
-### Test Scripts
-
-**test-maintain.py**
-- List all entities
-- Database query examples
-- Verification
-
-**demo-new-peer.py**
-- Automated peer creation
-- IP allocation demo
-- Config generation
-
-### Example Configs
-
-**import/coordination.conf** - Sample CS config (11 peers)
-**import/wg0.conf** - Sample subnet router
-**import/iphone16.conf** - Sample client
 
 ---
 
@@ -193,13 +147,12 @@ wireguard-friend/
 ├── DOCUMENTATION.md       ← This file
 ├── requirements.txt       ← Python deps
 │
-├── wg-friend-onboard.py    ← Import script
-├── wg-friend-maintain.py      ← Maintenance script
-├── wg-friend.db              ← SQLite database
+├── wg-friend-onboard.py   ← Import/wizard script
+├── wg-friend-maintain.py  ← Maintenance script
+├── wg-friend.db           ← SQLite database
 │
 ├── src/                   ← Source modules
 │   ├── database.py
-│   ├── raw_parser.py
 │   ├── keygen.py
 │   ├── ssh_client.py
 │   └── qr_generator.py
@@ -208,9 +161,23 @@ wireguard-friend/
 ├── output/                ← Generated configs
 │
 └── tests/
-    ├── test-maintain.py
-    └── demo-new-peer.py
 ```
+
+---
+
+## Key Concepts
+
+### Access Levels
+Control what peers can access: full_access, vpn_only, lan_only, restricted_ip.
+See: [QUICK_START.md](QUICK_START.md) - Access Levels
+
+### Restricted IP Access
+Limit specific peers to access only certain IPs and ports.
+See: [QUICK_START.md](QUICK_START.md) - Access Levels
+
+### PostUp/PostDown Rules
+These rules are stored as text blocks, preserving your iptables configuration.
+See: [ARCHITECTURE.md](ARCHITECTURE.md) - Design Rules
 
 ---
 
@@ -221,31 +188,3 @@ wireguard-friend/
 3. **Try `--help`** on scripts
 4. **Check database** with queries
 5. **Verify config files** in output/
-
----
-
-## Key Concepts
-
-### Perfect Fidelity
-Reconstructed configs must be byte-for-byte identical to originals.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Design Philosophy
-
-### Raw Blocks
-Exact text from config files, never parsed or modified.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Dual Storage Model
-
-### Structured Data
-Queryable fields extracted from raw blocks.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Structured Data
-
-### PostUp/PostDown Sacred
-These rules are stored as monolithic text blocks, never parsed.
-See: [ARCHITECTURE.md](ARCHITECTURE.md) - Sacred Rules
-
-### Access Levels
-Control what peers can access: full_access, vpn_only, lan_only, custom.
-See: [QUICK_START.md](QUICK_START.md) - Access Levels
-
----
-
-**All documentation maintained with the same care as the code: accurate, complete, and trustworthy.**

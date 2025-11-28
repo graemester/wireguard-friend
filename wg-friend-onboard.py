@@ -60,7 +60,7 @@ class WireGuardOnboarder:
         """Run the complete import workflow"""
         console.print(Panel.fit(
             "[bold cyan]WireGuard Friend - Configuration Import[/bold cyan]\n"
-            "Importing existing WireGuard configurations with perfect fidelity",
+            "Import existing WireGuard configurations or create new ones",
             border_style="cyan"
         ))
 
