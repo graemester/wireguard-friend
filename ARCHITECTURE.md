@@ -2,16 +2,9 @@
 
 ## Design Philosophy
 
-**Perfect Fidelity Above All Else**
+**Don't Break Working Configs**
 
-WireGuard Friend is built on one core principle: **reconstructed configs must be byte-for-byte identical to originals**. This drives every architectural decision.
-
-### Why Perfect Fidelity Matters
-
-1. **Trust**: Users can verify output matches input exactly
-2. **Safety**: No unintended modifications to working configs
-3. **Debugging**: Eliminates "what did the tool change?" questions
-4. **Preservation**: Maintains all quirks, comments, formatting
+WireGuard Friend imports existing configs into a database without modifying them. When you export or deploy configs, you get back exactly what you put in. This is the whole point - manage your network without breaking what already works.
 
 ## Core Architecture
 
@@ -31,20 +24,20 @@ WireGuard Friend stores each configuration in **two complementary forms**:
 │ (exact text)│   │ Data         │
 │             │   │ (queryable)  │
 │ Purpose:    │   │ Purpose:     │
-│ • Recon-    │   │ • Queries    │
-│   struction │   │ • IP alloc   │
-│ • Fidelity  │   │ • Logic      │
+│ • Export    │   │ • Queries    │
+│ • Deploy    │   │ • IP alloc   │
+│ • Unchanged │   │ • Logic      │
 └─────────────┘   └──────────────┘
        ↓
 ┌─────────────────────────────────────┐
 │ Reconstructed Config                │
-│ (byte-for-byte identical)           │
+│ (same as input)                     │
 └─────────────────────────────────────┘
 ```
 
 #### Raw Blocks
 
-**Purpose**: Perfect reconstruction
+**Purpose**: Store configs without modification
 
 **Storage**:
 - `raw_interface_block`: Exact text from `[Interface]` section
@@ -562,14 +555,14 @@ Typical network (50 peers):
 
 ## Testing Strategy
 
-### Fidelity Testing
+### Import Testing
 
 ```bash
 # Import → Reconstruct → Compare
 ./wg-friend-onboard.py --import-dir test/fixtures/
 diff test/fixtures/coordination.conf output/coordination.conf
 
-# Must be byte-for-byte identical
+# Should match
 test $? -eq 0
 ```
 
@@ -579,12 +572,12 @@ test $? -eq 0
 # Large network
 generate_cs_config(peers=1000)
 import_and_reconstruct()
-verify_fidelity()
+verify_import()
 
-# Complex rules  
+# Complex rules
 generate_postup_rules(count=50, complexity='high')
 import_and_reconstruct()
-verify_fidelity()
+verify_import()
 ```
 
 ### Regression Testing
@@ -611,7 +604,7 @@ test_postup_postdown_order()
 ### Will NOT Implement
 
 - Parsing PostUp/PostDown (violates sacred rule)
-- Config generation from scratch (violates fidelity)
+- Config generation from scratch (would modify user configs)
 - YAML/JSON export (loses raw blocks)
 - Git integration (not needed with SQLite)
 
@@ -634,8 +627,8 @@ test_postup_postdown_order()
 
 ### Why Raw Blocks?
 
-- Only way to guarantee fidelity
-- Preserves all original information
+- Preserves configs without modification
+- No risk of breaking working configurations
 - Simple to verify (byte comparison)
 - Immune to parsing bugs
 
@@ -648,4 +641,4 @@ test_postup_postdown_order()
 
 ---
 
-**The architecture prioritizes fidelity over convenience, simplicity over features, and trust over cleverness.**
+**The architecture prioritizes not breaking things over convenience, simplicity over features, and reliability over cleverness.**

@@ -195,7 +195,7 @@ gh release create v1.0.0 \
 ````markdown
 # WireGuard Friend v1.0.0
 
-**Build and manage reliable WireGuard networks with perfect fidelity.**
+**Build and manage reliable WireGuard networks.**
 
 ## What's New in v1.0.0
 

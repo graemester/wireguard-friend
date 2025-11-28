@@ -2,7 +2,7 @@
 
 ## Overview
 
-WireGuard Friend is a complete management system for WireGuard VPN networks with **perfect configuration fidelity**. It imports existing configs, stores them in SQLite with raw block preservation, and provides powerful maintenance capabilities.
+WireGuard Friend is a complete management system for WireGuard VPN networks. It imports existing configs into SQLite, manages peers and access levels, and provides powerful maintenance capabilities.
 
 ## Architecture
 
@@ -291,16 +291,12 @@ wireguard-friend/
 
 ## Key Features
 
-✅ **Perfect Fidelity**: Reconstructed configs are byte-for-byte identical to originals
-✅ **Raw Block Storage**: Exact text preserved, never parsed or modified
-✅ **PostUp/PostDown Sacred**: Rules stored as monolithic blocks
-✅ **Multi-line Comments**: Preserved perfectly
-✅ **Peer Order**: Original sequence maintained
 ✅ **Key Rotation**: Update both peer and CS configs atomically
 ✅ **Auto IP Allocation**: Finds next available IP addresses
 ✅ **QR Code Generation**: For easy mobile device setup
-✅ **Smart Deployment**: Automatic local/remote detection
-✅ **SSH Wizard**: Interactive key setup with testing
+✅ **Access Control**: Full network, VPN-only, LAN-only, IP/port-restricted
+✅ **SSH Deployment**: Automatic backup and config deployment
+✅ **Database Management**: Portable SQLite database with backup utilities
 ✅ **Key Reuse**: Tests existing keys before creating new ones
 ✅ **Proper Permissions**: All sensitive files secured (600)
 ✅ **Access Levels**: Control what peers can access
@@ -366,5 +362,3 @@ diff import/coordination.conf output/coordination.conf
 - **Key Testing**: Tests authentication before declaring success
 
 ---
-
-**Built with perfect configuration fidelity in mind.**

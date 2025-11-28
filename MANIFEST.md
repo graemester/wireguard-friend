@@ -311,7 +311,6 @@ wireguard-friend/
 - Parse WireGuard config files
 - Extract raw blocks and structured data
 - Store in SQLite database
-- Verify perfect fidelity reconstruction
 - Interactive wizard for new networks
 
 **Dependencies:**

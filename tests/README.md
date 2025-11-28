@@ -19,9 +19,9 @@ python3 tests/test-suite.py
 - Complete CRUD cycle
 - PostUp/PostDown rule order preserved
 
-### 3. Subnet Router - Multiple SNs, Config Fidelity (3 tests)
+### 3. Subnet Router - Multiple SNs, Import/Export (3 tests)
 - Multiple subnet routers in same network
-- Config reconstruction byte-for-byte
+- Config reconstruction matches original
 - Peer-specific rules labeled correctly
 
 ### 4. Peers - All Access Levels + Edge Cases (7 tests)

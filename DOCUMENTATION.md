@@ -53,7 +53,7 @@
 ### [ARCHITECTURE.md](ARCHITECTURE.md) - Design & Technical Details
 **Deep dive into how it works (650+ lines)**
 
-- Design philosophy: Perfect fidelity reconstruction
+- Design philosophy: Don't break working configs
 - Dual storage model: Raw blocks + structured data
 - Sacred rules: PostUp/PostDown, peer order, comments
 - Database schema (12 tables)
@@ -104,7 +104,7 @@
 - **Test suite:** 32 tests across 10 categories (100% pass rate)
 - **Demo scripts:** Remote assistance, new peer creation
 - **Migration scripts:** Database schema updates
-- **Test coverage:** Schema, CRUD, fidelity, CASCADE, edge cases
+- **Test coverage:** Schema, CRUD, import/export, CASCADE, edge cases
 
 👉 **For developers and testing** - verify system stability and reliability.
 
@@ -259,7 +259,7 @@ wireguard-friend/
 | Import failed | Check config file format | [QUICK_START.md](QUICK_START.md) - Troubleshooting |
 | Database not found | Run onboard script first | [README.md](README.md) - Quick Start |
 | SSH deployment fails | Set up SSH keys | [QUICK_START.md](QUICK_START.md) - SSH Deployment |
-| Configs don't match | Verify fidelity | [ARCHITECTURE.md](ARCHITECTURE.md) - Testing |
+| Configs don't match | Check import/export | [ARCHITECTURE.md](ARCHITECTURE.md) - Testing |
 | Need to backup | Use backup script | [BACKUP_RESTORE.md](BACKUP_RESTORE.md) |
 | Where to run it? | Read install guide | [WHERE_TO_RUN.md](WHERE_TO_RUN.md) |
 
@@ -290,9 +290,6 @@ wireguard-friend/
 
 ## 🔑 Key Concepts Glossary
 
-### Perfect Fidelity
-Reconstructed configs are byte-for-byte identical to originals.
-→ [ARCHITECTURE.md](ARCHITECTURE.md) - Design Philosophy
 
 ### Raw Blocks
 Exact text from config files, never parsed or modified.
