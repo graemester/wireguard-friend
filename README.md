@@ -1,273 +1,274 @@
 # WireGuard Friend
 
-**Complete WireGuard VPN management with perfect configuration fidelity.**
+**Configuration management system for WireGuard VPN networks with perfect fidelity.**
 
-WireGuard Friend imports your existing WireGuard configurations, stores them in SQLite with raw block preservation, and provides powerful maintenance capabilities—all while ensuring generated configs are **byte-for-byte identical** to your originals.
+WireGuard Friend helps you build, manage, and maintain hub-and-spoke WireGuard VPN topologies. Import existing configs or build from scratch, manage peers and subnet routers, rotate keys, and deploy—all while ensuring perfect byte-for-byte configuration fidelity.
 
-## Why WireGuard Friend?
+## What It Does
 
-- 🎯 **Perfect Fidelity**: Reconstructed configs match originals exactly
-- 🔒 **Raw Block Storage**: Original text preserved, never parsed or modified  
-- 🛡️ **Sacred PostUp/PostDown**: Rules stored as monolithic blocks
-- 📊 **SQLite Database**: Queryable structured data + raw blocks
-- 🔑 **Key Rotation**: Atomic updates to both peer and coordinator
-- 📱 **QR Code Generation**: Easy mobile device setup
-- 🚀 **SSH Deployment**: Push configs directly to servers
-- 🎚️ **Access Levels**: Control what each peer can access
+WireGuard Friend manages this network architecture:
 
-## Quick Start
+```
+                    ┌─────────────────────┐
+                    │  Coordination Server │  (Cloud VPS)
+                    │  Public: 1.2.3.4     │
+                    │  VPN: 10.66.0.1      │
+                    └──────────┬───────────┘
+                               │
+        ┏━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┓
+        ┃                                              ┃
+   ┌────┴─────┐                                  ┌────┴─────┐
+   │  Subnet  │                                  │  Client  │
+   │  Router  │  (Home/Office Gateway)           │  Peers   │
+   │ 10.66.0.20                                  │ 10.66.0.x │
+   └────┬─────┘                                  └──────────┘
+        │                                          • Laptops
+   192.168.12.0/24                                 • Phones
+   (LAN devices)                                   • Tablets
+```
+
+### Network Topology
+
+**Coordination Server (CS)**
+- Cloud VPS or dedicated server with public IP
+- Hub of the WireGuard network
+- All peers connect here
+- Routes traffic between peers and subnet routers
+
+**Subnet Routers (SN)**
+- WireGuard peers that advertise LAN networks
+- Gateway to home/office networks
+- Handle NAT and forwarding via PostUp/PostDown rules
+- Multiple subnet routers supported
+
+**Client Peers**
+- Individual devices (laptops, phones, tablets)
+- Access levels: full (VPN+LANs), vpn_only, lan_only, custom
+- Mobile device support with QR codes
+
+## Use Cases
+
+### 1. **Existing WireGuard Setup** (Import & Manage)
+
+You already have WireGuard configs running. Import them to get:
+- Centralized management in SQLite database
+- Key rotation without manual config editing
+- Access level management
+- QR code generation for mobile devices
+- SSH deployment automation
 
 ```bash
-# 1. Import existing configurations
+# Place your configs in import/
 ./wg-friend-onboard.py --import-dir import/ --yes
 
-# 2. Verify perfect reconstruction
-diff import/coordination.conf output/coordination.conf
-# (no output = byte-for-byte match)
-
-# 3. View your network
-python3 test-maintain.py
-
-# 4. Interactive maintenance
+# Start managing
 ./wg-friend-maintain.py
 ```
 
-See **[QUICK_START.md](QUICK_START.md)** for detailed walkthrough.
+**Preserves everything:** PostUp/PostDown rules, comments, peer order, all settings.
 
-## Architecture
+### 2. **New WireGuard Network** (De Novo Setup)
 
-### Raw Block Storage + Structured Data
+Building from scratch:
+1. Create coordination server config manually or from template
+2. Import the CS config
+3. Use maintenance mode to:
+   - Add subnet routers with advertised networks
+   - Create client peers with auto IP allocation
+   - Generate QR codes for mobile devices
+   - Deploy to servers via SSH
 
-WireGuard Friend stores configurations in **two complementary forms**:
+### 3. **Hybrid Setup** (Mix of Import + New)
 
-1. **Raw Blocks** (exact text from files) - For perfect reconstruction
-2. **Structured Data** (extracted fields) - For queries and logic
+Common scenario:
+- Import existing coordination server + subnet routers
+- Add new client peers as needed
+- Expand network by adding subnet routers
+- Rotate compromised keys
+- Change access levels
+
+### 4. **Multi-Site Network**
+
+Multiple offices/homes connected:
+- One coordination server (cloud VPS)
+- Subnet router at each site
+- Each site advertises its LAN networks
+- Clients can access all sites (or restricted by access level)
+- Centralized management of the entire topology
+
+### 5. **Access Level Control**
+
+Different peers need different access:
+- **IT staff**: Full access to all networks
+- **Remote workers**: VPN + specific LAN subnets
+- **Contractors**: VPN only, no LAN access
+- **IoT devices**: Custom restricted access
+
+Change access levels without manual config editing.
+
+## Key Features
+
+### Perfect Configuration Fidelity
+
+Generated configs are **byte-for-byte identical** to originals:
+- Raw block storage preserves exact text
+- PostUp/PostDown rules never parsed
+- Multi-line comments preserved
+- Peer order maintained
+- No loss of any configuration data
+
+### Dual Storage Model
 
 ```
-Config File → Parser → ┌─ Raw Block (byte-for-byte preservation)
-                       └─ Structured Data (IPs, keys, networks)
-                       
-Database → Reconstructor → Config File (identical to original)
+Config File → ┌─ Raw Blocks (exact text preservation)
+              └─ Structured Data (queryable IPs, keys, networks)
+
+Database → Reconstructor → Identical Config File
 ```
 
-### Key Design Decisions
+**Why both?**
+- Raw blocks ensure perfect reconstruction
+- Structured data enables queries, logic, IP allocation
+- Best of both worlds: fidelity + functionality
 
-- **PostUp/PostDown**: Never parsed, stored as exact text
-- **Multi-line comments**: Preserved with original formatting
-- **Peer order**: Maintained from original config
-- **Private keys**: Stored securely, masked in display only
-- **No YAML, No Git**: Just SQLite + raw blocks
+### Complete Management Workflow
 
-See **[ARCHITECTURE.md](ARCHITECTURE.md)** for detailed design.
+**Import** (`wg-friend-onboard.py`)
+1. Auto-detect coordination server, subnet routers, clients
+2. Extract and preserve raw blocks + structured data
+3. Verify byte-for-byte reconstruction
+4. Store in SQLite database
 
-## Features
+**Maintain** (`wg-friend-maintain.py`)
+- View and export configs
+- Rotate keys atomically (peer + CS updated together)
+- Add/remove peers
+- Generate QR codes
+- Add preshared keys
+- Deploy to servers via SSH
+- Manage access levels
 
-### Import System (`wg-friend-onboard.py`)
+## Quick Start
 
-5-phase workflow:
-1. **Parse & Classify** - Auto-detect CS/SN/clients
-2. **CS Confirmation** - Review network, rules, SSH
-3. **SN Confirmation** - Match routers, identify LANs
-4. **Peer Review** - Match clients, set access levels
-5. **Verification** - Reconstruct and verify byte-for-byte
-
-Result: All configs preserved in database + verified output files
-
-### Maintenance System (`wg-friend-maintain.py`)
-
-Interactive menu:
-- Manage Coordination Server (view, export, deploy)
-- Manage Subnet Routers (configs, key rotation)
-- Manage Peers (QR codes, key rotation, configs)
-- Create New Peer (auto IP allocation)
-- Deploy Configs (SSH with backup)
-
-### Access Levels
-
-| Level | AllowedIPs |
-|-------|------------|
-| **full_access** | VPN + all LANs |
-| **vpn_only** | Just VPN network |
-| **lan_only** | VPN + specific LANs |
-| **custom** | User-defined (future) |
-
-## Command Reference
-
-### Import
+### Import Existing Configs
 
 ```bash
-./wg-friend-onboard.py [OPTIONS]
+# 1. Place configs in import/
+cp /etc/wireguard/wg0.conf import/coordination.conf
+cp ~/wireguard-configs/*.conf import/
 
-  --import-dir PATH     Config directory (default: import/)
-  --db PATH            Database path (default: wg-friend.db)  
-  --clear-db           Clear database before import
-  -y, --yes            Auto-confirm prompts
+# 2. Import
+./wg-friend-onboard.py --import-dir import/ --yes
+
+# 3. Verify perfect fidelity
+diff import/coordination.conf output/coordination.conf
+# (no output = perfect match)
 ```
 
-### Maintenance
+### Maintenance Mode
 
 ```bash
-./wg-friend-maintain.py [OPTIONS]
+./wg-friend-maintain.py
 
-  --db PATH            Database path (default: wg-friend.db)
+# Interactive menu:
+# [1] Manage Coordination Server - view, export, deploy
+# [2] Manage Subnet Routers - configs, key rotation
+# [3] Manage Peers - QR codes, keys, access, delete
+# [4] Create New Peer - auto IP allocation
+# [5] List All Entities - network overview
+# [6] Deploy Configs - SSH deployment
 ```
 
-### Database Queries
-
-```bash
-# List all peers
-sqlite3 wg-friend.db "SELECT name, ipv4_address, access_level FROM peer;"
-
-# Find peers without client configs
-sqlite3 wg-friend.db "SELECT name FROM peer WHERE raw_interface_block IS NULL;"
-
-# Subnet routers with LANs
-sqlite3 wg-friend.db "
-  SELECT sn.name, lan.network_cidr  
-  FROM subnet_router sn
-  JOIN sn_lan_networks lan ON sn.id = lan.sn_id;
-"
-
-# Check peer order
-sqlite3 wg-friend.db "SELECT position, peer_public_key FROM cs_peer_order ORDER BY position;"
-
-# Recently rotated keys
-sqlite3 wg-friend.db "SELECT name, last_rotated FROM peer WHERE last_rotated IS NOT NULL ORDER BY last_rotated DESC;"
-```
-
-## Examples
-
-### Create New Mobile Client
+### Create New Peer
 
 ```bash
 ./wg-friend-maintain.py
 # [4] Create New Peer
-# Name: alice-iphone
-# Access: [1] Full access  
-# Generate QR: Yes
-
-# Result:
-# - output/alice-iphone.conf
-# - output/alice-iphone-qr.png
-# - Updated CS config ready to deploy
+# → Auto-assigns next available IP
+# → Generates keypair
+# → Creates client config
+# → Generates QR code (optional)
+# → Updates coordination server config
 ```
 
-### Rotate Compromised Key
+## Architecture Highlights
 
-```bash
-./wg-friend-maintain.py
-# [3] Manage Peers → Select peer → [3] Rotate Keys
+### PostUp/PostDown Rules
 
-# Then deploy:
-# - New client config to device
-# - Updated CS config to server
+Subnet routers use iptables/ip6tables rules for:
+- IP forwarding
+- NAT/Masquerading
+- MSS clamping for PMTU
+- Custom firewall rules
+
+**WireGuard Friend never parses these.** Stored as exact text blocks.
+
+### Access Levels
+
+| Level | Networks | Use Case |
+|-------|----------|----------|
+| `full_access` | VPN + all LANs | IT staff, administrators |
+| `vpn_only` | VPN network only | Contractors, guests |
+| `lan_only` | VPN + specific LANs | Remote workers |
+| `custom` | User-defined | IoT, restricted devices |
+
+### Key Rotation
+
+Rotate a peer's keys:
+1. Generate new keypair
+2. Update peer's client config (raw block)
+3. Update CS peer entry (raw block)
+4. Mark rotation timestamp
+5. Deploy both configs
+
+**Atomic operation.** Both sides updated together.
+
+## Network Examples
+
+### Simple: VPS + Clients
+
+```
+Cloud VPS (CS) ←→ Laptop
+               ←→ Phone
+               ←→ Tablet
 ```
 
-### Deploy to Server
+Use case: Personal VPN for secure browsing
 
-```bash
-./wg-friend-maintain.py
-# [1] Manage Coordination Server → [3] Deploy to Server
-
-# This will:
-# - Backup existing config
-# - Upload new config
-# - Set permissions (600)
-# - Restart WireGuard (optional)
-```
-
-## Project Structure
+### Standard: VPS + Home Network + Clients
 
 ```
-wireguard-friend/
-├── README.md                    # This file
-├── QUICK_START.md               # Detailed walkthrough
-├── ARCHITECTURE.md              # Design decisions
-├── wg-friend-onboard.py     # Import script
-├── wg-friend-maintain.py       # Maintenance script
-├── wg-friend.db                # SQLite database
-├── src/
-│   ├── database.py             # DB operations (442 lines)
-│   ├── raw_parser.py           # Raw block extraction (358 lines)
-│   ├── keygen.py               # Key generation
-│   ├── ssh_client.py           # SSH deployment
-│   └── qr_generator.py         # QR code generation
-├── import/                     # Place configs here for import
-└── output/                     # Generated configs
+Cloud VPS (CS) ←→ Home Router (SN, advertises 192.168.1.0/24)
+               ←→ Laptop (can access home devices)
+               ←→ Phone (can access home devices)
 ```
 
-## Testing
+Use case: Remote access to home network
 
-Verify perfect fidelity:
+### Advanced: Multi-Site + Clients
 
-```bash
-# Import configs
-./wg-friend-onboard.py --clear-db --import-dir import/ --yes
-
-# Verify byte-for-byte match
-diff import/coordination.conf output/coordination.conf
-# (no output = success)
-
-# Check database
-python3 test-maintain.py
-
-# Create test peer
-python3 demo-new-peer.py
+```
+Cloud VPS (CS) ←→ Office Router (SN, advertises 10.0.0.0/24)
+               ←→ Home Router (SN, advertises 192.168.1.0/24)
+               ←→ Branch Router (SN, advertises 172.16.0.0/24)
+               ←→ Employee Laptops (full access)
+               ←→ Contractor Laptops (vpn_only)
 ```
 
-## Troubleshooting
-
-**"Failed to derive public key"**
-```bash
-sudo apt install wireguard-tools
-which wg
-```
-
-**"Database locked"**
-```bash
-pkill -f wg-friend
-rm wg-friend.db-journal
-```
-
-**SSH deployment fails**
-```bash
-# Test access
-ssh user@host
-# Check sudo perms
-ssh user@host sudo -l
-```
-
-See **[QUICK_START.md](QUICK_START.md)** troubleshooting section for more.
-
-## Security
-
-- Configs saved with 600 permissions
-- Private keys stored in database (protect wg-friend.db)
-- Keys masked in terminal display
-- No keys transmitted except via SSH deployment
-- Backup existing configs before deployment
-
-## Development
-
-```bash
-# Test import
-./wg-friend-onboard.py --clear-db --import-dir import/ --yes
-
-# Run queries
-python3 test-maintain.py
-
-# Test peer creation  
-python3 demo-new-peer.py
-
-# Verify reconstruction
-diff import/coordination.conf output/coordination.conf
-```
+Use case: Corporate network with multiple locations
 
 ## Documentation
 
-- **[QUICK_START.md](QUICK_START.md)** - Complete walkthrough with examples
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Design decisions and rationale
-- **Code docstrings** - Module and function documentation
+Comprehensive documentation for all use cases:
+
+- **[QUICK_START.md](QUICK_START.md)** - Step-by-step walkthrough with examples
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Deep dive into design decisions
+- **[DOCUMENTATION.md](DOCUMENTATION.md)** - Documentation index and guide
+
+**In-code documentation:**
+- src/database.py (442 lines) - Database operations with full docstrings
+- src/raw_parser.py (358 lines) - Raw block extraction and parsing
+- All functions fully documented
 
 ## Requirements
 
@@ -280,17 +281,80 @@ diff import/coordination.conf output/coordination.conf
 # Install dependencies
 pip install -r requirements.txt
 
-# Verify WireGuard
-which wg wg-quick
+# Install WireGuard tools
+sudo apt install wireguard-tools
 ```
 
-## Credits
+## Project Structure
 
-Built with:
-- **SQLite** - Database storage
-- **Rich** - Terminal UI
-- **WireGuard** - VPN protocol
+```
+wireguard-friend/
+├── README.md                    # This file (overview)
+├── QUICK_START.md               # Detailed walkthrough
+├── ARCHITECTURE.md              # Design deep-dive
+├── DOCUMENTATION.md             # Documentation index
+├── requirements.txt             # Python dependencies
+│
+├── wg-friend-onboard.py         # Import existing configs
+├── wg-friend-maintain.py        # Maintenance mode
+├── wg-friend.db                 # SQLite database
+│
+├── src/                         # Source modules
+│   ├── database.py              # Database operations
+│   ├── raw_parser.py            # Raw block extraction
+│   ├── keygen.py                # Key generation
+│   ├── ssh_client.py            # SSH deployment
+│   └── qr_generator.py          # QR code generation
+│
+├── import/                      # Place configs here for import
+└── output/                      # Generated configs
+```
 
-**Designed with perfect configuration fidelity in mind.**
+## Why WireGuard Friend?
+
+**For existing WireGuard users:**
+- Centralized management without losing manual control
+- Perfect fidelity means configs always match originals
+- Key rotation without manual editing
+- Access level management
+- Deployment automation
+
+**For new WireGuard deployments:**
+- Structured approach to building hub-and-spoke topology
+- Auto IP allocation
+- QR code generation for mobile
+- Built-in best practices (PostUp/PostDown templates)
+- SQLite database for queries and reporting
+
+**For everyone:**
+- No YAML configuration files to maintain
+- No Git repository required (though you can version control the DB)
+- Pure SQLite + raw blocks = simple, reliable, portable
+- Command-line interface, no web dashboard bloat
+- Works with any WireGuard setup (wg-quick, systemd, etc.)
+
+## Security Notes
+
+- Configs saved with `600` permissions (owner read/write only)
+- Private keys stored in database (protect `wg-friend.db`)
+- Keys masked in terminal display
+- Deployment creates backups before overwriting
+- No keys transmitted except via SSH (encrypted)
+
+## Getting Help
+
+1. Check **[DOCUMENTATION.md](DOCUMENTATION.md)** for index of all docs
+2. Read **[QUICK_START.md](QUICK_START.md)** for detailed examples
+3. Review **[ARCHITECTURE.md](ARCHITECTURE.md)** for design rationale
+4. Check troubleshooting sections in docs
+5. Open an issue on GitHub
+
+## License
+
+[Add your license here]
+
+---
+
+**Built with perfect configuration fidelity in mind.**
 
 No YAML. No Git. Just SQLite + Raw Blocks. 🎯
