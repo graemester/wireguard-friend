@@ -23,6 +23,10 @@ class WireGuardDB:
         """Context manager for database connections"""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+
+        # Enable foreign key constraints (required for CASCADE deletes)
+        conn.execute("PRAGMA foreign_keys = ON")
+
         try:
             yield conn
             conn.commit()
@@ -186,6 +190,7 @@ class WireGuardDB:
                     peer_id INTEGER NOT NULL,
                     sn_id INTEGER NOT NULL,
                     target_ip TEXT NOT NULL,
+                    allowed_ports TEXT,
                     description TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (peer_id) REFERENCES peer(id) ON DELETE CASCADE,
@@ -507,15 +512,25 @@ class WireGuardDB:
             row = cursor.fetchone()
             return dict(row) if row else None
 
-    def save_peer_ip_restriction(self, peer_id: int, sn_id: int, target_ip: str, description: Optional[str] = None):
-        """Save IP restriction for a peer"""
+    def save_peer_ip_restriction(self, peer_id: int, sn_id: int, target_ip: str, allowed_ports: Optional[str] = None, description: Optional[str] = None):
+        """Save IP restriction for a peer
+
+        Args:
+            peer_id: Peer ID
+            sn_id: Subnet router ID
+            target_ip: Target IP address
+            allowed_ports: Comma-delimited ports (e.g., "22,443,8080" or "8000:8999")
+            description: Optional description
+        """
         with self._connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO peer_ip_restrictions (peer_id, sn_id, target_ip, description)
-                VALUES (?, ?, ?, ?)
-            """, (peer_id, sn_id, target_ip, description))
-            logger.info(f"Saved IP restriction for peer {peer_id}: {target_ip} on SN {sn_id}")
+                INSERT INTO peer_ip_restrictions (peer_id, sn_id, target_ip, allowed_ports, description)
+                VALUES (?, ?, ?, ?, ?)
+            """, (peer_id, sn_id, target_ip, allowed_ports, description))
+
+            port_info = f" ports: {allowed_ports}" if allowed_ports else " (all ports)"
+            logger.info(f"Saved IP restriction for peer {peer_id}: {target_ip}{port_info} on SN {sn_id}")
 
     def get_peer_ip_restriction(self, peer_id: int) -> Optional[Dict]:
         """Get IP restriction for a peer"""

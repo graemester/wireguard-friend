@@ -100,6 +100,52 @@ class WireGuardMaintainer:
             timestamp = int(time.time())
             self.ssh_key_path = self.ssh_key_dir / f"wg-friend-{timestamp}"
 
+    def _generate_port_firewall_rules(self, peer_ipv4: str, target_ip: str, allowed_ports: Optional[str]) -> tuple[list[str], list[str]]:
+        """Generate firewall rules for port-restricted access
+
+        Args:
+            peer_ipv4: Peer's VPN IPv4 address
+            target_ip: Target IP address on LAN
+            allowed_ports: Comma-delimited ports (e.g., "22,443,8080" or "8000:8999" or None for all)
+
+        Returns:
+            (postup_rules, postdown_rules)
+        """
+        postup_rules = []
+        postdown_rules = []
+
+        if not allowed_ports:
+            # No port restriction - allow all traffic to target IP
+            postup_rules.append(f"iptables -I FORWARD -s {peer_ipv4}/32 -d {target_ip}/32 -j ACCEPT")
+            postdown_rules.append(f"iptables -D FORWARD -s {peer_ipv4}/32 -d {target_ip}/32 -j ACCEPT")
+        else:
+            # Parse ports and create rules for each
+            ports = [p.strip() for p in allowed_ports.split(',')]
+
+            for port in ports:
+                if ':' in port:
+                    # Port range (e.g., "8000:8999")
+                    postup_rules.append(
+                        f"iptables -I FORWARD -s {peer_ipv4}/32 -d {target_ip}/32 -p tcp --dport {port} -j ACCEPT"
+                    )
+                    postdown_rules.append(
+                        f"iptables -D FORWARD -s {peer_ipv4}/32 -d {target_ip}/32 -p tcp --dport {port} -j ACCEPT"
+                    )
+                else:
+                    # Single port (e.g., "22")
+                    postup_rules.append(
+                        f"iptables -I FORWARD -s {peer_ipv4}/32 -d {target_ip}/32 -p tcp --dport {port} -j ACCEPT"
+                    )
+                    postdown_rules.append(
+                        f"iptables -D FORWARD -s {peer_ipv4}/32 -d {target_ip}/32 -p tcp --dport {port} -j ACCEPT"
+                    )
+
+        # Final rule: DROP all other traffic from this peer
+        postup_rules.append(f"iptables -I FORWARD -s {peer_ipv4}/32 -j DROP")
+        postdown_rules.append(f"iptables -D FORWARD -s {peer_ipv4}/32 -j DROP")
+
+        return postup_rules, postdown_rules
+
     def run(self):
         """Run maintenance mode interactive menu"""
         console.print(Panel.fit(
@@ -1397,7 +1443,20 @@ class WireGuardMaintainer:
 
             # Prompt for target IP
             target_ip = Prompt.ask("\nTarget IP address (e.g., 192.168.10.50)")
-            console.print(f"\n[yellow]This peer will ONLY be able to access {target_ip}[/yellow]")
+
+            # Prompt for port restrictions
+            console.print("\n[bold]Port Restrictions:[/bold]")
+            console.print("  Syntax: Single: 22 | Multiple: 22,443,8080 | Range: 8000:8999 | All: (blank)")
+            console.print("  [dim]Common: 22=SSH, 80=HTTP, 443=HTTPS, 3389=RDP, 5900=VNC, 8096=Jellyfin, 8123=HomeAssistant[/dim]")
+
+            allowed_ports = Prompt.ask("\nAllowed port(s)", default="")
+            allowed_ports = allowed_ports.strip() if allowed_ports else None
+
+            # Show summary
+            if allowed_ports:
+                console.print(f"\n[yellow]This peer will ONLY access {target_ip} on port(s): {allowed_ports}[/yellow]")
+            else:
+                console.print(f"\n[yellow]This peer will ONLY access {target_ip} (all ports)[/yellow]")
             console.print(f"[yellow]Firewall rules will be added to {target_sn['name']}[/yellow]")
 
             if not Confirm.ask("Continue?", default=True):
@@ -1468,26 +1527,27 @@ class WireGuardMaintainer:
 
         # Handle restricted_ip access level - save restriction and firewall rules
         if access_level == 'restricted_ip':
+            # Generate description
+            if allowed_ports:
+                description = f"Restricted access to {target_ip} port(s): {allowed_ports}"
+            else:
+                description = f"Restricted access to {target_ip} (all ports)"
+
             # Save IP restriction
             self.db.save_peer_ip_restriction(
                 peer_id=peer_id,
                 sn_id=target_sn_id,
                 target_ip=target_ip,
-                description=f"Restricted access to {target_ip} only"
+                allowed_ports=allowed_ports,
+                description=description
             )
 
-            # Generate firewall rules
-            # PostUp: Allow ONLY traffic from this peer to the target IP, drop everything else
-            postup_rules = [
-                f"iptables -I FORWARD -s {ipv4}/32 -d {target_ip}/32 -j ACCEPT",
-                f"iptables -I FORWARD -s {ipv4}/32 -j DROP"
-            ]
-
-            # PostDown: Remove the rules
-            postdown_rules = [
-                f"iptables -D FORWARD -s {ipv4}/32 -d {target_ip}/32 -j ACCEPT",
-                f"iptables -D FORWARD -s {ipv4}/32 -j DROP"
-            ]
+            # Generate firewall rules based on port restrictions
+            postup_rules, postdown_rules = self._generate_port_firewall_rules(
+                peer_ipv4=ipv4,
+                target_ip=target_ip,
+                allowed_ports=allowed_ports
+            )
 
             # Save firewall rules
             self.db.save_sn_peer_firewall_rules(
@@ -1497,8 +1557,11 @@ class WireGuardMaintainer:
                 postdown_rules=postdown_rules
             )
 
-            console.print(f"[green]✓ IP restriction saved: {target_ip}[/green]")
-            console.print(f"[green]✓ Firewall rules added to {target_sn['name']}[/green]")
+            if allowed_ports:
+                console.print(f"[green]✓ IP restriction saved: {target_ip} port(s): {allowed_ports}[/green]")
+            else:
+                console.print(f"[green]✓ IP restriction saved: {target_ip} (all ports)[/green]")
+            console.print(f"[green]✓ Firewall rules added to {target_sn['name']} ({len(postup_rules)} rules)[/green]")
 
         console.print(f"\n[green]✓ Peer '{name}' created successfully![/green]")
         console.print(f"\n[bold]Next steps:[/bold]")

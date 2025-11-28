@@ -70,15 +70,17 @@ for i in range(2, 65535):
 
 console.print(f"[green]Next available: {next_ipv4}, {next_ipv6}[/green]")
 
-# Create restricted peer
+# Create restricted peer with port restrictions
 name = "test-restricted"
 target_ip = "192.168.10.50"
+allowed_ports = "22,443,8096"  # SSH, HTTPS, Jellyfin
 
 # Generate keypair
 private_key, public_key = generate_keypair()
 
 console.print(f"\n[cyan]Creating restricted IP peer '{name}'...[/cyan]")
 console.print(f"  Target IP: {target_ip}")
+console.print(f"  Allowed Ports: {allowed_ports}")
 console.print(f"  Subnet Router: {sn['name']}")
 
 # Build peer entry for CS
@@ -121,26 +123,30 @@ db.save_peer_order(cs['id'], public_key, next_position, is_subnet_router=False)
 
 console.print(f"[green]✓ Peer created with ID {peer_id}[/green]")
 
-# Save IP restriction
+# Save IP restriction with port restrictions
 db.save_peer_ip_restriction(
     peer_id=peer_id,
     sn_id=sn['id'],
     target_ip=target_ip,
-    description=f"Test restricted access to {target_ip}"
+    allowed_ports=allowed_ports,
+    description=f"Test restricted access to {target_ip} ports: {allowed_ports}"
 )
 
-console.print(f"[green]✓ IP restriction saved[/green]")
+console.print(f"[green]✓ IP restriction saved (ports: {allowed_ports})[/green]")
 
-# Generate and save firewall rules
-postup_rules = [
-    f"iptables -I FORWARD -s {next_ipv4}/32 -d {target_ip}/32 -j ACCEPT",
-    f"iptables -I FORWARD -s {next_ipv4}/32 -j DROP"
-]
+# Generate firewall rules based on port restrictions
+postup_rules = []
+postdown_rules = []
 
-postdown_rules = [
-    f"iptables -D FORWARD -s {next_ipv4}/32 -d {target_ip}/32 -j ACCEPT",
-    f"iptables -D FORWARD -s {next_ipv4}/32 -j DROP"
-]
+# Parse ports and create rules
+ports = [p.strip() for p in allowed_ports.split(',')]
+for port in ports:
+    postup_rules.append(f"iptables -I FORWARD -s {next_ipv4}/32 -d {target_ip}/32 -p tcp --dport {port} -j ACCEPT")
+    postdown_rules.append(f"iptables -D FORWARD -s {next_ipv4}/32 -d {target_ip}/32 -p tcp --dport {port} -j ACCEPT")
+
+# Final DROP rule
+postup_rules.append(f"iptables -I FORWARD -s {next_ipv4}/32 -j DROP")
+postdown_rules.append(f"iptables -D FORWARD -s {next_ipv4}/32 -j DROP")
 
 db.save_sn_peer_firewall_rules(
     sn_id=sn['id'],
@@ -166,6 +172,7 @@ console.print(f"\n[bold]Summary:[/bold]")
 console.print(f"  • Peer: {name}")
 console.print(f"  • Access: restricted_ip")
 console.print(f"  • Target IP: {target_ip}")
+console.print(f"  • Allowed Ports: {allowed_ports}")
 console.print(f"  • Subnet Router: {sn['name']}")
 console.print(f"  • Firewall rules: {len(postup_rules)} PostUp, {len(postdown_rules)} PostDown")
 console.print(f"  • Peer-specific rule sections: {peer_rule_count}")
