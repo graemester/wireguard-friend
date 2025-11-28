@@ -454,20 +454,17 @@ class WireGuardMaintainer:
 
         config = self.db.reconstruct_peer_config(peer['id'])
 
-        # Generate QR code
+        # Generate QR code (returns ASCII art)
         qr_file = self.output_dir / f"{peer['name']}-qr.png"
-        generate_qr_code(config, str(qr_file))
+        qr_ascii = generate_qr_code(config, qr_file)
 
         console.print(f"[green]✓ QR code saved to {qr_file}[/green]")
 
-        # Also display in terminal if possible
-        try:
-            import qrcode
-            qr = qrcode.QRCode()
-            qr.add_data(config)
-            qr.print_ascii(invert=True)
-        except:
-            pass
+        # Offer to display in terminal
+        if Confirm.ask("\nDisplay QR code in terminal?", default=True):
+            console.print("\n[dim]Note: Terminal display may not work in all terminal configurations.[/dim]")
+            console.print("[dim]If scanning doesn't work, use the PNG file from output/ folder.[/dim]\n")
+            console.print(qr_ascii)
 
     def _export_peer_config(self, peer: Dict):
         """Export peer config to file"""
@@ -841,8 +838,13 @@ class WireGuardMaintainer:
 
         if Confirm.ask("Generate QR code?", default=True):
             qr_file = self.output_dir / f"{name}-qr.png"
-            generate_qr_code(client_config, str(qr_file))
+            qr_ascii = generate_qr_code(client_config, qr_file)
             console.print(f"[green]✓ QR code saved to {qr_file}[/green]")
+
+            if Confirm.ask("Display QR code in terminal?", default=True):
+                console.print("\n[dim]Note: Terminal display may not work in all terminal configurations.[/dim]")
+                console.print("[dim]If scanning doesn't work, use the PNG file from output/ folder.[/dim]\n")
+                console.print(qr_ascii)
 
     def _deploy_configs(self):
         """Deploy all configs"""
