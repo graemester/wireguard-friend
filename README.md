@@ -214,6 +214,31 @@ Deploy configs to servers:
 - Optional WireGuard service restart
 - Works with any SSH-accessible server
 
+## Where Should I Run This?
+
+**TL;DR: Run it on your subnet router, or your laptop - it works anywhere!**
+
+WireGuard Friend is a **management tool**, not a runtime service. It doesn't need to run 24/7. Run it when you need to manage your network, then it sits idle.
+
+**Pragmatic choice:** Run on your subnet router
+- Already managing WireGuard configs
+- On your local network (easy access)
+- Single point of management
+
+**Power user choice:** Run on your workstation/laptop
+- Keep servers minimal and clean
+- Work offline (except deployments)
+- Database travels with you
+
+**The key insight:** WireGuard Friend just needs SSH access to your WireGuard hosts. It doesn't need to be on the same machine as WireGuard itself!
+
+📖 **See [WHERE_TO_RUN.md](WHERE_TO_RUN.md) for comprehensive guidance** including:
+- Detailed pros/cons of each location
+- Security considerations
+- Multi-admin scenarios
+- Migration between machines
+- Requirements checklist
+
 ## Quick Start
 
 ### Create New Network (Wizard Mode)
