@@ -23,6 +23,8 @@ from src.keygen import generate_keypair, generate_preshared_key
 from src.qr_generator import generate_qr_code
 from src.ssh_client import SSHClient
 
+import getpass
+
 console = Console()
 
 
@@ -40,9 +42,19 @@ class WireGuardMaintainer:
         self.output_dir = Path("output")
         self.output_dir.mkdir(exist_ok=True)
 
-        # SSH key path for deployments
+        # SSH key path for deployments - use unique name to avoid conflicts
         self.ssh_key_dir = Path.home() / ".ssh"
-        self.ssh_key_path = self.ssh_key_dir / "id_ed25519"
+
+        # Check if wg-friend key already exists, otherwise create new one with timestamp
+        existing_keys = list(self.ssh_key_dir.glob("wg-friend-*"))
+        if existing_keys:
+            # Use the most recent wg-friend key
+            self.ssh_key_path = sorted(existing_keys)[-1]
+        else:
+            # Create new key with timestamp
+            import time
+            timestamp = int(time.time())
+            self.ssh_key_path = self.ssh_key_dir / f"wg-friend-{timestamp}"
 
     def run(self):
         """Run maintenance mode interactive menu"""
@@ -60,9 +72,10 @@ class WireGuardMaintainer:
             console.print("  [4] Create New Peer")
             console.print("  [5] List All Entities")
             console.print("  [6] Deploy Configs")
+            console.print("  [7] SSH Setup (Key Generation & Installation)")
             console.print("  [0] Exit")
 
-            choice = Prompt.ask("\nSelect option", choices=["0", "1", "2", "3", "4", "5", "6"], default="0")
+            choice = Prompt.ask("\nSelect option", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="0")
 
             if choice == "0":
                 console.print("[yellow]Goodbye![/yellow]")
@@ -79,6 +92,212 @@ class WireGuardMaintainer:
                 self._list_all_entities()
             elif choice == "6":
                 self._deploy_configs()
+            elif choice == "7":
+                self._ssh_setup_wizard()
+
+    def _ssh_setup_wizard(self):
+        """Interactive SSH key setup wizard"""
+        console.print(Panel.fit(
+            "[bold cyan]SSH Key Setup Wizard[/bold cyan]\n\n"
+            "This wizard will help you set up SSH key-based authentication\n"
+            "for deploying WireGuard configs to your servers.\n\n"
+            "Steps:\n"
+            "  1. Generate SSH keypair (if needed)\n"
+            "  2. Install public key to coordination server\n"
+            "  3. Install public key to subnet router(s)\n"
+            "  4. Test authentication",
+            border_style="cyan"
+        ))
+
+        if not Confirm.ask("\nContinue with SSH setup?", default=True):
+            console.print("[yellow]Cancelled[/yellow]")
+            return
+
+        # Step 1: Generate or check SSH key
+        console.print("\n[bold cyan]Step 1: SSH Keypair[/bold cyan]")
+
+        if self.ssh_key_path.exists():
+            console.print(f"[green]✓ SSH key already exists: {self.ssh_key_path}[/green]")
+
+            if not Confirm.ask("Use existing key?", default=True):
+                if not Confirm.ask("[yellow]Generate new key? (will overwrite existing)[/yellow]", default=False):
+                    console.print("[yellow]Keeping existing key[/yellow]")
+                else:
+                    self._generate_ssh_key()
+        else:
+            console.print(f"[yellow]No SSH key found at: {self.ssh_key_path}[/yellow]")
+            if Confirm.ask("Generate new SSH key?", default=True):
+                self._generate_ssh_key()
+            else:
+                console.print("[red]Cannot proceed without SSH key[/red]")
+                return
+
+        # Step 2: Install to coordination server
+        console.print("\n[bold cyan]Step 2: Coordination Server[/bold cyan]")
+        cs = self.db.get_coordination_server()
+
+        if cs:
+            console.print(f"Target: {cs['ssh_user']}@{cs['ssh_host']}:{cs['ssh_port']}")
+
+            if Confirm.ask("Install SSH key to coordination server?", default=True):
+                self._install_ssh_key_to_host(
+                    cs['ssh_host'],
+                    cs['ssh_port'],
+                    cs['ssh_user']
+                )
+        else:
+            console.print("[yellow]No coordination server configured - skipping[/yellow]")
+
+        # Step 3: Install to subnet routers
+        console.print("\n[bold cyan]Step 3: Subnet Routers[/bold cyan]")
+
+        if cs:
+            sn_list = self.db.get_subnet_routers(cs['id'])
+
+            if sn_list:
+                console.print(f"Found {len(sn_list)} subnet router(s)")
+
+                for sn in sn_list:
+                    console.print(f"\n  • {sn['name']} ({sn['ipv4_address']})")
+
+                    if Confirm.ask(f"    Install SSH key to {sn['name']}?", default=True):
+                        # Prompt for SSH details
+                        ssh_host = Prompt.ask("    SSH hostname/IP", default=sn.get('ipv4_address', ''))
+                        ssh_port = int(Prompt.ask("    SSH port", default="22"))
+                        ssh_user = Prompt.ask("    SSH username", default="root")
+
+                        self._install_ssh_key_to_host(ssh_host, ssh_port, ssh_user)
+            else:
+                console.print("[yellow]No subnet routers configured - skipping[/yellow]")
+
+        console.print("\n[bold green]✓ SSH setup complete![/bold green]")
+        console.print("\n[cyan]You can now use deployment features in the main menu.[/cyan]")
+
+    def _generate_ssh_key(self):
+        """Generate SSH keypair"""
+        try:
+            console.print(f"\n[cyan]Generating ed25519 SSH keypair...[/cyan]")
+
+            # Ensure .ssh directory exists
+            self.ssh_key_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+
+            # Generate key using ssh-keygen
+            result = subprocess.run(
+                [
+                    "ssh-keygen",
+                    "-t", "ed25519",
+                    "-f", str(self.ssh_key_path),
+                    "-N", "",  # No passphrase
+                    "-C", f"wg-friend@{datetime.now().strftime('%Y%m%d')}"
+                ],
+                capture_output=True,
+                text=True
+            )
+
+            if result.returncode != 0:
+                console.print(f"[red]✗ Failed to generate key: {result.stderr}[/red]")
+                return False
+
+            # Set permissions
+            self.ssh_key_path.chmod(0o600)
+            (self.ssh_key_path.parent / f"{self.ssh_key_path.name}.pub").chmod(0o644)
+
+            console.print(f"[green]✓ SSH keypair generated:[/green]")
+            console.print(f"  Private: {self.ssh_key_path}")
+            console.print(f"  Public:  {self.ssh_key_path}.pub")
+
+            return True
+
+        except Exception as e:
+            console.print(f"[red]✗ Error generating keypair: {e}[/red]")
+            return False
+
+    def _install_ssh_key_to_host(self, host: str, port: int, user: str):
+        """Install SSH public key to remote host"""
+        try:
+            console.print(f"\n[cyan]Installing SSH key to {user}@{host}:{port}[/cyan]")
+
+            # Read public key
+            pub_key_path = Path(f"{self.ssh_key_path}.pub")
+            if not pub_key_path.exists():
+                console.print(f"[red]✗ Public key not found: {pub_key_path}[/red]")
+                return False
+
+            public_key = pub_key_path.read_text().strip()
+
+            # Prompt for password
+            console.print(f"[yellow]Enter password for {user}@{host}:[/yellow]")
+            password = getpass.getpass("Password: ")
+
+            # Connect with password and install key
+            import paramiko
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            console.print("[cyan]Connecting...[/cyan]")
+            ssh.connect(
+                hostname=host,
+                port=port,
+                username=user,
+                password=password,
+                timeout=10
+            )
+
+            # Ensure .ssh directory exists
+            console.print("[cyan]Setting up .ssh directory...[/cyan]")
+            ssh.exec_command("mkdir -p ~/.ssh && chmod 700 ~/.ssh")
+
+            # Add public key to authorized_keys
+            console.print("[cyan]Installing public key...[/cyan]")
+            install_cmd = f'echo "{public_key}" >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys'
+            stdin, stdout, stderr = ssh.exec_command(install_cmd)
+            exit_status = stdout.channel.recv_exit_status()
+
+            ssh.close()
+
+            if exit_status != 0:
+                error = stderr.read().decode()
+                console.print(f"[red]✗ Failed to install key: {error}[/red]")
+                return False
+
+            console.print(f"[green]✓ Public key installed successfully[/green]")
+
+            # Test key authentication
+            console.print("[cyan]Testing key-based authentication...[/cyan]")
+
+            ssh = paramiko.SSHClient()
+            ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            private_key = paramiko.Ed25519Key.from_private_key_file(str(self.ssh_key_path))
+
+            ssh.connect(
+                hostname=host,
+                port=port,
+                username=user,
+                pkey=private_key,
+                timeout=10
+            )
+
+            stdin, stdout, stderr = ssh.exec_command("echo 'wg-friend test'")
+            output = stdout.read().decode().strip()
+
+            ssh.close()
+
+            if output == "wg-friend test":
+                console.print("[green]✓ Key authentication successful![/green]")
+                return True
+            else:
+                console.print("[red]✗ Key authentication failed[/red]")
+                return False
+
+        except paramiko.AuthenticationException:
+            console.print(f"[red]✗ Authentication failed - incorrect password?[/red]")
+            return False
+        except Exception as e:
+            console.print(f"[red]✗ Error installing key: {e}[/red]")
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
+            return False
 
     def _list_all_entities(self):
         """List all entities in the system"""
@@ -188,12 +407,18 @@ class WireGuardMaintainer:
         # Check SSH key
         if not self.ssh_key_path.exists():
             console.print(f"[red]✗ SSH key not found: {self.ssh_key_path}[/red]")
-            console.print("[yellow]Make sure you have SSH key-based authentication set up.[/yellow]")
-            console.print(f"[yellow]You can generate a key with:[/yellow]")
-            console.print(f"  ssh-keygen -t ed25519 -f {self.ssh_key_path}")
-            console.print(f"[yellow]Then copy it to the server with:[/yellow]")
-            console.print(f"  ssh-copy-id -i {self.ssh_key_path}.pub -p {cs['ssh_port']} {cs['ssh_user']}@{cs['ssh_host']}")
-            return
+            console.print("[yellow]SSH key-based authentication is required for deployment.[/yellow]")
+
+            if Confirm.ask("\nRun SSH setup wizard now?", default=True):
+                self._ssh_setup_wizard()
+
+                # Check again after wizard
+                if not self.ssh_key_path.exists():
+                    console.print("[red]✗ SSH setup incomplete - cannot deploy[/red]")
+                    return
+            else:
+                console.print("[yellow]Deployment cancelled[/yellow]")
+                return
 
         if not Confirm.ask("Continue with deployment?", default=False):
             console.print("[yellow]Cancelled[/yellow]")
@@ -370,12 +595,18 @@ class WireGuardMaintainer:
         # Check SSH key
         if not self.ssh_key_path.exists():
             console.print(f"[red]✗ SSH key not found: {self.ssh_key_path}[/red]")
-            console.print("[yellow]Make sure you have SSH key-based authentication set up.[/yellow]")
-            console.print(f"[yellow]You can generate a key with:[/yellow]")
-            console.print(f"  ssh-keygen -t ed25519 -f {self.ssh_key_path}")
-            console.print(f"[yellow]Then copy it to the server with:[/yellow]")
-            console.print(f"  ssh-copy-id -i {self.ssh_key_path}.pub -p {ssh_port} {ssh_user}@{ssh_host}")
-            return
+            console.print("[yellow]SSH key-based authentication is required for deployment.[/yellow]")
+
+            if Confirm.ask("\nRun SSH setup wizard now?", default=True):
+                self._ssh_setup_wizard()
+
+                # Check again after wizard
+                if not self.ssh_key_path.exists():
+                    console.print("[red]✗ SSH setup incomplete - cannot deploy[/red]")
+                    return
+            else:
+                console.print("[yellow]Deployment cancelled[/yellow]")
+                return
 
         if not Confirm.ask("Continue with deployment?", default=False):
             console.print("[yellow]Cancelled[/yellow]")
