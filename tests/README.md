@@ -115,6 +115,30 @@ def test_new_feature(self):
 ## Other Test Scripts
 
 - `demo-new-peer.py` - Demonstrates programmatic peer creation
+- `demo-remote-assistance.py` - Demonstrates remote assistance peer creation with instructions
 - `test-maintain.py` - Tests database queries and entity listing
 - `test-restricted-ip.py` - Tests restricted IP functionality with ports
 - `migrate-*.py` - Database migration scripts
+
+## Remote Assistance Feature
+
+The `remote_assistance` access level creates peers with:
+- Full network access (VPN + all LANs)
+- Config exported as `RemoteAssist.conf`
+- User-friendly setup instructions in `remote-assist.txt`
+- Includes macOS and Windows installation guides
+- Documents SSH (port 22), RDP (port 3389), and VNC (port 5900) access
+
+To use:
+1. In maintenance mode, select option [5] when creating a new peer
+2. Config and instructions are exported to `output/` directory
+3. Share both files with the user needing assistance
+
+## Database Migrations
+
+### Add Remote Assistance Access Level
+```bash
+python3 tests/migrate-add-remote-assistance.py
+```
+
+This migration updates the `peer` table CHECK constraint to allow the new `remote_assistance` access level. Required for existing databases before using this feature.

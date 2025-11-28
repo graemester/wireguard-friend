@@ -165,7 +165,7 @@ class WireGuardDB:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     last_rotated TIMESTAMP,
                     FOREIGN KEY (cs_id) REFERENCES coordination_server(id) ON DELETE CASCADE,
-                    CHECK (access_level IN ('full_access', 'vpn_only', 'lan_only', 'custom', 'restricted_ip'))
+                    CHECK (access_level IN ('full_access', 'vpn_only', 'lan_only', 'custom', 'restricted_ip', 'remote_assistance'))
                 )
             """)
 

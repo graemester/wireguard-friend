@@ -146,6 +146,163 @@ class WireGuardMaintainer:
 
         return postup_rules, postdown_rules
 
+    def _generate_remote_assist_instructions(self, config_file: Path):
+        """Generate user-friendly setup instructions for remote assistance peers
+
+        Args:
+            config_file: Path to the RemoteAssist.conf file
+        """
+        instructions_file = self.output_dir / "remote-assist.txt"
+
+        instructions = f"""
+================================================================================
+WIREGUARD REMOTE ASSISTANCE SETUP GUIDE
+================================================================================
+
+This guide will help you install WireGuard and connect to remote assistance.
+
+Your configuration file: {config_file.name}
+
+================================================================================
+STEP 1: DOWNLOAD WIREGUARD
+================================================================================
+
+Visit: https://www.wireguard.com/install/
+
+Download the installer for your operating system:
+  • Windows: Download "WireGuard Installer"
+  • macOS: Download from App Store or download "WireGuard for macOS"
+  • Linux: Install via package manager (instructions on website)
+
+
+================================================================================
+MACOS SETUP INSTRUCTIONS
+================================================================================
+
+STEP 1: INSTALL WIREGUARD
+--------------------------
+1. Download WireGuard from the Mac App Store, or
+2. Download from https://www.wireguard.com/install/ and install
+
+STEP 2: IMPORT THE CONFIGURATION FILE
+--------------------------------------
+1. Click on the WireGuard icon in your macOS top menu bar
+2. In the drop-down menu, select "Import tunnel(s) from file..."
+3. Navigate to your Downloads folder and select: {config_file.name}
+4. Click "Import"
+5. Click "Allow" if you get a pop-up saying "WireGuard would like to Add VPN
+   Configurations"
+
+STEP 3: CONNECT
+---------------
+1. Click on the WireGuard icon in your desktop's top menu bar
+2. In the drop-down menu, select the entry "RemoteAssist"
+3. A checkmark will appear next to it - you're now connected!
+
+You can view detailed connection information and manage your connection under
+"Manage Tunnels" in the drop-down menu.
+
+STEP 4: DISCONNECT
+------------------
+1. Click on the WireGuard icon in your desktop's top menu bar
+2. In the drop-down menu, click on "RemoteAssist" (the one with a checkmark)
+3. The checkmark will disappear - you're now disconnected
+
+
+================================================================================
+WINDOWS SETUP INSTRUCTIONS
+================================================================================
+
+STEP 1: INSTALL WIREGUARD
+--------------------------
+1. Download WireGuard from https://www.wireguard.com/install/
+2. Run the installer (WireGuard-Installer.exe)
+3. Follow the installation prompts
+
+STEP 2: IMPORT THE CONFIGURATION
+---------------------------------
+1. Open the WireGuard app
+2. Click "Add Tunnel"
+3. Select the configuration file you received: {config_file.name}
+4. Click "Open"
+
+STEP 3: CONNECT
+---------------
+1. Open the WireGuard app
+2. Select "RemoteAssist" from the list on the left
+3. Press "Activate" to connect
+
+The status will change to "Active" and show connection information.
+
+STEP 4: DISCONNECT
+------------------
+1. Open the WireGuard app
+2. Press "Deactivate" to disconnect
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+Connection won't activate:
+  • Make sure you have an active internet connection
+  • Try disabling any VPN or firewall software temporarily
+  • Restart the WireGuard app
+
+Can't find the configuration file:
+  • Check your Downloads folder
+  • The file is named: {config_file.name}
+  • Make sure it wasn't blocked by your antivirus
+
+Need help?
+  • Contact your technical support person
+  • They can remotely assist you once you're connected
+
+
+================================================================================
+IMPORTANT NOTES
+================================================================================
+
+• Only connect when you need remote assistance
+• Disconnect when assistance is complete
+• Your connection is encrypted and secure
+• Your support person can access your computer via SSH, RDP, or VNC when
+  you're connected
+
+
+================================================================================
+REMOTE ACCESS PROTOCOLS
+================================================================================
+
+When connected, your support person can reach your computer using:
+
+  SSH (Secure Shell)
+    - Port 22
+    - Command-line access for troubleshooting
+    - Available on: macOS, Linux, Windows (with OpenSSH)
+
+  RDP (Remote Desktop Protocol)
+    - Port 3389
+    - Full graphical desktop access
+    - Available on: Windows (built-in), macOS (Microsoft Remote Desktop app)
+
+  VNC (Virtual Network Computing)
+    - Port 5900
+    - Cross-platform graphical desktop access
+    - Available on: macOS (Screen Sharing), Linux, Windows (with VNC server)
+
+Your support person will use the appropriate protocol based on your system.
+
+================================================================================
+"""
+
+        with open(instructions_file, 'w') as f:
+            f.write(instructions)
+
+        instructions_file.chmod(0o644)
+        console.print(f"[green]✓ Instructions saved to {instructions_file}[/green]")
+        console.print(f"[yellow]→ Share both {config_file.name} and {instructions_file.name} with the user[/yellow]")
+
     def run(self):
         """Run maintenance mode interactive menu"""
         console.print(Panel.fit(
@@ -1413,9 +1570,10 @@ class WireGuardMaintainer:
         console.print("  [2] VPN only")
         console.print("  [3] LAN only (VPN + all LANs, deprecated)")
         console.print("  [4] Restricted IP (access to ONE specific IP only)")
+        console.print("  [5] Remote Assistance (full access + user-friendly setup instructions)")
 
         access_choice = IntPrompt.ask("Select", default=1)
-        access_map = {1: 'full_access', 2: 'vpn_only', 3: 'lan_only', 4: 'restricted_ip'}
+        access_map = {1: 'full_access', 2: 'vpn_only', 3: 'lan_only', 4: 'restricted_ip', 5: 'remote_assistance'}
         access_level = access_map.get(access_choice, 'full_access')
 
         # Handle restricted_ip access level
@@ -1483,7 +1641,7 @@ class WireGuardMaintainer:
         client_config += f"Endpoint = {cs['endpoint']}\n"
 
         # Set AllowedIPs based on access level
-        if access_level == 'full_access':
+        if access_level in ('full_access', 'remote_assistance'):
             # Get all networks from subnet routers
             all_networks = [cs['network_ipv4'], cs['network_ipv6']]
             for sn in existing_sn:
@@ -1572,12 +1730,21 @@ class WireGuardMaintainer:
 
         # Offer to export now
         if Confirm.ask("\nExport client config now?", default=True):
-            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-            output_file = self.output_dir / f"{name}-{timestamp}.conf"
+            # Use special filename for remote assistance
+            if access_level == 'remote_assistance':
+                output_file = self.output_dir / "RemoteAssist.conf"
+            else:
+                timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+                output_file = self.output_dir / f"{name}-{timestamp}.conf"
+
             with open(output_file, 'w') as f:
                 f.write(client_config)
             output_file.chmod(0o600)
             console.print(f"[green]✓ Exported to {output_file}[/green]")
+
+            # Generate instructions file for remote assistance
+            if access_level == 'remote_assistance':
+                self._generate_remote_assist_instructions(output_file)
 
         if Confirm.ask("Generate QR code?", default=True):
             qr_file = self.output_dir / f"{name}-qr.png"
