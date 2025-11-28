@@ -10,68 +10,83 @@ python3 tests/test-suite.py
 
 ## What It Tests
 
-### 1. Database & Schema (2 tests)
-- Table creation
-- Foreign key constraints enabled
+### 1. Database Schema & Integrity (3 tests)
+- All required tables exist
+- Foreign key constraints enforced
+- UNIQUE constraints prevent duplicates
 
-### 2. Coordination Server (2 tests)
-- Save/retrieve operations
-- PostUp/PostDown rule storage
+### 2. Coordination Server - Deep Validation (2 tests)
+- Complete CRUD cycle
+- PostUp/PostDown rule order preserved
 
-### 3. Subnet Router (4 tests)
-- Save/retrieve operations
-- LAN network management
-- Firewall rule storage
-- Config reconstruction
+### 3. Subnet Router - Multiple SNs, Config Fidelity (3 tests)
+- Multiple subnet routers in same network
+- Config reconstruction byte-for-byte
+- Peer-specific rules labeled correctly
 
-### 4. Peers - All Access Levels (5 tests)
-- `full_access` - VPN + all LANs
-- `vpn_only` - VPN network only
+### 4. Peers - All Access Levels + Edge Cases (7 tests)
+- `full_access` - VPN + all LANs with keepalive
+- `vpn_only` - VPN network isolation
 - `restricted_ip` (all ports) - One IP, all ports
-- `restricted_ip` (specific ports) - One IP, specific ports
-- Peer order tracking
+- `restricted_ip` (single port) - SSH only
+- `restricted_ip` (multiple ports) - SSH, HTTPS, Jellyfin
+- `restricted_ip` (port range) - Port range 8000-8999
+- Server-only peer (no client config)
 
-### 5. Config Reconstruction (3 tests)
-- Coordination server config rebuilding
-- Subnet router config with peer-specific rules
-- Peer client config rebuilding
+### 5. IP Allocation Logic (2 tests)
+- Find next available IPv4 address
+- Find next available IPv6 address
 
-### 6. Foreign Key CASCADE (2 tests)
-- Peer deletion removes IP restrictions
-- Peer deletion removes firewall rules
-
-### 7. Key Generation (2 tests)
-- WireGuard keypair generation
+### 6. Key Generation & Cryptography (3 tests)
+- WireGuard keypair validity
+- Public key derivation from private key
 - Key uniqueness
 
-### 8. Edge Cases (2 tests)
-- Empty port list handling
-- Multiple LAN networks
+### 7. Peer Order & CS Config Reconstruction (2 tests)
+- Peer order preserved in CS config
+- CS config includes all peers and SNs
+
+### 8. Foreign Key CASCADE - Data Integrity (3 tests)
+- Peer deletion removes IP restrictions
+- Peer deletion removes firewall rules
+- Peer order cleanup (manual - no FK CASCADE)
+
+### 9. Real-World Scenarios (3 tests)
+- Multiple restricted peers on same subnet router
+- Firewall rule ordering (ACCEPT before DROP)
+- Config export file permissions (600)
+
+### 10. Edge Cases & Error Handling (4 tests)
+- Empty string vs None for optional fields
+- Large config handling (50+ peers)
+- Special characters in peer names
+- IPv6 address validation
 
 ## Test Output
 
 ```
-======================================================================
-WireGuard Friend - Comprehensive Test Suite
-======================================================================
+================================================================================
+WireGuard Friend - Ultra-Refined Test Suite
+================================================================================
 
-[1/8] Database & Schema Tests
-✓ Database initialization
-✓ Foreign keys enabled
+[1/10] Database Schema & Integrity
+✓ Schema: All required tables exist
+✓ Schema: Foreign keys enforced
+✓ Schema: UNIQUE constraints work
 
-[2/8] Coordination Server Tests
-✓ CS: Save and retrieve
-✓ CS: PostUp/PostDown rules
+[2/10] Coordination Server - Deep Validation
+✓ CS: Complete CRUD cycle
+✓ CS: PostUp/PostDown rule order preserved
 
-... (22 tests total)
+... (32 tests across 10 categories)
 
-======================================================================
-Tests Run:    22
-Tests Passed: 22 (100%)
+================================================================================
+Tests Run:    32
+Tests Passed: 32 (100%)
 Tests Failed: 0
-======================================================================
+================================================================================
 
-✓ All tests passed!
+✓ All tests passed! System is stable and reliable.
 ```
 
 ## Test Database
