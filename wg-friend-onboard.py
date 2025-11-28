@@ -850,13 +850,14 @@ class WireGuardOnboarder:
 
         # LAN network
         console.print("\n[bold]LAN Network[/bold]")
-        console.print("[dim]The subnet your LAN uses (e.g., home or office network)[/dim]\n")
-        console.print("[yellow]💡 Subnet Selection Tip:[/yellow]")
-        console.print("[dim]Choose a less common subnet to avoid conflicts when traveling.")
-        console.print("Many public WiFi networks (coffee shops, hotels, airports) use")
-        console.print("192.168.0.0/24 or 192.168.1.0/24, which can cause routing issues.")
-        console.print("Consider using a third octet between 15-230 (e.g., 192.168.47.0/24)")
-        console.print("to minimize conflicts with networks you might join remotely.[/dim]\n")
+        console.print("[dim]The subnet your LAN uses (configured at your router/gateway)[/dim]\n")
+        console.print("[yellow]💡 Good Neighbor Tip:[/yellow]")
+        console.print("[dim]If your router currently uses 192.168.0.0/24 or 192.168.1.0/24,")
+        console.print("consider changing it (at the router level) to a less common subnet.")
+        console.print("Many public WiFi networks use these ranges, which can cause routing")
+        console.print("conflicts when you connect to WireGuard from remote locations.")
+        console.print("Using a third octet between 15-230 (e.g., 192.168.47.0/24) minimizes")
+        console.print("these conflicts. This is configured at your router, not by this script.[/dim]\n")
         console.print("Examples: 192.168.10.0/24, 192.168.47.0/24, 10.0.10.0/24")
         lan_network = Prompt.ask("Network CIDR")
 
