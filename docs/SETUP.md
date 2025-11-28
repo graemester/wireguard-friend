@@ -29,12 +29,13 @@ cp /path/to/subnet-router-wg0.conf import/
 cp /path/to/client-*.conf import/  # Optional: existing client configs
 
 # Run onboarding (detects and imports everything)
-./wg-friend-onboard.py --scan ./import
+./wg-friend-onboard.py --import-dir ./import
 ```
 
 **Option B: Setup from Scratch** (interactive wizard for new deployments)
 ```bash
-./wg-friend-onboard.py --wizard
+# Wizard mode activates automatically when no configs found
+./wg-friend-onboard.py --import-dir ./import
 ```
 
 The onboarding script will:
@@ -107,7 +108,7 @@ cp ~/wireguard-backups/*.conf import/
 
 **Step 2: Run onboarding**
 ```bash
-./wg-friend-onboard.py --scan ./import
+./wg-friend-onboard.py --import-dir ./import
 ```
 
 The script will:
@@ -124,19 +125,19 @@ The script shows what it found and asks for confirmation before writing files.
 
 **Recovery Mode:**
 
-If you have a coordinator config but missing client configs for some peers:
-```bash
-./wg-friend-onboard.py --scan ./import --recover
-```
-
-This will offer to rotate keys for "orphan" peers (exist on coordinator but no client config).
+If you have a coordinator config but missing client configs for some peers, the import will
+detect "orphan" peers (exist on coordinator but no client config) and save them without
+private keys. You can later rotate keys for these peers using the maintenance tool.
 
 ### Onboarding: Wizard (From Scratch)
 
-If you're setting up WireGuard for the first time:
+If you're setting up WireGuard for the first time, simply run the onboarding script
+with an empty import directory. Wizard mode activates automatically when no configs
+are found:
 
 ```bash
-./wg-friend-onboard.py --wizard
+mkdir -p import
+./wg-friend-onboard.py --import-dir ./import
 ```
 
 The wizard will ask:
