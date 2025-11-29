@@ -226,8 +226,7 @@ wg-friend maintain           # Interactive TUI
 
 ## Documentation
 
-- v1/QUICK_START_V2.md - Detailed walkthrough
-- v1/ARCHITECTURE.md - Technical design
+- v1/quick-start.md - Detailed walkthrough
 - v1/COMMAND_REFERENCE.md - Command reference
 
 ## Project Structure

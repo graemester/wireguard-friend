@@ -43,7 +43,7 @@ wg-friend status --live
 ## Documentation
 
 - [README](README.md) - Overview and installation
-- [Quick Start](v1/QUICK_START_V2.md) - Detailed walkthrough
+- [Quick Start](v1/quick-start.md) - Detailed walkthrough
 - [Command Reference](v1/COMMAND_REFERENCE.md) - All commands
 
 ## Core Features
