@@ -1,6 +1,6 @@
-# WireGuard Friend v2 - Command Reference
+# WireGuard Friend - Command Reference
 
-Complete reference for all `wg-friend` commands.
+Reference for `wg-friend` commands.
 
 ## Quick Reference
 
@@ -61,7 +61,7 @@ wg-friend init --db custom.db
 
 **Example:**
 ```bash
-./v2/wg-friend init
+./v1/wg-friend init
 
 # Answers:
 #   Endpoint: vps.example.com
@@ -83,7 +83,7 @@ wg-friend init --db custom.db
 
 ### `wg-friend import` - Import Existing Configs
 
-Import existing WireGuard configs into v2 database.
+Import existing WireGuard configs into v1 database.
 
 **Usage:**
 ```bash
@@ -101,7 +101,7 @@ wg-friend import --cs coordination.conf --db imported.db
 
 **Example:**
 ```bash
-./v2/wg-friend import --cs /etc/wireguard/wg0.conf
+./v1/wg-friend import --cs /etc/wireguard/wg0.conf
 ```
 
 **Output:**
@@ -138,7 +138,7 @@ wg-friend generate --db custom.db --output generated --qr
 
 **Example:**
 ```bash
-./v2/wg-friend generate --qr
+./v1/wg-friend generate --qr
 ```
 
 **Output:**
@@ -189,7 +189,7 @@ wg-friend add peer --hostname alice-desktop
 
 **Example:**
 ```bash
-./v2/wg-friend add peer
+./v1/wg-friend add peer
 
 # Prompts:
 #   Hostname: alice-desktop
@@ -225,7 +225,7 @@ wg-friend remove              # Interactive peer selection
 
 **Example:**
 ```bash
-./v2/wg-friend remove
+./v1/wg-friend remove
 
 # Shows peer list, then:
 #   Peer type: remote
@@ -294,7 +294,7 @@ wg-friend rotate cs --reason "Scheduled monthly rotation"
 
 **Example:**
 ```bash
-./v2/wg-friend rotate remote:5
+./v1/wg-friend rotate remote:5
 
 # Shows:
 #   Rotate keys for: alice-phone
@@ -351,7 +351,7 @@ wg-friend deploy --user admin           # Use different SSH user
 
 **Example:**
 ```bash
-./v2/wg-friend deploy --restart
+./v1/wg-friend deploy --restart
 
 # Output:
 #   Found 2 deployable host(s):
@@ -463,7 +463,7 @@ q. Quit
 
 **Example:**
 ```bash
-./v2/wg-friend maintain
+./v1/wg-friend maintain
 
 # Interactive menu appears:
 #   ======================================================================
@@ -490,13 +490,13 @@ q. Quit
 
 ```bash
 # 1. Create network
-./v2/wg-friend init
+./v1/wg-friend init
 
 # 2. Generate configs
-./v2/wg-friend generate --qr
+./v1/wg-friend generate --qr
 
 # 3. Deploy to servers
-./v2/wg-friend deploy --restart
+./v1/wg-friend deploy --restart
 
 # 4. Done! Network is live
 ```
@@ -505,30 +505,30 @@ q. Quit
 
 ```bash
 # 1. Import coordination server
-./v2/wg-friend import --cs /etc/wireguard/wg0.conf
+./v1/wg-friend import --cs /etc/wireguard/wg0.conf
 
 # 2. Add existing peers manually
-./v2/wg-friend add peer    # repeat for each peer
+./v1/wg-friend add peer    # repeat for each peer
 
 # 3. Generate updated configs
-./v2/wg-friend generate --qr
+./v1/wg-friend generate --qr
 
 # 4. Deploy
-./v2/wg-friend deploy --restart
+./v1/wg-friend deploy --restart
 ```
 
 ### Add New User
 
 ```bash
 # 1. Add peer
-./v2/wg-friend add peer
+./v1/wg-friend add peer
 # Enter: alice-desktop, laptop, full_access
 
 # 2. Regenerate configs
-./v2/wg-friend generate --qr
+./v1/wg-friend generate --qr
 
 # 3. Deploy to coordination server
-./v2/wg-friend deploy --host coordination-server --restart
+./v1/wg-friend deploy --host coordination-server --restart
 
 # 4. Give alice-desktop.conf (or QR code) to user
 ```
@@ -537,31 +537,31 @@ q. Quit
 
 ```bash
 # 1. View current status
-./v2/wg-friend status
+./v1/wg-friend status
 
 # 2. Rotate coordination server keys
-./v2/wg-friend rotate cs --reason "Monthly rotation"
+./v1/wg-friend rotate cs --reason "Monthly rotation"
 
 # 3. Rotate all peer keys
-./v2/wg-friend rotate router:1 --reason "Monthly rotation"
-./v2/wg-friend rotate remote:1 --reason "Monthly rotation"
+./v1/wg-friend rotate router:1 --reason "Monthly rotation"
+./v1/wg-friend rotate remote:1 --reason "Monthly rotation"
 # ... repeat for all peers ...
 
 # 4. Regenerate all configs
-./v2/wg-friend generate --qr
+./v1/wg-friend generate --qr
 
 # 5. Deploy everywhere
-./v2/wg-friend deploy --restart
+./v1/wg-friend deploy --restart
 
 # 6. Verify rotation history
-./v2/wg-friend status --full
+./v1/wg-friend status --full
 ```
 
 ### Interactive Management
 
 ```bash
 # Launch TUI
-./v2/wg-friend maintain
+./v1/wg-friend maintain
 
 # Navigate menus:
 #   - View status
@@ -570,8 +570,8 @@ q. Quit
 #   - Exit when done
 
 # Then generate and deploy:
-./v2/wg-friend generate --qr
-./v2/wg-friend deploy --restart
+./v1/wg-friend generate --qr
+./v1/wg-friend deploy --restart
 ```
 
 ---
