@@ -158,12 +158,14 @@ The script automatically detects whether you're deploying **locally** (from wg-f
 ```
 
 **Local Deployment:**
+- Apples when wg-friend is running on the *same host* as you need to apply the new wg0.conf
 - Detects localhost automatically
 - Uses `sudo` for operations (no SSH needed)
 - Prompts for sudo password if needed
 - Faster and works in restricted environments
 
 **Remote Deployment:**
+- Apples when wg-friend is running on a *different host* than where you need to apply the new wg0.conf
 - Uses SSH key-based authentication
 - Requires one-time SSH setup (option 7)
 - Connects securely to remote host
