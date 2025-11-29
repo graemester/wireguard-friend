@@ -140,16 +140,16 @@ Saves QR code to `output/{peer-name}-qr.png`
 
 ### Deploy Configuration to Servers
 
-The script automatically detects whether you're deploying **locally** or **remotely**:
+The script automatically detects whether you're deploying **locally** (from wg-friend on the same host) or **remotely** (from wg-friend on a different host):
 
-#### Deploy Coordination Server
+#### Deploy Coordination Server wg0.conf
 ```bash
 ./wg-friend-maintain.py
 # Select [1] Manage Coordination Server
 # Select [3] Deploy to Server
 ```
 
-#### Deploy Subnet Router
+#### Deploy Subnet Router wg0.conf
 ```bash
 ./wg-friend-maintain.py
 # Select [2] Manage Subnet Routers
@@ -157,7 +157,7 @@ The script automatically detects whether you're deploying **locally** or **remot
 # Select [4] Deploy to Server
 ```
 
-**Local Deployment** (running ON the target server):
+**Local Deployment**:
 - Detects localhost automatically
 - Uses `sudo` for operations (no SSH needed)
 - Prompts for sudo password if needed
@@ -169,7 +169,7 @@ The script automatically detects whether you're deploying **locally** or **remot
 - Connects securely to remote host
 - Works from any machine
 
-Both deployment methods:
+Regardless of which deployment method you use, both:
 1. Backup existing config with timestamp
 2. Install new config to `/etc/wireguard/wg0.conf`
 3. Set proper permissions (`600` - owner read/write only)
