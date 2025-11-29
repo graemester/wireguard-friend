@@ -41,7 +41,7 @@ WireGuard Friend establishes this network architecture:
 - All peers connect here for routing
 - Deployed and managed via SSH
 
-**Subnet Routers (SN)**
+**Subnet Routers**
 - WireGuard peers that advertise LAN networks
 - Gateway between VPN and home/office networks
 - Handle NAT, forwarding, and firewall rules
