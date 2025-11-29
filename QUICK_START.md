@@ -180,10 +180,10 @@ Regardless of which deployment method you use, both:
 
 #### Deployment Scenarios
 
-| Where You Run | CS Deploy | Subnet Router Deploy |
+| Where You Run | Coordination Server Deploy | Subnet Router Deploy |
 |---------------|-----------|----------------------|
 | On your laptop | SSH to VPS | SSH to router |
-| On the VPS (CS) | **Local (sudo)** | SSH to router |
+| On the VPS | **Local (sudo)** | SSH to router |
 | On subnet router | SSH to VPS | **Local (sudo)** |
 
 ## Access Levels
