@@ -252,6 +252,38 @@ def run_maintenance_mode(db_path: Path):
     maintainer.run()
 
 
+def is_messy_location(path: Path) -> tuple[bool, str]:
+    """Check if the current directory is a 'messy' location.
+
+    Returns (is_messy, reason)
+    """
+    home = Path.home()
+    cwd = path.resolve()
+
+    # Check common messy locations
+    messy_paths = {
+        home / "Downloads": "Downloads folder",
+        home / "Desktop": "Desktop",
+        home: "home directory",
+        Path("/tmp"): "temp directory",
+        Path("/var/tmp"): "temp directory",
+    }
+
+    for messy_path, reason in messy_paths.items():
+        if cwd == messy_path.resolve():
+            return True, reason
+
+    # Check if there are too many unrelated files (more than 20 items)
+    try:
+        items = list(cwd.iterdir())
+        if len(items) > 20:
+            return True, f"cluttered directory ({len(items)} items)"
+    except PermissionError:
+        pass
+
+    return False, ""
+
+
 def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
     """Handle first-run experience with guided setup."""
     from rich.prompt import Prompt
@@ -259,6 +291,27 @@ def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
     console.print("[bold]Welcome to WireGuard Friend![/bold]\n")
     console.print("This tool helps you manage WireGuard VPN networks.")
     console.print("Let's get you set up.\n")
+
+    # Check if we're in a messy location
+    cwd = Path.cwd()
+    is_messy, reason = is_messy_location(cwd)
+
+    if is_messy:
+        console.print(f"[yellow]You're running from your {reason}.[/yellow]")
+        console.print("[dim]wg-friend works best from a dedicated folder where it can keep")
+        console.print("its database, configs, and output files organized.[/dim]\n")
+
+        suggested_dir = Path.home() / "wireguard-friend"
+        console.print(f"[cyan]Suggested:[/cyan] Create a folder and run from there:")
+        console.print(f"  [bold]mkdir -p {suggested_dir}[/bold]")
+        console.print(f"  [bold]cd {suggested_dir}[/bold]")
+        console.print(f"  [bold]wg-friend[/bold]\n")
+
+        if not Confirm.ask("Continue here anyway?", default=False):
+            console.print(f"\n[dim]Create your folder and run wg-friend from there.[/dim]")
+            sys.exit(0)
+
+        console.print()  # blank line before continuing
 
     # Create output directory
     output_dir.mkdir(exist_ok=True)
