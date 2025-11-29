@@ -104,12 +104,39 @@ class WireGuardOnboarder:
 
             console.print("\n[bold green]✓ Import completed successfully![/bold green]")
 
+            # Offer to continue to maintenance mode
+            if not self.auto_confirm:
+                console.print("\nYou can now manage your WireGuard network.")
+                if Confirm.ask("Continue to maintenance mode?", default=True):
+                    self._launch_maintenance_mode()
+
         except KeyboardInterrupt:
             console.print("\n[yellow]Import cancelled by user[/yellow]")
             sys.exit(1)
         except Exception as e:
             console.print(f"\n[red]Error during import: {e}[/red]")
             raise
+
+    def _launch_maintenance_mode(self):
+        """Launch maintenance mode after successful import"""
+        # Import the maintainer class
+        import importlib.util
+        script_dir = Path(__file__).parent
+
+        try:
+            from wg_friend_maintain import WireGuardMaintainer
+        except ImportError:
+            spec = importlib.util.spec_from_file_location(
+                "wg_friend_maintain",
+                script_dir / "wg-friend-maintain.py"
+            )
+            module = importlib.util.module_from_spec(spec)
+            sys.modules["wg_friend_maintain"] = module
+            spec.loader.exec_module(module)
+            WireGuardMaintainer = module.WireGuardMaintainer
+
+        maintainer = WireGuardMaintainer(self.db_path)
+        maintainer.run()
 
     def _phase1_parse_configs(self):
         """Phase 1: Parse all configs and classify them"""

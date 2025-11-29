@@ -320,9 +320,10 @@ Your support person will use the appropriate protocol based on your system.
             console.print("  [5] List All Entities")
             console.print("  [6] Deploy Configs")
             console.print("  [7] SSH Setup (Key Generation & Installation)")
+            console.print("  [8] Check for Updates")
             console.print("  [0] Exit")
 
-            choice = Prompt.ask("\nSelect option", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="0")
+            choice = Prompt.ask("\nSelect option", choices=["0", "1", "2", "3", "4", "5", "6", "7", "8"], default="0")
 
             if choice == "0":
                 console.print("[yellow]Goodbye![/yellow]")
@@ -341,6 +342,13 @@ Your support person will use the appropriate protocol based on your system.
                 self._deploy_configs()
             elif choice == "7":
                 self._ssh_setup_wizard()
+            elif choice == "8":
+                self._check_for_updates()
+
+    def _check_for_updates(self):
+        """Check for and install updates"""
+        from src.app import self_update
+        self_update()
 
     def _ssh_setup_wizard(self):
         """Interactive SSH key setup wizard"""

@@ -25,6 +25,29 @@ console = Console()
 DEFAULT_DB_NAME = "wg-friend.db"
 DEFAULT_IMPORT_DIR = "import"
 DEFAULT_OUTPUT_DIR = "output"
+CONFIG_DIR = Path.home() / ".config" / "wg-friend"
+HOME_FILE = CONFIG_DIR / "home"
+
+
+def get_saved_home() -> Path | None:
+    """Get the saved wg-friend home directory, if any."""
+    if HOME_FILE.exists():
+        try:
+            saved_path = Path(HOME_FILE.read_text().strip())
+            if saved_path.exists() and (saved_path / DEFAULT_DB_NAME).exists():
+                return saved_path
+        except Exception:
+            pass
+    return None
+
+
+def save_home(path: Path):
+    """Save the current directory as the wg-friend home."""
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        HOME_FILE.write_text(str(path.resolve()))
+    except Exception:
+        pass  # Not critical if this fails
 
 
 def get_data_dir() -> Path:
@@ -252,6 +275,44 @@ def run_maintenance_mode(db_path: Path):
     maintainer.run()
 
 
+def is_good_location(path: Path) -> bool:
+    """Check if the current directory is a good place to run wg-friend.
+
+    Good locations:
+    - Home directory
+    - A subdirectory of home that's not too cluttered (<=20 items)
+    - Any directory that already has wg-friend files
+    """
+    home = Path.home()
+    cwd = path.resolve()
+
+    # Already has wg-friend files? It's a good spot.
+    if (cwd / "wg-friend.db").exists() or (cwd / "import").exists():
+        return True
+
+    # Home directory is fine
+    if cwd == home:
+        return True
+
+    # Subdirectory of home?
+    try:
+        cwd.relative_to(home)
+        is_under_home = True
+    except ValueError:
+        is_under_home = False
+
+    if is_under_home:
+        # Check if it's reasonably clean (not cluttered)
+        try:
+            items = list(cwd.iterdir())
+            if len(items) <= 20:
+                return True
+        except PermissionError:
+            pass
+
+    return False
+
+
 def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
     """Handle first-run experience with guided setup."""
     from rich.prompt import Prompt
@@ -259,6 +320,26 @@ def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
     console.print("[bold]Welcome to WireGuard Friend![/bold]\n")
     console.print("This tool helps you manage WireGuard VPN networks.")
     console.print("Let's get you set up.\n")
+
+    # Check if we're in a good location
+    cwd = Path.cwd()
+
+    if not is_good_location(cwd):
+        console.print(f"[yellow]Heads up:[/yellow] You're running from [bold]{cwd}[/bold]")
+        console.print("[dim]wg-friend works best from your home directory or a dedicated folder")
+        console.print("where it can keep its database and configs organized.[/dim]\n")
+
+        suggested_dir = Path.home() / "wireguard-friend"
+        console.print(f"[cyan]Suggested:[/cyan] Create a folder and run from there:")
+        console.print(f"  [bold]mkdir -p {suggested_dir}[/bold]")
+        console.print(f"  [bold]cd {suggested_dir}[/bold]")
+        console.print(f"  [bold]wg-friend[/bold]\n")
+
+        if not Confirm.ask("Continue here anyway?", default=False):
+            console.print(f"\n[dim]Create your folder and run wg-friend from there.[/dim]")
+            sys.exit(0)
+
+        console.print()  # blank line before continuing
 
     # Create output directory
     output_dir.mkdir(exist_ok=True)
@@ -383,12 +464,48 @@ def main():
     output_dir = data_dir / DEFAULT_OUTPUT_DIR
 
     if db_path.exists():
-        # Database exists - maintenance mode
+        # Database exists in current directory - use it
+        save_home(data_dir)  # Remember this location
         console.print(f"[dim]Using database: {db_path}[/dim]\n")
         run_maintenance_mode(db_path)
     else:
-        # No database - first run experience
+        # No database here - check if we have a saved home elsewhere
+        saved_home = get_saved_home()
+        if saved_home and saved_home != data_dir:
+            console.print(f"[cyan]Found existing wg-friend setup at:[/cyan]")
+            console.print(f"  [bold]{saved_home}[/bold]")
+            console.print(f"[dim]To skip this prompt, run wg-friend from that directory.[/dim]\n")
+
+            if Confirm.ask("Use that setup?", default=True):
+                # Switch to saved home
+                db_path = saved_home / DEFAULT_DB_NAME
+                console.print(f"[dim]Using database: {db_path}[/dim]\n")
+                run_maintenance_mode(db_path)
+                return
+
+            # User declined - offer options
+            from rich.prompt import Prompt
+
+            console.print("\n[bold]What would you like to do?[/bold]")
+            console.print("  [1] Start first-run setup here")
+            console.print("  [2] Exit")
+            console.print(f"\n[dim]Tip: To manage your existing installation, run wg-friend")
+            console.print(f"from the folder containing your database ({saved_home}).[/dim]")
+
+            choice = Prompt.ask("\nSelect option", choices=["1", "2"], default="2")
+
+            if choice == "2":
+                console.print("\n[dim]Goodbye![/dim]")
+                sys.exit(0)
+
+            console.print()  # blank line before first-run setup
+
+        # First run experience (or user chose to proceed)
         first_run_setup(db_path, import_dir, output_dir)
+
+        # If setup completed successfully, save this as home
+        if (data_dir / DEFAULT_DB_NAME).exists():
+            save_home(data_dir)
 
 
 if __name__ == "__main__":
