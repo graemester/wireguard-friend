@@ -484,7 +484,7 @@ q. Quit
 
 ---
 
-## Complete Workflow Examples
+## Workflow Examples
 
 ### New Network Setup
 
