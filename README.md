@@ -28,7 +28,7 @@ WireGuard Friend establishes this network architecture:
               |            VPN: 10.20.0.20             |        |            VPN: 10.20.0.x              |
               |            LAN: 192.168.1.1            |        |                                        |
               +----------------------------------------+        +----------------------------------------+
-              192.168.1.0/24                                      Laptops, Phones, Tablets, Friend's Computer
+              192.168.1.0/24                                    Laptops, Phones, Tablets, Friend's Computer
               Samba Shares, Jellyfin, Media Server, SSH...
         
 ```
