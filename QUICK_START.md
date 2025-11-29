@@ -1,286 +1,199 @@
 # WireGuard Friend - Quick Start Guide
 
-## Overview
+## Installation
 
-WireGuard Friend is a management system for WireGuard VPN networks. It imports existing configs or helps you create new ones, stores everything in SQLite, and provides tools for peer management, key rotation, and deployment.
-
-## Quick Start
-
-### 1. Choose Your Setup Path
-
-**Option A: Import Existing Configs** (if you already have WireGuard running)
+### Download the Binary
 
 ```bash
-# Gather your existing configs into import/ directory
-mkdir -p import
-scp user@your-vps:/etc/wireguard/wg0.conf import/coordination.conf
-scp user@your-router:/etc/wireguard/wg0.conf import/router.conf
-cp ~/your-client-configs/*.conf import/  # Optional
+# Linux
+curl -LO https://github.com/graemester/wireguard-friend/releases/latest/download/wg-friend-linux-x86_64
+chmod +x wg-friend-linux-x86_64
+sudo mv wg-friend-linux-x86_64 /usr/local/bin/wg-friend
 
-# Run onboarding (detects and imports everything)
-./wg-friend-onboard.py --import-dir import/
+# macOS (Apple Silicon)
+curl -LO https://github.com/graemester/wireguard-friend/releases/latest/download/wg-friend-darwin-arm64
+chmod +x wg-friend-darwin-arm64
+sudo mv wg-friend-darwin-arm64 /usr/local/bin/wg-friend
+
+# macOS (Intel)
+curl -LO https://github.com/graemester/wireguard-friend/releases/latest/download/wg-friend-darwin-x86_64
+chmod +x wg-friend-darwin-x86_64
+sudo mv wg-friend-darwin-x86_64 /usr/local/bin/wg-friend
 ```
 
-**Option B: Create from Scratch** (new WireGuard setup)
+### Create a Folder and Run
 
 ```bash
-# Just run onboarding with empty import/ directory
-mkdir -p import
-./wg-friend-onboard.py --import-dir import/
-# → Wizard mode activates automatically when no configs found
+mkdir ~/wireguard-friend
+cd ~/wireguard-friend
+wg-friend
 ```
 
-The wizard will guide you through:
-1. **Coordination Server** - Public VPS endpoint, VPN networks
-2. **Subnet Routers** - Optional LAN gateways with PostUp/PostDown rules
-3. **Initial Peers** - Client devices with access levels
+That's it. The app will guide you from there.
 
-Both routes will:
-- ✅ Parse and classify configs (CS, subnet routers, clients)
-- ✅ Derive public keys from private keys
-- ✅ Match clients to CS peers
-- ✅ Save everything to SQLite database
+## First Run
 
-### 2. View Your Network
+When you run `wg-friend` for the first time, it asks one question:
 
-Use maintenance mode to view your network:
-
-```bash
-./wg-friend-maintain.py
-# Select [5] List All Entities
+```
+Do you have existing WireGuard configs to import? [y/N]:
 ```
 
-Or query the database directly:
-```bash
-sqlite3 wg-friend.db "SELECT name, ipv4_address, access_level FROM peer;"
+### If You Have Existing Configs
+
+1. Answer **yes**
+2. It creates an `import/` folder
+3. Copy your `.conf` files there (coordination server, routers, clients)
+4. Press Enter
+5. The import wizard walks you through confirming each config
+
+### If You're Starting Fresh
+
+1. Answer **no**
+2. The wizard walks you through creating:
+   - Coordination server (your cloud VPS)
+   - Subnet routers (optional - for home/office LAN access)
+   - Client peers (laptops, phones, etc.)
+
+Either way, you end up with a database and can manage your network.
+
+## Main Menu
+
+After setup, you'll see the main menu:
+
+```
+Main Menu:
+  [1] Manage Coordination Server
+  [2] Manage Subnet Routers
+  [3] Manage Peers
+  [4] Create New Peer
+  [5] List All Entities
+  [6] Deploy Configs
+  [7] SSH Setup (Key Generation & Installation)
+  [8] Check for Updates
+  [0] Exit
 ```
 
-### 3. Maintenance Mode
+## Common Tasks
 
-Run interactive maintenance:
+### Add a New Peer
 
-```bash
-./wg-friend-maintain.py
+```
+[4] Create New Peer
+→ Name: alice-phone
+→ Access level: [1] Full access
+→ Generate QR code: Yes
+
+Result:
+  output/alice-phone.conf (client config)
+  output/alice-phone-qr.png (QR code for mobile)
 ```
 
-Menu options:
-- **[1] Manage Coordination Server** - View, export, deploy
-- **[2] Manage Subnet Routers** - View config, rotate keys, deploy
-- **[3] Manage Peers** - View config, generate QR, rotate keys
-- **[4] Create New Peer** - Auto-assign IPs, generate keys
-- **[5] List All Entities** - Overview of network
-- **[6] Deploy Configs** - Push to servers (local or remote)
-- **[7] SSH Setup** - Interactive key generation and installation
+### Rotate Compromised Keys
+
+```
+[3] Manage Peers
+→ Select peer
+→ [3] Rotate Keys
+
+New keypair generated, both configs updated.
+```
+
+### Generate QR Code
+
+```
+[3] Manage Peers
+→ Select peer
+→ [2] Generate QR Code
+
+Saves to output/{peer-name}-qr.png
+```
+
+### Deploy to Servers
+
+```
+[1] Manage Coordination Server
+→ [3] Deploy to Server
+```
+
+The app detects whether you're on the server (uses sudo) or remote (uses SSH).
 
 ## SSH Setup (One-Time)
 
-Before deploying configs to remote servers, set up SSH authentication:
+Before deploying to remote servers:
 
-```bash
-./wg-friend-maintain.py
-# Select [7] SSH Setup (Key Generation & Installation)
+```
+[7] SSH Setup
 ```
 
-The wizard will:
-1. **Generate SSH key** (if needed) - Creates `~/.ssh/wg-friend-TIMESTAMP`
-2. **Install to coordination server** - Prompts for password once
-3. **Install to subnet routers** - Prompts for each router
-4. **Test authentication** - Verifies keys work
+This wizard:
+1. Generates an SSH key (if needed)
+2. Installs it on your coordination server
+3. Installs it on subnet routers
+4. Tests that it works
 
-**Note:** SSH setup is **not needed** if you're running the script on the target server itself (it will use local sudo instead).
+After that, deployments are passwordless.
 
-### Key Reuse
-The wizard is smart about keys:
-- Tests all existing `wg-friend-*` keys before creating new ones
-- Reuses working keys (no password prompt needed)
-- Only creates new keys when necessary
-- One key can work for multiple servers
+## Updating
 
-## Common Operations
-
-### Create a New Peer
-
-```bash
-./wg-friend-maintain.py
-# Select [4] Create New Peer
+From the menu:
+```
+[8] Check for Updates
 ```
 
-This will:
-1. Find next available IP addresses
-2. Generate new keypair
-3. Build client config with proper access level
-4. Add peer to coordination server
-5. Save configs to `output/`
-
-### Rotate Peer Keys
-
+Or from command line:
 ```bash
-./wg-friend-maintain.py
-# Select [3] Manage Peers
-# Select peer
-# Select [3] Rotate Keys
+wg-friend --update
 ```
 
-This will:
-1. Generate new keypair
-2. Update peer's client config
-3. Update coordination server peer entry
-4. Mark as rotated with timestamp
+## Files
 
-### Generate QR Code for Mobile
+After running, your folder contains:
 
-```bash
-./wg-friend-maintain.py
-# Select [3] Manage Peers
-# Select peer (e.g., iphone16pro)
-# Select [2] Generate QR Code
 ```
-
-Saves QR code to `output/{peer-name}-qr.png`
-
-### Deploy Configuration to Servers
-
-The script automatically detects whether you're deploying **locally** or **remotely**:
-
-#### Deploy Coordination Server
-```bash
-./wg-friend-maintain.py
-# Select [1] Manage Coordination Server
-# Select [3] Deploy to Server
+~/wireguard-friend/
+├── wg-friend.db      # Your network database
+├── import/           # Original configs (if imported)
+└── output/           # Generated configs and QR codes
 ```
-
-#### Deploy Subnet Router
-```bash
-./wg-friend-maintain.py
-# Select [2] Manage Subnet Routers
-# Select router
-# Select [4] Deploy to Server
-```
-
-**Local Deployment** (running ON the target server):
-- Detects localhost automatically
-- Uses `sudo` for operations (no SSH needed)
-- Prompts for sudo password if needed
-- Faster and works in restricted environments
-
-**Remote Deployment** (deploying to another server):
-- Uses SSH key-based authentication
-- Requires one-time SSH setup (option 7)
-- Connects securely to remote host
-- Works from any machine
-
-Both deployment methods:
-1. Backup existing config with timestamp
-2. Install new config to `/etc/wireguard/wg0.conf`
-3. Set proper permissions (`600` - owner read/write only)
-4. Optionally restart WireGuard service
-5. Verify WireGuard is running
-
-#### Deployment Scenarios
-
-| Where You Run | CS Deploy | Subnet Router Deploy |
-|---------------|-----------|----------------------|
-| On your laptop | SSH to VPS | SSH to router |
-| On the VPS (CS) | **Local (sudo)** | SSH to router |
-| On subnet router | SSH to VPS | **Local (sudo)** |
 
 ## Access Levels
 
-When creating or updating peers, choose access level:
+When creating peers, choose access:
 
-- **full_access**: All networks (VPN + all LAN subnets)
-  - `AllowedIPs = 10.20.0.0/24, fd20::/64, 192.168.10.0/24`
-
-- **vpn_only**: Just the VPN network
-  - `AllowedIPs = 10.20.0.0/24, fd20::/64`
-
-- **lan_only**: VPN + specific LAN subnets
-  - `AllowedIPs = 10.20.0.0/24, fd20::/64, 192.168.10.0/24`
-
-- **restricted_ip**: Access to specific IPs/ports only
-
-## Database Queries
-
-Query the database directly:
-
-```bash
-# List all peers
-sqlite3 wg-friend.db "SELECT name, ipv4_address, access_level FROM peer;"
-
-# Find peers needing client configs
-sqlite3 wg-friend.db "SELECT name, ipv4_address FROM peer WHERE raw_interface_block IS NULL;"
-
-# List subnet routers and their LANs
-sqlite3 wg-friend.db "
-  SELECT sn.name, lan.network_cidr
-  FROM subnet_router sn
-  JOIN sn_lan_networks lan ON sn.id = lan.sn_id;
-"
-```
-
-## File Structure
-
-```
-wireguard-friend/
-├── wg-friend-onboard.py        # Import existing configs or create new
-├── wg-friend-maintain.py       # Maintenance mode
-├── wg-friend.db                # SQLite database
-├── src/
-│   ├── database.py             # Database operations
-│   ├── keygen.py               # Key generation
-│   ├── ssh_client.py           # SSH deployment
-│   └── qr_generator.py         # QR code generation
-├── import/                     # Place configs here for import
-└── output/                     # Generated configs
-```
-
-## Key Features
-
-- **Key Rotation**: Update both peer and CS configs atomically
-- **Auto IP Allocation**: Finds next available IP addresses
-- **QR Code Generation**: For easy mobile device setup
-- **Smart Deployment**: Automatic local/remote detection
-- **SSH Wizard**: Interactive key setup with testing
-- **Proper Permissions**: All sensitive files secured (600)
-- **Access Levels**: Control what peers can access
-- **Restricted IP Access**: Limit peers to specific IPs and ports
-
-## Next Steps
-
-1. **Import your configs**: `./wg-friend-onboard.py --import-dir import/`
-2. **Explore maintenance**: `./wg-friend-maintain.py`
-3. **Create new peer**: Follow interactive prompts
-4. **Deploy to server**: Use SSH deployment feature
+| Level | What They Can Reach |
+|-------|---------------------|
+| Full access | VPN + all LANs |
+| VPN only | Just the VPN network |
+| LAN only | VPN + specific LANs |
 
 ## Troubleshooting
 
-### "No coordination server found"
-- Run import first: `./wg-friend-onboard.py --import-dir import/`
+### "No database found"
+Normal on first run. Follow the setup prompts.
 
 ### "Failed to derive public key"
-- Install WireGuard tools: `sudo apt install wireguard-tools`
-
-### Database locked
-- Only one process can access database at a time
-- Close other instances of the scripts
+Install WireGuard tools:
+```bash
+sudo apt install wireguard-tools  # Debian/Ubuntu
+brew install wireguard-tools      # macOS
+```
 
 ### SSH deployment fails
-- Run SSH setup wizard: `./wg-friend-maintain.py` → option 7
-- Verify SSH access manually: `ssh user@host`
-- Check SSH key exists: `ls ~/.ssh/wg-friend-*`
-- Test key authentication from wizard
+Run `[7] SSH Setup` to configure keys.
 
-### Local deployment requires sudo
-- The script needs sudo to modify `/etc/wireguard/`
-- You'll be prompted for your password
-- Ensure your user has sudo privileges
+### Need to start over
+Delete the database and run again:
+```bash
+rm wg-friend.db
+wg-friend
+```
 
-## Safety Features
+## Command Line Options
 
-- **File Permissions**: All configs saved with 600 (owner read/write only)
-- **SSH Keys**: Private keys 600, public keys 644
-- **Timestamped Backups**: Before every deployment
-- **Confirmation Prompts**: For key rotation and deployment
-- **Secure Storage**: Private keys stored securely in database
-- **Smart Detection**: Automatically uses local or remote deployment
-- **Key Testing**: Tests authentication before declaring success
+```bash
+wg-friend              # Run interactive mode
+wg-friend --version    # Show version
+wg-friend --update     # Update to latest version
+wg-friend --help       # Show help
+```
