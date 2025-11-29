@@ -157,13 +157,13 @@ The script automatically detects whether you're deploying **locally** (from wg-f
 # Select [4] Deploy to Server
 ```
 
-**Local Deployment**:
+**Local Deployment:**
 - Detects localhost automatically
 - Uses `sudo` for operations (no SSH needed)
 - Prompts for sudo password if needed
 - Faster and works in restricted environments
 
-**Remote Deployment** (deploying to another server):
+**Remote Deployment:**
 - Uses SSH key-based authentication
 - Requires one-time SSH setup (option 7)
 - Connects securely to remote host
