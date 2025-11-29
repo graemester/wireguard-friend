@@ -3,10 +3,10 @@
 **Build and manage reliable Wireguard networks.  Learn and have fun!**
 
 > **📦 Repository Structure:**
-> **[v1/](v1/)** - Stable, production-ready version (current release)
-> **[v2/](v2/)** - Experimental future vision (paradigm shift in progress)
+> **[v1/](v1/)** - Current stable release (v1.0.0)
+> **[v-alpha/](v-alpha/)** - Archived original version (historical reference)
 >
-> **Users:** Use v1. **Developers:** Explore v2 for radical ideas.
+> **Users:** Use v1. **Developers:** Check v1 for active development.
 
 ---
 

@@ -1,0 +1,92 @@
+version: '3.8'
+
+services:
+  # Coordination Server (VPS hub)
+  coordination-server:
+    build: .
+    container_name: wgf-cs
+    hostname: coordination-server
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    privileged: true  # Required for WireGuard kernel module
+    networks:
+      internet:
+        ipv4_address: 172.20.0.10
+    volumes:
+      - ./configs:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+
+  # Subnet Router (LAN gateway)
+  subnet-router:
+    build: .
+    container_name: wgf-snr
+    hostname: subnet-router
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    privileged: true
+    networks:
+      internet:
+        ipv4_address: 172.20.0.20
+      lan:
+        ipv4_address: 192.168.100.1
+    volumes:
+      - ./configs:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+
+  # Remote client 1 (mobile device simulation)
+  remote-1:
+    build: .
+    container_name: wgf-remote1
+    hostname: remote-1
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    privileged: true
+    networks:
+      internet:
+        ipv4_address: 172.20.0.30
+    volumes:
+      - ./configs:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+
+  # Remote client 2 (another device)
+  remote-2:
+    build: .
+    container_name: wgf-remote2
+    hostname: remote-2
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    privileged: true
+    networks:
+      internet:
+        ipv4_address: 172.20.0.31
+    volumes:
+      - ./configs:/etc/wireguard
+      - /lib/modules:/lib/modules:ro
+
+  # Simulated LAN device (behind subnet-router)
+  lan-device:
+    build: .
+    container_name: wgf-lan-device
+    hostname: lan-device
+    networks:
+      lan:
+        ipv4_address: 192.168.100.10
+
+networks:
+  # Simulates the public internet
+  internet:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+  # Simulates LAN behind subnet-router
+  lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24

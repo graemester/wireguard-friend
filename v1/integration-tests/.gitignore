@@ -1,0 +1,9 @@
+# Generated configs (contain private keys!)
+configs/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Docker volumes
+.docker/

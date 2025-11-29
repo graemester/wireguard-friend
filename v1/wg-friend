@@ -1,19 +1,323 @@
 #!/usr/bin/env python3
 """
-wg-friend - WireGuard Network Manager
+WireGuard Friend v2 - Main CLI Entry Point
 
-This is the main entry point. Run directly or build with PyInstaller.
+Usage:
+  wg-friend init              # First-run wizard
+  wg-friend import <configs>  # Import existing configs
+  wg-friend add peer          # Add new peer
+  wg-friend rotate <peer>     # Rotate peer keys
+  wg-friend psk               # Add/update preshared key
+  wg-friend qr                # Generate QR code for peer
+  wg-friend generate          # Generate all configs from database
+  wg-friend deploy            # Deploy configs via SSH
+  wg-friend status            # View peer status
+  wg-friend status --live     # View live peer connections (wg show)
+  wg-friend ssh-setup         # SSH key setup wizard
+  wg-friend maintain          # Interactive TUI mode
 """
 
 import sys
+import argparse
 from pathlib import Path
 
-# Add src to path for development
-src_dir = Path(__file__).parent / "src"
-if src_dir.exists():
-    sys.path.insert(0, str(src_dir.parent))
+# Add v1 to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.app import main
+from v1.cli.init_wizard import run_init_wizard
+from v1.cli.import_configs import run_import
+from v1.cli.peer_manager import add_peer, rotate_keys, revoke_peer, run_preshared_key, run_generate_qr
+from v1.cli.config_generator import generate_configs
+from v1.cli.deploy import deploy_configs
+from v1.cli.status import show_status
+from v1.cli.tui import run_tui
+from v1.cli.ssh_setup import ssh_setup
+from v1.config_detector import ConfigDetector
 
-if __name__ == "__main__":
-    main()
+
+def main():
+    """Main CLI entry point"""
+    parser = argparse.ArgumentParser(
+        description='WireGuard Friend v2 - VPN Configuration Manager',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # First time setup
+  wg-friend init
+
+  # Import existing configs
+  wg-friend import --cs coordination.conf --snr wg0.conf --remote phone.conf
+
+  # Add new peer
+  wg-friend add peer --name alice-laptop --type mobile
+
+  # Rotate keys
+  wg-friend rotate bob-phone
+
+  # Generate configs
+  wg-friend generate
+
+  # Interactive mode
+  wg-friend maintain
+        """
+    )
+
+    parser.add_argument('--db', default='wireguard.db',
+                       help='Database file (default: wireguard.db)')
+    parser.add_argument('--version', action='version', version='wg-friend v1.0.0')
+
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+
+    # init - First-run wizard
+    init_parser = subparsers.add_parser('init', help='First-run setup wizard')
+
+    # import - Import existing configs
+    import_parser = subparsers.add_parser('import', help='Import existing configs')
+    import_parser.add_argument('--cs', required=True, help='Coordination server config')
+    import_parser.add_argument('--snr', action='append', help='Subnet router config (can specify multiple)')
+    import_parser.add_argument('--remote', action='append', help='Remote client config (can specify multiple)')
+
+    # add - Add new entity
+    add_parser = subparsers.add_parser('add', help='Add new peer/router')
+    add_subparsers = add_parser.add_subparsers(dest='add_type')
+
+    peer_parser = add_subparsers.add_parser('peer', help='Add new peer')
+    peer_parser.add_argument('--name', required=True, help='Peer name/hostname')
+    peer_parser.add_argument('--type', choices=['mobile', 'laptop', 'server'],
+                            default='mobile', help='Peer type')
+    peer_parser.add_argument('--access', choices=['full', 'vpn', 'lan', 'custom'],
+                            default='full', help='Access level')
+
+    router_parser = add_subparsers.add_parser('router', help='Add subnet router')
+    router_parser.add_argument('--name', required=True, help='Router hostname')
+    router_parser.add_argument('--lan', required=True, help='LAN network (e.g., 192.168.1.0/24)')
+
+    # rotate - Rotate keys
+    rotate_parser = subparsers.add_parser('rotate', help='Rotate peer keys')
+    rotate_parser.add_argument('peer', help='Peer name or permanent_guid')
+    rotate_parser.add_argument('--reason', help='Reason for rotation')
+
+    # revoke - Revoke peer
+    revoke_parser = subparsers.add_parser('revoke', help='Revoke peer access')
+    revoke_parser.add_argument('peer', help='Peer name or permanent_guid')
+
+    # generate - Generate configs
+    generate_parser = subparsers.add_parser('generate', help='Generate all configs from database')
+    generate_parser.add_argument('--output', default='generated', help='Output directory')
+    generate_parser.add_argument('--qr', action='store_true', help='Generate QR codes for mobile devices')
+
+    # deploy - Deploy via SSH
+    deploy_parser = subparsers.add_parser('deploy', help='Deploy configs via SSH')
+    deploy_parser.add_argument('--entity', help='Deploy specific entity (or all if not specified)')
+    deploy_parser.add_argument('--dry-run', action='store_true', help='Show what would be deployed')
+
+    # status - View peer status
+    status_parser = subparsers.add_parser('status', help='View peer connection status')
+    status_parser.add_argument('--live', action='store_true', help='Show live peer status (wg show)')
+    status_parser.add_argument('--interface', default='wg0', help='WireGuard interface name (default: wg0)')
+    status_parser.add_argument('--user', default='root', help='SSH user for coordination server (default: root)')
+    status_parser.add_argument('--full', action='store_true', help='Show full details')
+
+    # maintain - Interactive TUI
+    maintain_parser = subparsers.add_parser('maintain', help='Interactive maintenance mode')
+
+    # psk - Add/update preshared key
+    psk_parser = subparsers.add_parser('psk', help='Add/update preshared key for peer')
+
+    # qr - Generate QR code for peer
+    qr_parser = subparsers.add_parser('qr', help='Generate QR code for remote peer')
+    qr_parser.add_argument('--output', default='generated', help='Output directory for QR code')
+
+    # ssh-setup - SSH setup wizard
+    ssh_setup_parser = subparsers.add_parser('ssh-setup', help='SSH key setup wizard')
+    ssh_setup_parser.add_argument('--user', default='root', help='SSH user for servers (default: root)')
+
+    # Parse args
+    args = parser.parse_args()
+
+    # Smart routing when no command specified
+    if not args.command:
+        db_path = Path(args.db)
+        import_dir = Path('import')
+
+        # Database exists → Maintenance mode
+        if db_path.exists():
+            print(f"Using database: {db_path}\n")
+            return run_tui(args.db)
+
+        # No database → First-run experience
+        print("=" * 70)
+        print("  WireGuard Friend v2")
+        print("=" * 70)
+        print()
+        print("Welcome! This tool helps you manage WireGuard VPN networks.")
+        print()
+
+        # Ask what they want to do
+        print("Do you have existing WireGuard configs to import?")
+        print()
+        print("  If you already have .conf files from a working WireGuard setup,")
+        print("  we can import them. Otherwise, we'll help you create a new network.")
+        print()
+
+        response = input("Import existing configs? [y/N]: ").strip().lower()
+        has_configs = response in ('y', 'yes')
+
+        if has_configs:
+            # Import flow
+            import_dir.mkdir(exist_ok=True)
+
+            # Check if configs already present
+            existing_confs = list(import_dir.glob("*.conf"))
+
+            if existing_confs:
+                print(f"\nFound {len(existing_confs)} config(s) in {import_dir}/")
+                for conf in existing_confs:
+                    print(f"  • {conf.name}")
+            else:
+                print(f"\nCreated {import_dir}/ folder")
+                print(f"\nCopy your WireGuard .conf files into:")
+                print(f"  {import_dir.absolute()}")
+                print()
+                print("Typical files to import:")
+                print("  • Coordination server config (e.g., wg0.conf from your VPS)")
+                print("  • Subnet router configs (if you have any)")
+                print("  • Client peer configs (laptop, phone, etc.)")
+                print()
+
+                # Wait for user
+                input("Press Enter when your configs are in place...")
+
+                # Check again
+                existing_confs = list(import_dir.glob("*.conf"))
+
+                if not existing_confs:
+                    print(f"\nNo .conf files found in {import_dir}/")
+                    print("You can either:")
+                    print("  1. Add your configs and run 'wg-friend' again")
+                    print("  2. Start fresh with a new network")
+                    print()
+
+                    response = input("Create a new network from scratch instead? [Y/n]: ").strip().lower()
+                    if response not in ('n', 'no'):
+                        print("\nGreat! Let's create a new WireGuard network.\n")
+                        return run_init_wizard(args.db)
+                    else:
+                        print("\nRun wg-friend again when you've added your configs.")
+                        return 0
+
+            # Detect config types
+            print("\nDetecting config types...")
+            detector = ConfigDetector()
+            classified_configs = []
+
+            for conf in existing_confs:
+                try:
+                    config_type, peer_count = detector.detect_type(conf)
+                    classified_configs.append((conf, config_type, peer_count))
+                    print(f"  • {conf.name}: {config_type} ({peer_count} peers)")
+                except Exception as e:
+                    print(f"  • {conf.name}: [error: {e}]")
+
+            # Find coordination server
+            cs_conf = None
+            for conf, config_type, _ in classified_configs:
+                if config_type == 'coordination_server':
+                    cs_conf = conf
+                    break
+
+            if not cs_conf:
+                print("\n⚠  No coordination server config detected!")
+                print("Looking for a config with:")
+                print("  - 3+ peers, OR")
+                print("  - FORWARD/POSTROUTING rules in PostUp")
+                print()
+                print("You can still import manually:")
+                print("  wg-friend import --cs <coordination-server-config>")
+                return 1
+
+            print(f"\nReady to import:")
+            for conf, config_type, peer_count in classified_configs:
+                marker = "→" if conf == cs_conf else " "
+                print(f"  {marker} {conf.name}: {config_type} ({peer_count} peers)")
+            print()
+
+            response = input("Proceed with import? [Y/n]: ").strip().lower()
+            if response not in ('n', 'no'):
+                print(f"\nImporting coordination server from: {cs_conf.name}")
+                print("(Other configs will need to be added manually with 'wg-friend add')")
+                print()
+
+                # Build import args
+                class ImportArgs:
+                    cs = str(cs_conf)
+                    snr = None
+                    remote = None
+                    db = args.db
+
+                return run_import(ImportArgs())
+            else:
+                print("\nRun wg-friend again when ready.")
+                return 0
+
+        else:
+            # New network flow
+            print("\nGreat! Let's create a new WireGuard network.")
+            print("The wizard will walk you through setting up:")
+            print("  • Coordination server (your cloud VPS)")
+            print("  • Subnet routers (optional - for accessing home/office LANs)")
+            print("  • Client peers (laptops, phones, etc.)")
+            print()
+
+            response = input("Start the setup wizard? [Y/n]: ").strip().lower()
+            if response not in ('n', 'no'):
+                return run_init_wizard(args.db)
+            else:
+                print("\nRun wg-friend again when ready.")
+                return 0
+
+    # Route to appropriate handler
+    try:
+        if args.command == 'init':
+            return run_init_wizard(args.db)
+        elif args.command == 'import':
+            return run_import(args)
+        elif args.command == 'add':
+            if args.add_type == 'peer':
+                return add_peer(args)
+            elif args.add_type == 'router':
+                return add_router(args)
+        elif args.command == 'rotate':
+            return rotate_keys(args)
+        elif args.command == 'revoke':
+            return revoke_peer(args)
+        elif args.command == 'generate':
+            return generate_configs(args)
+        elif args.command == 'deploy':
+            return deploy_configs(args)
+        elif args.command == 'status':
+            return show_status(args)
+        elif args.command == 'maintain':
+            return run_tui(args.db)
+        elif args.command == 'psk':
+            return run_preshared_key(args)
+        elif args.command == 'qr':
+            return run_generate_qr(args)
+        elif args.command == 'ssh-setup':
+            return ssh_setup(args)
+        else:
+            parser.print_help()
+            return 1
+
+    except KeyboardInterrupt:
+        print("\n\nInterrupted by user")
+        return 130
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

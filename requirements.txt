@@ -1,0 +1,21 @@
+# WireGuard Friend v1.0.0 - Python Dependencies
+
+# Cryptography - for key generation and derivation
+PyNaCl>=1.5.0
+
+# QR Code generation - for mobile device configs
+qrcode[pil]>=7.4.0
+Pillow>=10.0.0
+
+# Standard library modules used (no installation needed):
+# - sqlite3 (database)
+# - subprocess (wg commands, SSH)
+# - pathlib (file operations)
+# - argparse (CLI)
+# - datetime (timestamps)
+# - socket (network utilities)
+# - shutil (file operations)
+# - base64 (key encoding)
+
+# Future dependencies (planned for v1.2.0):
+# - rich>=13.0.0 (Terminal UI enhancements)
