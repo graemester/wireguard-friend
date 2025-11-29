@@ -13,15 +13,28 @@ Command-line tool for managing WireGuard VPN networks with hub-and-spoke topolog
 WireGuard Friend manages WireGuard configurations for networks using a coordination server (cloud VPS), subnet routers (LAN gateways), and client peers (individual devices). Configurations are stored in a SQLite database for querying and automated deployment.
 
 ```
-                            Coordination Server (VPS)
-                                 Public IP: 1.2.3.4
-                                  VPN IP: 10.20.0.1
-                                        |
-                    +-------------------+-------------------+
-                    |                                       |
-             Subnet Router                            Client Peers
-          VPN: 10.20.0.20                          VPN: 10.20.0.x
-          LAN: 192.168.1.0/24                      Laptops, Phones
+                                 ┌──────────────────────────────────────────────────────┐
+                                 │                 Coordination Server                  │
+                                 │                  (BYO Cloud VPS)                     │
+                                 │                                                      │
+                                 │                 Public IP: 1.2.3.4                   │
+                                 │                  VPN IP: 10.20.0.1                   │
+                                 └───────────────────────────┬──────────────────────────┘
+                                                             │
+                                                             │
+                                 ┌───────────────────────────┴──────────────────────────┐
+                                 │                                                      │
+                                 │                                                      │
+              ┌──────────────────────────────────────────┐        ┌──────────────────────────────────────────┐
+              │             Subnet Router                │        │              Client Peers                │
+              │             (On your LAN)                │        │           (Anywhere you are.)            │
+              │                                          │        │                                          │
+              │            VPN: 10.20.0.20               │        │             VPN: 10.20.0.x               │
+              │            LAN: 192.168.1.1              │        │                                          │
+              └──────────────────────────────────────────┘        └──────────────────────────────────────────┘
+              192.168.1.0/24                                      Laptops, Phones, Tablets, Friend's Computer
+              Samba, HAOS, Jellyfin, Media Server, SSH...
+
 ```
 
 ## Features
