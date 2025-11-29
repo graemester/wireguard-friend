@@ -1,8 +1,11 @@
 # Git attributes for WireGuard Friend
 #
-# This file controls what gets included in GitHub Release archives
-# when users download the "Source code (zip/tar.gz)" from Releases page.
-#
+# Rename detection: Aggressive settings to handle v1/v2 restructure
+# This prevents merge hell when files are moved between directories
+*.py diff=python merge=union
+*.md diff=markdown
+
+# Release archives: What gets included in GitHub Release downloads
 # Files marked with "export-ignore" are excluded from release archives
 # but remain in the git repository for development.
 
