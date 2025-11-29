@@ -31,6 +31,7 @@ v1_modules = [
     'v1.entity_parser',
     'v1.patterns',
     'v1.system_state',
+    'v1.unknown_fields',
 ]
 
 a = Analysis(
