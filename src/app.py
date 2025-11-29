@@ -473,7 +473,8 @@ def main():
         saved_home = get_saved_home()
         if saved_home and saved_home != data_dir:
             console.print(f"[cyan]Found existing wg-friend setup at:[/cyan]")
-            console.print(f"  [bold]{saved_home}[/bold]\n")
+            console.print(f"  [bold]{saved_home}[/bold]")
+            console.print(f"[dim]To skip this prompt, run wg-friend from that directory.[/dim]\n")
 
             if Confirm.ask("Use that setup?", default=True):
                 # Switch to saved home
