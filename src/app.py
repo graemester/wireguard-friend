@@ -483,9 +483,24 @@ def main():
                 run_maintenance_mode(db_path)
                 return
 
-            console.print()  # blank line
+            # User declined - offer options
+            from rich.prompt import Prompt
 
-        # First run experience (or user declined saved home)
+            console.print("\n[bold]What would you like to do?[/bold]")
+            console.print("  [1] Start first-run setup here")
+            console.print("  [2] Exit")
+            console.print(f"\n[dim]Tip: To manage your existing installation, run wg-friend")
+            console.print(f"from the folder containing your database ({saved_home}).[/dim]")
+
+            choice = Prompt.ask("\nSelect option", choices=["1", "2"], default="2")
+
+            if choice == "2":
+                console.print("\n[dim]Goodbye![/dim]")
+                sys.exit(0)
+
+            console.print()  # blank line before first-run setup
+
+        # First run experience (or user chose to proceed)
         first_run_setup(db_path, import_dir, output_dir)
 
         # If setup completed successfully, save this as home
