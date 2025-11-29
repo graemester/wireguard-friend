@@ -4,9 +4,9 @@
 
 WireGuard Friend helps you *establish and maintain* sophisticated WireGuard network topologies using a BYO VPS coordination server, a subnet router on a host you probably already have, and client peers (your mobile devices). Import existing configurations or build from scratch, manage access levels, rotate keys, and deploy to servers —- all through an intuitive, fast command-line interface.  It can work from a setup you already have or help you build a complete set of configs from scratch
 
-## What It Builds For You
+## What It Does
 
-WireGuard Friend establishes this network architecture:
+WireGuard Friend establishes and maintains a network architecture like this:
 
 ```
                                +------------------------------------------------------+
@@ -29,7 +29,7 @@ WireGuard Friend establishes this network architecture:
               |            LAN: 192.168.1.1            |        |                                        |
               +----------------------------------------+        +----------------------------------------+
               192.168.1.0/24                                    Laptops, Phones, Tablets, Friend's Computer
-              Samba Shares, Jellyfin, Media Server, SSH...
+              Samba, Jellyfin, Media Server, SSH, HAOS...
         
 ```
 
