@@ -142,6 +142,8 @@ jobs:
 
             ### Usage
 
+            > **Pro Tip!** Run Wireguard Friend from a new directory where it can create its database and other assets you'll want to find easily later!
+
             ```bash
             wg-friend              # Launch interactive mode
             wg-friend --version    # Show version
