@@ -252,36 +252,42 @@ def run_maintenance_mode(db_path: Path):
     maintainer.run()
 
 
-def is_messy_location(path: Path) -> tuple[bool, str]:
-    """Check if the current directory is a 'messy' location.
+def is_good_location(path: Path) -> bool:
+    """Check if the current directory is a good place to run wg-friend.
 
-    Returns (is_messy, reason)
+    Good locations:
+    - Home directory
+    - A subdirectory of home that's not too cluttered (<=20 items)
+    - Any directory that already has wg-friend files
     """
     home = Path.home()
     cwd = path.resolve()
 
-    # Check common messy locations
-    messy_paths = {
-        home / "Downloads": "Downloads folder",
-        home / "Desktop": "Desktop",
-        home: "home directory",
-        Path("/tmp"): "temp directory",
-        Path("/var/tmp"): "temp directory",
-    }
+    # Already has wg-friend files? It's a good spot.
+    if (cwd / "wg-friend.db").exists() or (cwd / "import").exists():
+        return True
 
-    for messy_path, reason in messy_paths.items():
-        if cwd == messy_path.resolve():
-            return True, reason
+    # Home directory is fine
+    if cwd == home:
+        return True
 
-    # Check if there are too many unrelated files (more than 20 items)
+    # Subdirectory of home?
     try:
-        items = list(cwd.iterdir())
-        if len(items) > 20:
-            return True, f"cluttered directory ({len(items)} items)"
-    except PermissionError:
-        pass
+        cwd.relative_to(home)
+        is_under_home = True
+    except ValueError:
+        is_under_home = False
 
-    return False, ""
+    if is_under_home:
+        # Check if it's reasonably clean (not cluttered)
+        try:
+            items = list(cwd.iterdir())
+            if len(items) <= 20:
+                return True
+        except PermissionError:
+            pass
+
+    return False
 
 
 def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
@@ -292,14 +298,13 @@ def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
     console.print("This tool helps you manage WireGuard VPN networks.")
     console.print("Let's get you set up.\n")
 
-    # Check if we're in a messy location
+    # Check if we're in a good location
     cwd = Path.cwd()
-    is_messy, reason = is_messy_location(cwd)
 
-    if is_messy:
-        console.print(f"[yellow]You're running from your {reason}.[/yellow]")
-        console.print("[dim]wg-friend works best from a dedicated folder where it can keep")
-        console.print("its database, configs, and output files organized.[/dim]\n")
+    if not is_good_location(cwd):
+        console.print(f"[yellow]Heads up:[/yellow] You're running from [bold]{cwd}[/bold]")
+        console.print("[dim]wg-friend works best from your home directory or a dedicated folder")
+        console.print("where it can keep its database and configs organized.[/dim]\n")
 
         suggested_dir = Path.home() / "wireguard-friend"
         console.print(f"[cyan]Suggested:[/cyan] Create a folder and run from there:")
