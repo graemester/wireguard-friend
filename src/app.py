@@ -25,6 +25,29 @@ console = Console()
 DEFAULT_DB_NAME = "wg-friend.db"
 DEFAULT_IMPORT_DIR = "import"
 DEFAULT_OUTPUT_DIR = "output"
+CONFIG_DIR = Path.home() / ".config" / "wg-friend"
+HOME_FILE = CONFIG_DIR / "home"
+
+
+def get_saved_home() -> Path | None:
+    """Get the saved wg-friend home directory, if any."""
+    if HOME_FILE.exists():
+        try:
+            saved_path = Path(HOME_FILE.read_text().strip())
+            if saved_path.exists() and (saved_path / DEFAULT_DB_NAME).exists():
+                return saved_path
+        except Exception:
+            pass
+    return None
+
+
+def save_home(path: Path):
+    """Save the current directory as the wg-friend home."""
+    try:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        HOME_FILE.write_text(str(path.resolve()))
+    except Exception:
+        pass  # Not critical if this fails
 
 
 def get_data_dir() -> Path:
@@ -441,12 +464,32 @@ def main():
     output_dir = data_dir / DEFAULT_OUTPUT_DIR
 
     if db_path.exists():
-        # Database exists - maintenance mode
+        # Database exists in current directory - use it
+        save_home(data_dir)  # Remember this location
         console.print(f"[dim]Using database: {db_path}[/dim]\n")
         run_maintenance_mode(db_path)
     else:
-        # No database - first run experience
+        # No database here - check if we have a saved home elsewhere
+        saved_home = get_saved_home()
+        if saved_home and saved_home != data_dir:
+            console.print(f"[cyan]Found existing wg-friend setup at:[/cyan]")
+            console.print(f"  [bold]{saved_home}[/bold]\n")
+
+            if Confirm.ask("Use that setup?", default=True):
+                # Switch to saved home
+                db_path = saved_home / DEFAULT_DB_NAME
+                console.print(f"[dim]Using database: {db_path}[/dim]\n")
+                run_maintenance_mode(db_path)
+                return
+
+            console.print()  # blank line
+
+        # First run experience (or user declined saved home)
         first_run_setup(db_path, import_dir, output_dir)
+
+        # If setup completed successfully, save this as home
+        if (data_dir / DEFAULT_DB_NAME).exists():
+            save_home(data_dir)
 
 
 if __name__ == "__main__":
