@@ -10,7 +10,7 @@ Command-line tool for managing WireGuard VPN networks with hub-and-spoke topolog
 
 ## Overview
 
-WireGuard Friend manages WireGuard configurations for networks using a coordination server (cloud VPS), subnet routers (LAN gateways), and client peers (individual devices). Configurations are stored in a SQLite database for querying and automated deployment.
+WireGuard Friend manages WireGuard configurations for networks using a coordination server (BYO cloud VPS), subnet routers (LAN gateways), and client peers (individual devices). Configurations are stored in a SQLite database for querying and automated deployment.
 
 ```
                                  ┌──────────────────────────────────────────────────────┐
