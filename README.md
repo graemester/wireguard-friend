@@ -9,22 +9,28 @@ WireGuard Friend helps you establish sophisticated WireGuard network topologies 
 WireGuard Friend establishes this network architecture:
 
 ```
-                    ┌─────────────────────┐
-                    │  Coordination Server │  (Cloud VPS)
-                    │  Public: 1.2.3.4     │
-                    │  VPN: 10.20.0.1      │
-                    └──────────┬───────────┘
-                               │
-        ┏━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┓
-        ┃                                              ┃
-   ┌────┴─────┐                                  ┌────┴─────┐
-   │  Subnet  │                                  │  Client  │
-   │  Router  │  (Home/Office Gateway)           │  Peers   │
-   │ 10.20.0.20                                  │ 10.20.0.x │
-   └────┬─────┘                                  └──────────┘
-        │                                          • Laptops
-   192.168.1.0/24                                 • Phones
-   (LAN devices)                                   • Tablets
+                                 +------------------------------------------------------+
+                                 |                 Coordination Server                  |
+                                 |                  (BYO Cloud VPS)                     |
+                                 |                                                      |
+                                 |                 Public IP: 1.2.3.4                   |
+                                 |                  VPN IP: 10.20.0.1                   |
+                                 +---------------------------+--------------------------+
+                                                             |
+                                                             |
+                                 +---------------------------+--------------------------+
+                                 |                                                      |
+                                 |                                                      |
+              +------------------------------------------+        +------------------------------------------+
+              |             Subnet Router                |        |              Client Peers                |
+              |             (On your LAN)                |        |           (Anywhere you are.)            |
+              |                                          |        |                                          |
+              |            VPN: 10.20.0.20               |        |             VPN: 10.20.0.x               |
+              |            LAN: 192.168.1.1              |        |                                          |
+              +------------------------------------------+        +------------------------------------------+
+              192.168.1.0/24                                      Laptops, Phones, Tablets, Friend's Computer
+              Samba Shares, Jellyfin, Media Server, SSH...
+        
 ```
 
 ### Network Components
