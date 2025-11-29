@@ -518,27 +518,41 @@ class WireGuardOnboarder:
             cs = self.db.get_coordination_server()
             vpn_networks = {cs['network_ipv4'], cs['network_ipv6']}
 
-            # Get LAN networks from subnet routers
-            lan_networks = set()
-            for sn in self.db.get_subnet_routers(cs['id']):
-                lan_networks.update(self.db.get_sn_lan_networks(sn['id']))
-
             # Parse client's current allowed IPs
             client_networks = set(ip.strip() for ip in client_allowed_ips.split(',') if ip.strip())
 
-            # Infer access level
-            has_vpn = vpn_networks.issubset(client_networks)
-            has_lans = lan_networks.issubset(client_networks) if lan_networks else False
+            # Check for VPN networks
+            has_vpn = bool(vpn_networks & client_networks)  # Any overlap
+
+            # Detect LAN networks: private ranges that aren't the VPN network
+            # RFC1918: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+            # RFC4193: fd00::/8 (ULA)
+            detected_lans = []
+            for network in client_networks:
+                net_str = network.split('/')[0]  # Get base address
+                # Skip if it's a VPN network
+                if network in vpn_networks:
+                    continue
+                # Check if it's a private/LAN network
+                if (net_str.startswith('192.168.') or
+                    net_str.startswith('10.') or
+                    net_str.startswith('172.16.') or net_str.startswith('172.17.') or
+                    net_str.startswith('172.18.') or net_str.startswith('172.19.') or
+                    net_str.startswith('172.2') or net_str.startswith('172.30.') or
+                    net_str.startswith('172.31.')):
+                    detected_lans.append(network)
+
+            has_lans = len(detected_lans) > 0
 
             if has_lans and has_vpn:
-                inferred_level = 1  # full_access or lan_only
-                inferred_text = "Full access (has VPN + LAN networks)"
+                inferred_level = 1  # full_access
+                inferred_text = f"Full access (VPN + LANs: {', '.join(detected_lans)})"
             elif has_vpn and not has_lans:
                 inferred_level = 2  # vpn_only
-                inferred_text = "VPN only (only VPN networks, no LANs)"
+                inferred_text = "VPN only (no LAN networks detected)"
             elif has_lans:
                 inferred_level = 3  # lan_only
-                inferred_text = "LAN only (has LAN access)"
+                inferred_text = f"LAN only ({', '.join(detected_lans)})"
             else:
                 inferred_level = 1  # Default to full_access if unclear
                 inferred_text = "Full access (default)"
