@@ -252,6 +252,93 @@ def run_maintenance_mode(db_path: Path):
     maintainer.run()
 
 
+def first_run_setup(db_path: Path, import_dir: Path, output_dir: Path):
+    """Handle first-run experience with guided setup."""
+    from rich.prompt import Prompt
+
+    console.print("[bold]Welcome to WireGuard Friend![/bold]\n")
+    console.print("This tool helps you manage WireGuard VPN networks.")
+    console.print("Let's get you set up.\n")
+
+    # Create output directory
+    output_dir.mkdir(exist_ok=True)
+
+    # Ask what they want to do
+    console.print("[bold cyan]Do you have existing WireGuard configs to import?[/bold cyan]")
+    console.print("[dim]  If you already have .conf files from a working WireGuard setup,")
+    console.print("  we can import them. Otherwise, we'll help you create a new network.[/dim]\n")
+
+    has_configs = Confirm.ask("Import existing configs?", default=False)
+
+    if has_configs:
+        # Import flow
+        import_dir.mkdir(exist_ok=True)
+
+        # Check if configs already present
+        existing_confs = list(import_dir.glob("*.conf"))
+
+        if existing_confs:
+            console.print(f"\n[green]Found {len(existing_confs)} config(s) in {import_dir}/[/green]")
+            for conf in existing_confs:
+                console.print(f"  [dim]•[/dim] {conf.name}")
+        else:
+            console.print(f"\n[cyan]Created {import_dir}/ folder[/cyan]")
+            console.print(f"\nCopy your WireGuard .conf files into:")
+            console.print(f"  [bold]{import_dir.absolute()}[/bold]\n")
+            console.print("[dim]Typical files to import:[/dim]")
+            console.print("  • Coordination server config (e.g., wg0.conf from your VPS)")
+            console.print("  • Subnet router configs (if you have any)")
+            console.print("  • Client peer configs (laptop, phone, etc.)")
+            console.print()
+
+            # Wait for user
+            Prompt.ask("[yellow]Press Enter when your configs are in place[/yellow]", default="")
+
+            # Check again
+            existing_confs = list(import_dir.glob("*.conf"))
+
+            if not existing_confs:
+                console.print(f"\n[yellow]Still no .conf files found in {import_dir}/[/yellow]")
+                console.print("You can either:")
+                console.print("  1. Add your configs and run [bold]wg-friend[/bold] again")
+                console.print("  2. Start fresh with a new network\n")
+
+                if Confirm.ask("Create a new network from scratch instead?", default=True):
+                    run_onboard_mode(db_path, import_dir)
+                    return
+                else:
+                    console.print("\n[dim]Run wg-friend again when you've added your configs.[/dim]")
+                    sys.exit(0)
+
+        # Show what we found
+        console.print(f"\n[green]Ready to import {len(existing_confs)} config(s):[/green]")
+        for conf in existing_confs:
+            console.print(f"  [dim]•[/dim] {conf.name}")
+        console.print()
+
+        if Confirm.ask("Proceed with import?", default=True):
+            run_onboard_mode(db_path, import_dir)
+        else:
+            console.print("\n[dim]Run wg-friend again when ready.[/dim]")
+            sys.exit(0)
+
+    else:
+        # New network flow
+        console.print("\n[cyan]Great! Let's create a new WireGuard network.[/cyan]")
+        console.print("[dim]The wizard will walk you through setting up:[/dim]")
+        console.print("  • Coordination server (your cloud VPS)")
+        console.print("  • Subnet routers (optional - for accessing home/office LANs)")
+        console.print("  • Client peers (laptops, phones, etc.)")
+        console.print()
+
+        if Confirm.ask("Start the setup wizard?", default=True):
+            import_dir.mkdir(exist_ok=True)
+            run_onboard_mode(db_path, import_dir)
+        else:
+            console.print("\n[dim]Run wg-friend again when ready.[/dim]")
+            sys.exit(0)
+
+
 def main():
     """Main entry point."""
     # Handle special commands
@@ -293,15 +380,15 @@ def main():
     data_dir = get_data_dir()
     db_path = data_dir / DEFAULT_DB_NAME
     import_dir = data_dir / DEFAULT_IMPORT_DIR
+    output_dir = data_dir / DEFAULT_OUTPUT_DIR
 
     if db_path.exists():
         # Database exists - maintenance mode
         console.print(f"[dim]Using database: {db_path}[/dim]\n")
         run_maintenance_mode(db_path)
     else:
-        # No database - onboard mode
-        console.print("[dim]No database found - starting setup[/dim]\n")
-        run_onboard_mode(db_path, import_dir)
+        # No database - first run experience
+        first_run_setup(db_path, import_dir, output_dir)
 
 
 if __name__ == "__main__":
