@@ -9,22 +9,28 @@ WireGuard Friend helps you establish sophisticated WireGuard network topologies 
 WireGuard Friend establishes this network architecture:
 
 ```
-                    ┌─────────────────────┐
-                    │  Coordination Server │  (Cloud VPS)
-                    │  Public: 1.2.3.4     │
-                    │  VPN: 10.20.0.1      │
-                    └──────────┬───────────┘
-                               │
-        ┏━━━━━━━━━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━━━━━━━━━┓
-        ┃                                              ┃
-   ┌────┴─────┐                                  ┌────┴─────┐
-   │  Subnet  │                                  │  Client  │
-   │  Router  │  (Home/Office Gateway)           │  Peers   │
-   │ 10.20.0.20                                  │ 10.20.0.x │
-   └────┬─────┘                                  └──────────┘
-        │                                          • Laptops
-   192.168.1.0/24                                 • Phones
-   (LAN devices)                                   • Tablets
+                                 +------------------------------------------------------+
+                                 |                 Coordination Server                  |
+                                 |                  (BYO Cloud VPS)                     |
+                                 |                                                      |
+                                 |                 Public IP: 1.2.3.4                   |
+                                 |                  VPN IP: 10.20.0.1                   |
+                                 +---------------------------+--------------------------+
+                                                             |
+                                                             |
+                                 +---------------------------+--------------------------+
+                                 |                                                      |
+                                 |                                                      |
+              +------------------------------------------+        +------------------------------------------+
+              |             Subnet Router                |        |              Client Peers                |
+              |             (On your LAN)                |        |           (Anywhere you are.)            |
+              |                                          |        |                                          |
+              |            VPN: 10.20.0.20               |        |             VPN: 10.20.0.x               |
+              |            LAN: 192.168.1.1              |        |                                          |
+              +------------------------------------------+        +------------------------------------------+
+              192.168.1.0/24                                      Laptops, Phones, Tablets, Friend's Computer
+              Samba Shares, Jellyfin, Media Server, SSH...
+        
 ```
 
 ### Network Components
@@ -143,8 +149,8 @@ You want to build a WireGuard network but:
 ### Import & Manage Existing Configs
 
 ```bash
-# Import your existing WireGuard configs
-./wg-friend-onboard.py --import-dir import/ --yes
+# Place configs in import/ and run wg-friend
+wg-friend
 
 # Database now contains:
 # - Coordination server with all settings
@@ -158,7 +164,7 @@ The import process preserves everything exactly as-is - no data loss, no reforma
 ### Interactive Maintenance
 
 ```bash
-./wg-friend-maintain.py
+wg-friend
 
 # Menu-driven interface for:
 # [1] Manage Coordination Server - view, export, deploy
@@ -232,53 +238,98 @@ WireGuard Friend is a **management tool**, not a runtime service. It doesn't nee
 
 **The key insight:** WireGuard Friend just needs SSH access to your WireGuard hosts. It doesn't need to be on the same machine as WireGuard itself!
 
-📖 **See [WHERE_TO_RUN.md](WHERE_TO_RUN.md) for comprehensive guidance** including:
+📖 **See [docs/WHERE_TO_RUN.md](docs/WHERE_TO_RUN.md) for comprehensive guidance** including:
 - Detailed pros/cons of each location
 - Security considerations
 - Multi-admin scenarios
 - Migration between machines
 - Requirements checklist
 
+## Installation
+
+### Download Binary (Recommended)
+
+Download a pre-built binary - no Python or dependencies required:
+
+```bash
+# Linux
+curl -LO https://github.com/graemester/wireguard-friend/releases/latest/download/wg-friend-linux-x86_64
+chmod +x wg-friend-linux-x86_64
+sudo mv wg-friend-linux-x86_64 /usr/local/bin/wg-friend
+
+# macOS (Intel)
+curl -LO https://github.com/graemester/wireguard-friend/releases/latest/download/wg-friend-darwin-x86_64
+chmod +x wg-friend-darwin-x86_64
+sudo mv wg-friend-darwin-x86_64 /usr/local/bin/wg-friend
+
+# macOS (Apple Silicon)
+curl -LO https://github.com/graemester/wireguard-friend/releases/latest/download/wg-friend-darwin-arm64
+chmod +x wg-friend-darwin-arm64
+sudo mv wg-friend-darwin-arm64 /usr/local/bin/wg-friend
+```
+
+### Update
+
+```bash
+wg-friend --update
+```
+
+### From Source (Development)
+
+```bash
+git clone https://github.com/graemester/wireguard-friend.git
+cd wireguard-friend
+pip install -r requirements.txt
+./wg-friend
+```
+
 ## Quick Start
+
+### First Run - Create or Import
+
+```bash
+wg-friend
+
+# If no database exists, you'll see:
+# → No WireGuard configs found in import/
+# → Create new WireGuard network from scratch? [y/N]: y
+#   OR
+#   Place your existing .conf files in import/ and run again
+```
 
 ### Create New Network (Wizard Mode)
 
 ```bash
-# Run with empty import directory
-./wg-friend-onboard.py
+# Just run wg-friend in an empty directory
+wg-friend
 
-# Wizard will ask:
-# → Create new WireGuard network from scratch? [y/N]: y
-# → Walks through:
+# Wizard walks through:
 #    • Coordination server setup
 #    • Subnet routers (optional, with default NAT rules)
 #    • Client peers (optional)
 # → Generates configs in import/
-# → Automatically proceeds with import
+# → Automatically imports into database
 ```
 
 ### Import Existing Network
 
 ```bash
 # 1. Place your configs in import/
+mkdir import
 cp /etc/wireguard/wg0.conf import/coordination.conf
 cp ~/configs/*.conf import/
 
-# 2. Import into database
-./wg-friend-onboard.py --import-dir import/ --yes
+# 2. Run wg-friend - it auto-detects and imports
+wg-friend
 
-# 3. Verify import
-./wg-friend-maintain.py
-# → [5] List All Entities
-
-# 4. View generated configs
-ls -la output/
+# 3. After import, you're in maintenance mode
+# → [5] List All Entities to verify
 ```
 
 ### Add a New Peer
 
 ```bash
-./wg-friend-maintain.py
+wg-friend
 
 # [4] Create New Peer
 # → Name: alice-laptop
@@ -298,7 +349,7 @@ ls -la output/
 ### Rotate Compromised Keys
 
 ```bash
-./wg-friend-maintain.py
+wg-friend
 
 # [3] Manage Peers → Select peer → [3] Rotate Keys
 # → New keypair generated
@@ -350,17 +401,12 @@ Cloud VPS (CS) ←→ Office Router (SN, advertises 10.0.0.0/24)
 
 WireGuard Friend stores configurations in two forms:
 
-1. **Raw text blocks** - Exact original configuration text
+1. **Text blocks** - Original configuration text
 2. **Structured data** - Extracted fields (IPs, keys, networks) for queries
-
-**Why both?**
-- Raw blocks enable reconstruction without data loss
-- Structured data enables queries, logic, IP allocation
-- Reconstruction preserves all original formatting and settings
 
 ### PostUp/PostDown Rules
 
-Subnet router firewall rules are stored as-is, never parsed:
+Subnet router firewall rules are stored as text:
 - IP forwarding settings
 - NAT/Masquerading rules
 - MSS clamping for PMTU
@@ -395,53 +441,45 @@ All source code is fully documented with docstrings.
 
 ## Requirements
 
-- Python 3.8+
+**Binary version (recommended):**
 - WireGuard tools (`wg`, `wg-quick`)
-- SQLite 3
 - SSH access to servers (for deployment)
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
-
 # Install WireGuard tools
-sudo apt install wireguard-tools
+sudo apt install wireguard-tools  # Debian/Ubuntu
+brew install wireguard-tools      # macOS
 ```
 
-## Installation
-
-```bash
-git clone https://github.com/graemester/wireguard-friend.git
-cd wireguard-friend
-pip install -r requirements.txt
-
-# Verify WireGuard tools
-which wg wg-quick
-```
+**From source:**
+- Python 3.8+
+- WireGuard tools
+- pip install -r requirements.txt
 
 ## Project Structure
 
 ```
 wireguard-friend/
+├── wg-friend                    # Main entry point (run this)
+├── wg-friend.spec               # PyInstaller build config
 ├── README.md                    # This file
 ├── QUICK_START.md               # Detailed walkthrough
-├── ARCHITECTURE.md              # Design deep-dive
-├── DOCUMENTATION.md             # Documentation index
-├── requirements.txt             # Python dependencies
-│
-├── wg-friend-onboard.py         # Import existing configs
-├── wg-friend-maintain.py        # Maintenance interface
-├── wg-friend.db                 # SQLite database
+├── requirements.txt             # Python dependencies (dev only)
 │
 ├── src/                         # Source modules
+│   ├── app.py                   # Unified application logic
 │   ├── database.py              # Database operations
 │   ├── raw_parser.py            # Configuration parsing
 │   ├── keygen.py                # Key generation
 │   ├── ssh_client.py            # SSH deployment
 │   └── qr_generator.py          # QR code generation
 │
-├── import/                      # Place configs here
-└── output/                      # Generated configs
+├── wg-friend-onboard.py         # Onboarding (imported by app.py)
+├── wg-friend-maintain.py        # Maintenance (imported by app.py)
+│
+├── import/                      # Place configs here for import
+├── output/                      # Generated/exported configs
+└── wg-friend.db                 # SQLite database (created on first run)
 ```
 
 ## Why WireGuard Friend?

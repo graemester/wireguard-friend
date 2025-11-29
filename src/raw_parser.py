@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RawInterfaceBlock:
     """Raw Interface block with structured data extracted"""
-    raw_text: str  # EXACT text from file
+    raw_text: str  # Original text from file
     # Structured data extracted for logic
     addresses: List[str]  # e.g., ["10.20.0.1/24", "fd20::1/64"]
     private_key: Optional[str]
@@ -25,7 +25,7 @@ class RawInterfaceBlock:
 @dataclass
 class RawPeerBlock:
     """Raw Peer block with structured data extracted"""
-    raw_text: str  # EXACT text from file
+    raw_text: str  # Original text from file
     # Structured data extracted for logic
     public_key: str
     preshared_key: Optional[str]
