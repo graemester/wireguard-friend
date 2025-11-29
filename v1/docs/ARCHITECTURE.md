@@ -12,7 +12,7 @@
 
 WireGuard Friend is distributed as a single compiled binary (via PyInstaller) that bundles
 all Python dependencies. Under the hood, it stores configurations in SQLite with a dual
-storage model: original text blocks for reconstruction and structured fields for querying.
+storage model: original text blocks and structured fields for querying.
 
 ### Application Flow
 
@@ -29,9 +29,9 @@ appropriate mode. It also handles self-updates by checking GitHub Releases.
 
 ## Design Philosophy
 
-**Don't Break Working Configs**
+**Parse Everything, Preserve Everything**
 
-WireGuard Friend imports existing configs into a database without modifying them. When you export or deploy configs, you get back exactly what you put in. This is the whole point - manage your network without breaking what already works.
+WireGuard Friend validates every element of your configurations - addresses, keys, routes, rules - and stores them in dual form: structured data for intelligent management, raw blocks for deployment fidelity. This lets you make surgical changes at scale while preserving manual customizations.
 
 ## Core Architecture
 

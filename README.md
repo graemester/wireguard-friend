@@ -2,6 +2,14 @@
 
 **Build and manage reliable Wireguard networks.  Learn and have fun!**
 
+> **📦 Repository Structure:**
+> **[v1/](v1/)** - Stable, production-ready version (current release)
+> **[v2/](v2/)** - Experimental future vision (paradigm shift in progress)
+>
+> **Users:** Use v1. **Developers:** Explore v2 for radical ideas.
+
+---
+
 WireGuard Friend helps you *establish and maintain* sophisticated WireGuard network topologies using a BYO VPS coordination server, a subnet router on a host you probably already have, and client peers (your mobile devices). Import existing configurations or build from scratch, manage access levels, rotate keys, and deploy to servers —- all through an intuitive, fast command-line interface.  It can work from a setup you already have or help you build a complete set of configs from scratch
 
 ## What It Does
