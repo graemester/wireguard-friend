@@ -1,5 +1,13 @@
 # WireGuard Friend - Documentation Index
 
+> **Note for Users**: WireGuard Friend is distributed as a single compiled binary.
+> Just download it, run it, and follow the prompts. See [QUICK_START.md](QUICK_START.md).
+>
+> **This document** is for developers contributing to the project, or users who want
+> to understand how things work under the hood.
+
+---
+
 ## Available Documentation
 
 ### 1. [README.md](README.md) - Project Overview
@@ -46,21 +54,22 @@
 
 ## Quick Reference
 
-### Import Configs
+### Running (Binary Distribution)
 ```bash
-./wg-friend-onboard.py --import-dir import/
+# Download wg-friend binary, then:
+mkdir ~/wireguard-friend && cd ~/wireguard-friend
+wg-friend
+# Follow the interactive prompts
 ```
 
-### Create from Scratch
+### Running (From Source)
 ```bash
-mkdir -p import
-./wg-friend-onboard.py --import-dir import/
-# Wizard mode activates when no configs found
-```
-
-### Maintenance Mode
-```bash
-./wg-friend-maintain.py
+# Clone repo and install dependencies
+pip install -r requirements.txt
+./wg-friend              # Unified entry point
+# Or use individual scripts:
+./wg-friend-onboard.py   # Import/wizard mode
+./wg-friend-maintain.py  # Maintenance mode
 ```
 
 ---
@@ -100,7 +109,20 @@ mkdir -p import
 
 ## Code Documentation
 
-### Source Files
+### Entry Points
+
+**wg-friend** (wrapper script)
+- Unified entry point for binary distribution
+- Calls `src/app.py`
+
+**src/app.py**
+- Main application logic
+- State detection (has database → maintenance, else → onboard)
+- Self-update mechanism
+- First-run setup flow
+- Location checking and home directory management
+
+### Source Modules
 
 **src/database.py**
 - Database operations
@@ -121,7 +143,7 @@ mkdir -p import
 - QR code generation
 - PNG output
 
-### Scripts
+### Legacy Scripts (still functional)
 
 **wg-friend-onboard.py**
 - Import workflow
@@ -139,26 +161,41 @@ mkdir -p import
 
 ## File Structure
 
+### For Users (Binary Distribution)
+```
+~/wireguard-friend/        ← Your working directory
+├── wg-friend.db           ← SQLite database (created on first run)
+├── import/                ← Place configs here for import
+└── output/                ← Generated configs
+```
+
+### Source Repository (For Developers)
 ```
 wireguard-friend/
 ├── README.md              ← Start here
-├── QUICK_START.md         ← Detailed guide
+├── QUICK_START.md         ← User guide
 ├── ARCHITECTURE.md        ← Design deep-dive
-├── DOCUMENTATION.md       ← This file
-├── requirements.txt       ← Python deps
+├── DOCUMENTATION.md       ← This file (developer reference)
+├── requirements.txt       ← Python dependencies
 │
+├── wg-friend              ← Unified entry point (wrapper)
+├── wg-friend.spec         ← PyInstaller build config
 ├── wg-friend-onboard.py   ← Import/wizard script
 ├── wg-friend-maintain.py  ← Maintenance script
-├── wg-friend.db           ← SQLite database
 │
 ├── src/                   ← Source modules
+│   ├── app.py             ← Main application logic
 │   ├── database.py
 │   ├── keygen.py
 │   ├── ssh_client.py
 │   └── qr_generator.py
 │
-├── import/                ← Place configs here
-├── output/                ← Generated configs
+├── docs/
+│   ├── BUILDING.md        ← How to build releases
+│   └── SETUP.md
+│
+├── .github/workflows/
+│   └── release.yml        ← Automated release builds
 │
 └── tests/
 ```
@@ -185,6 +222,6 @@ See: [ARCHITECTURE.md](ARCHITECTURE.md) - Design Rules
 
 1. **Check documentation** (this index)
 2. **Read error messages** (usually helpful)
-3. **Try `--help`** on scripts
-4. **Check database** with queries
+3. **Use the menu** - wg-friend is interactive and menu-driven
+4. **Check database** with queries (option in maintenance menu)
 5. **Verify config files** in output/

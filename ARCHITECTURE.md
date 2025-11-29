@@ -1,8 +1,31 @@
 # WireGuard Friend - Architecture
 
+> **Note**: This document describes the internal design and implementation of WireGuard Friend.
+> It's intended for developers contributing to the project, or curious users who want to
+> understand how things work under the hood.
+>
+> **For usage instructions**, see [QUICK_START.md](QUICK_START.md).
+
+---
+
 ## Design Overview
 
-WireGuard Friend stores configurations in SQLite with a dual storage model: original text blocks for reconstruction and structured fields for querying.
+WireGuard Friend is distributed as a single compiled binary (via PyInstaller) that bundles
+all Python dependencies. Under the hood, it stores configurations in SQLite with a dual
+storage model: original text blocks for reconstruction and structured fields for querying.
+
+### Application Flow
+
+```
+wg-friend (binary)
+    │
+    ├─→ Has database? ─→ Maintenance Mode (wg-friend-maintain.py)
+    │
+    └─→ No database? ─→ First-Run Setup ─→ Onboard Mode (wg-friend-onboard.py)
+```
+
+The unified entry point (`src/app.py`) detects the current state and routes to the
+appropriate mode. It also handles self-updates by checking GitHub Releases.
 
 ## Core Architecture
 
