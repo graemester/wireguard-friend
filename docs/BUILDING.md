@@ -143,11 +143,9 @@ Works on both Intel and Apple Silicon. Build on each architecture for native bin
 pyinstaller wg-friend.spec
 ```
 
-### Windows (untested)
+### Windows
 
-Should work but isn't tested. Would need:
-- Windows in the GitHub Actions matrix
-- Possibly some path handling fixes
+Not supported. The tool assumes Unix paths, SSH, and `wg` command availability. Windows users can use WSL or manage their WireGuard network from a Linux/macOS machine.
 
 ## Troubleshooting
 
