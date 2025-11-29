@@ -2,6 +2,12 @@
 
 **Everything you need to build, manage, and understand your WireGuard network.**
 
+> **Note for Users**: WireGuard Friend is distributed as a single compiled binary.
+> Just download it, run it, and follow the prompts. See [QUICK_START.md](QUICK_START.md).
+>
+> **This document** is for developers contributing to the project, or users who want
+> to understand how things work under the hood.
+
 ---
 
 ## 🚀 Getting Started (Start Here!)
@@ -112,15 +118,26 @@
 
 ## 📋 Quick Reference
 
-### Essential Commands
-
+### Running (Binary Distribution)
 ```bash
-# Import existing configs
-./wg-friend-onboard.py --import-dir import/
+# Download wg-friend binary, then:
+mkdir ~/wireguard-friend && cd ~/wireguard-friend
+wg-friend
+# Follow the interactive prompts
+```
 
-# Interactive maintenance mode
-./wg-friend-maintain.py
+### Running (From Source)
+```bash
+# Clone repo and install dependencies
+pip install -r requirements.txt
+./wg-friend              # Unified entry point
+# Or use individual scripts:
+./wg-friend-onboard.py   # Import/wizard mode
+./wg-friend-maintain.py  # Maintenance mode
+```
 
+### Essential Commands (Source)
+```bash
 # Backup database
 ./backup-database.sh /mnt/nas/backups
 
