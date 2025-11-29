@@ -180,7 +180,7 @@ Regardless of which deployment method you use, both:
 
 #### Deployment Scenarios
 
-| Where You Run | Coordination Server Deployment | Subnet Router Deployment |
+| Where You Run | Coordination Server<br> wg0.conf Deployment | Subnet Router<br>wg0.conf Deployment |
 |---------------|-----------|----------------------|
 | On your laptop | SSH to VPS | SSH to router |
 | On the VPS | **Local (sudo)** | SSH to router |
