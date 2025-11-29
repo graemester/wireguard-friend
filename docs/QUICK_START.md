@@ -39,11 +39,11 @@ cp /path/to/client-*.conf import/  # Optional: existing client configs
 ```
 
 The onboarding script will:
-- ✅ Import your existing WireGuard configs (Option A) or guide you through setup (Option B)
-- ✅ Create `~/.wg-friend/config.yaml` with coordinator/subnet router details
-- ✅ Initialize the peer database (`~/.wg-friend/peers.db`)
-- ✅ Detect infrastructure vs client peers
-- ✅ Preserve comments and metadata from existing configs
+- Import your existing WireGuard configs (Option A) or guide you through setup (Option B)
+- Create `~/.wg-friend/config.yaml` with coordinator/subnet router details
+- Initialize the peer database (`~/.wg-friend/peers.db`)
+- Detect infrastructure vs client peers
+- Preserve comments and metadata from existing configs
 
 ### Step 3: Configure Automated Deployment (One-Time Setup)
 
@@ -53,13 +53,13 @@ The onboarding script will:
 ```
 
 This will:
-- ✅ Generate a dedicated SSH keypair (`~/.wg-friend/ssh/wg-friend-deploy`)
-- ✅ Install the public key to your coordinator
-- ✅ Install the public key to your subnet router (if configured)
-- ✅ Test SSH authentication
-- ✅ Verify IP forwarding on subnet router (PostUp rules or system-level)
-- ✅ Confirm routing rules (iptables MASQUERADE, FORWARD chains)
-- ✅ Offer to add missing PostUp rules if needed
+- Generate a dedicated SSH keypair (`~/.wg-friend/ssh/wg-friend-deploy`)
+- Install the public key to your coordinator
+- Install the public key to your subnet router (if configured)
+- Test SSH authentication
+- Verify IP forwarding on subnet router (PostUp rules or system-level)
+- Confirm routing rules (iptables MASQUERADE, FORWARD chains)
+- Offer to add missing PostUp rules if needed
 
 **Note:** Setup mode is interactive - you'll enter SSH passwords once to install the keys, then never again!
 
