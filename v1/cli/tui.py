@@ -130,7 +130,7 @@ def peer_type_menu(db: WireGuardDBv2):
         # Add remote
         try:
             add_remote(db)
-            print("\n✓ Remote added successfully!")
+            print("\n✓ Remote added")
             print("  Run 'wg-friend generate' to create updated configs.")
             input("\nPress Enter to continue...")
         except Exception as e:
@@ -141,7 +141,7 @@ def peer_type_menu(db: WireGuardDBv2):
         # Add router
         try:
             add_router(db)
-            print("\n✓ Router added successfully!")
+            print("\n✓ Router added")
             print("  Run 'wg-friend generate' to create updated configs.")
             input("\nPress Enter to continue...")
         except Exception as e:
@@ -181,7 +181,7 @@ def remove_peer_menu(db: WireGuardDBv2):
     try:
         success = remove_peer(db, peer_type, peer_id, reason)
         if success:
-            print("\n✓ Peer removed successfully!")
+            print("\n✓ Peer removed")
             print("  Run 'wg-friend generate' to create updated configs.")
         input("\nPress Enter to continue...")
     except Exception as e:
@@ -223,7 +223,7 @@ def rotate_keys_menu(db: WireGuardDBv2):
     try:
         success = rotate_keys(db, peer_type, peer_id, reason)
         if success:
-            print("\n✓ Keys rotated successfully!")
+            print("\n✓ Keys rotated")
             print("  Run 'wg-friend generate' to create updated configs.")
             print("  Then 'wg-friend deploy' to push to servers.")
         input("\nPress Enter to continue...")
@@ -305,7 +305,7 @@ def run_tui(db_path: str) -> int:
     db = WireGuardDBv2(db_path)
 
     print("\n" + "=" * 70)
-    print("  WIREGUARD FRIEND v2 - INTERACTIVE MODE")
+    print("  WIREGUARD FRIEND - INTERACTIVE MODE")
     print("=" * 70)
     print("\n  Welcome! This interactive mode lets you manage your WireGuard network.")
     print("  Navigate using the menu options below.")

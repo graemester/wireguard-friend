@@ -21,7 +21,7 @@ Stop all write operations first:
 cp wireguard.db wireguard.db.backup-$(date +%Y%m%d-%H%M%S)
 ```
 
-Full backup including configs:
+Complete backup including configs:
 ```bash
 # Create backup directory
 mkdir -p ~/wg-backup-$(date +%Y%m%d)

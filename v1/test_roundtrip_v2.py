@@ -410,7 +410,7 @@ def test_roundtrip():
     config_path = import_dir / "coordination.conf"
 
     if not config_path.exists():
-        print("❌ coordination.conf not found")
+        print("✗ coordination.conf not found")
         return
 
     print(f"\nTesting: {config_path.name}")

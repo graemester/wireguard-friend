@@ -43,7 +43,7 @@ class ConfigDetector:
 
         # First entity should be [Interface]
         interface = entities[0]
-        if not any('[Interface]' in line for line in interface.lines):
+        if interface.entity_type != '[Interface]':
             raise ValueError(f"First entity is not [Interface] in {config_path}")
 
         # Count peers

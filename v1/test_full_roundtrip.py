@@ -348,7 +348,7 @@ def test_config(config_path: Path):
     gen_sections = [l for l in gen_lines if l.startswith('[')]
 
     sections_match = orig_sections == gen_sections
-    print(f"   Sections match: {'✓ YES' if sections_match else '❌ NO'}")
+    print(f"   Sections match: {'✓ YES' if sections_match else '✗ NO'}")
 
     # Check field count
     orig_fields = [l for l in orig_lines if '=' in l and not l.strip().startswith('#')]
@@ -402,7 +402,7 @@ def main():
     configs = sorted(import_dir.glob("*.conf"))
 
     if not configs:
-        print("\n❌ No configs found in import/")
+        print("\n✗ No configs found in import/")
         return
 
     print(f"\nTesting {len(configs)} configs:")

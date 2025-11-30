@@ -33,7 +33,7 @@ wg-friend deploy --dry-run        # Show what would be done
 
 # Status & Monitoring
 wg-friend status                  # Show network status
-wg-friend status --full           # Show full details with patterns
+wg-friend status --complete           # Show complete details with patterns
 
 # Interactive Mode
 wg-friend maintain                # Launch interactive TUI
@@ -390,7 +390,7 @@ Show current network status and configuration.
 **Usage:**
 ```bash
 wg-friend status                # Basic status
-wg-friend status --full         # Full details with patterns
+wg-friend status --complete         # Complete details with patterns
 ```
 
 **Output:**

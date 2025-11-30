@@ -1,1 +1,1 @@
-"""WireGuard Friend v2 CLI modules"""
+"""WireGuard Friend CLI modules"""

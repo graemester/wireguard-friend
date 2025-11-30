@@ -78,7 +78,7 @@ v2/integration-tests/
 ```
 ├── wg_keys.py              ← Key generation & derivation
 ├── test_key_validation.py  ← Validation workflow demo
-└── test_connectivity.py    ← Full integration test (TODO: run)
+└── test_connectivity.py    ← Complete integration test (TODO: run)
 ```
 
 ## Test Network Topology
@@ -111,7 +111,7 @@ v2/integration-tests/
 
 ## What Gets Tested
 
-### ✅ Current Tests
+### ✓ Current Tests
 
 1. **Key Derivation** (`wg_keys.py`)
    - Generate WireGuard keypairs
@@ -124,7 +124,7 @@ v2/integration-tests/
    - Validate derived keys match peer references
    - Detect corrupted/mismatched keys
 
-### 🚧 Planned Tests
+###  Planned Tests
 
 3. **Basic Connectivity** (`test_connectivity.py`)
    - Generate configs for 4 entities
@@ -159,7 +159,7 @@ make test
 # Key validation only
 python3 test_key_validation.py
 
-# Full connectivity test
+# Complete connectivity test
 python3 test_connectivity.py
 ```
 
@@ -200,16 +200,16 @@ This catches:
 
 ## Next Steps
 
-1. ✅ Fix any Docker Compose issues
-2. ✅ Run full connectivity test
-3. 🚧 Add key rotation test
-4. 🚧 Add new peer test
-5. 🚧 Add SSH deployment test
-6. 🚧 Integrate into CI/CD (GitHub Actions)
+1. ✓ Fix any Docker Compose issues
+2. ✓ Run complete connectivity test
+3.  Add key rotation test
+4.  Add new peer test
+5.  Add SSH deployment test
+6.  Integrate into CI/CD (GitHub Actions)
 
 ## Key Takeaway
 
-The permanent_guid system is fully implemented:
+The permanent_guid system is implemented:
 
 1. ✓ Schema updated with permanent_guid columns
 2. ✓ Comments link via permanent_guid

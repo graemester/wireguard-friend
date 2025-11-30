@@ -1,8 +1,8 @@
-# Folder Rename Complete ✅
+# Folder Rename Complete ✓
 
 ## Summary
 
-Successfully renamed folders to align with v1.0.0 release:
+renamed folders to align with v1.0.0 release:
 
 ```
 v1/  → v-alpha/  (old code archived)
@@ -43,19 +43,19 @@ After:
 
 ## Verification
 
-### ✅ Python Imports
+### ✓ Python Imports
 ```bash
 $ python3 -c "from v1.schema_semantic import WireGuardDBv2; print('✓ Import successful')"
 ✓ Import successful
 ```
 
-### ✅ CLI Version
+### ✓ CLI Version
 ```bash
 $ ./v1/wg-friend --version
 wg-friend v1.0.0
 ```
 
-### ✅ CLI Help
+### ✓ CLI Help
 ```bash
 $ ./v1/wg-friend --help
 usage: wg-friend [-h] [--db DB] [--version]
@@ -63,7 +63,7 @@ usage: wg-friend [-h] [--db DB] [--version]
                  ...
 ```
 
-All commands visible: ✅
+All commands visible: ✓
 - init, import, add, rotate, revoke
 - generate, deploy, status, maintain
 - **psk** (new in v1.0.0)
@@ -88,10 +88,10 @@ All commands visible: ✅
 ## What's Next
 
 ### Immediate
-1. ✅ Folder rename complete
-2. ✅ All imports updated
-3. ✅ CLI tested and working
-4. ✅ Changes committed
+1. ✓ Folder rename complete
+2. ✓ All imports updated
+3. ✓ CLI tested and working
+4. ✓ Changes committed
 
 ### For v1.0.0 Release
 1. **Create Git tag:** `git tag -a v1.0.0 -m "Release v1.0.0"`
@@ -135,11 +135,11 @@ wireguard-friend/
 
 All 5 high-priority features now integrated:
 
-1. ✅ **Localhost detection** - Smart deployment (skip SSH for local)
-2. ✅ **Preshared key support** - Post-quantum resistance (`wg-friend psk`)
-3. ✅ **Per-peer QR codes** - On-demand generation (`wg-friend qr`)
-4. ✅ **Live peer status** - Real-time monitoring (`wg-friend status --live`)
-5. ✅ **SSH setup wizard** - Automated key setup (`wg-friend ssh-setup`)
+1. ✓ **Localhost detection** - Smart deployment (skip SSH for local)
+2. ✓ **Preshared key support** - Post-quantum resistance (`wg-friend psk`)
+3. ✓ **Per-peer QR codes** - On-demand generation (`wg-friend qr`)
+4. ✓ **Live peer status** - Real-time monitoring (`wg-friend status --live`)
+5. ✓ **SSH setup wizard** - Automated key setup (`wg-friend ssh-setup`)
 
 ---
 
@@ -157,7 +157,7 @@ All 5 high-priority features now integrated:
 
 ---
 
-## Clean Slate Achieved! 🎉
+## Clean Slate Achieved! 
 
 The repository now has a clean structure aligned with semantic versioning:
 - External version: **v1.0.0**
@@ -197,4 +197,4 @@ git push origin v1.0.0
 
 **Confidence level:** High - All tests passed, imports work, CLI functional
 
-**Ready for v1.0.0 release!** 🚀
+**Ready for v1.0.0 release!** 

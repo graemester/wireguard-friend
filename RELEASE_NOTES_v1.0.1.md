@@ -3,9 +3,9 @@
 **Release Date:** 2025-11-30
 **Type:** Feature Release
 
-## 🎉 Major New Feature: Extramural Configs
+##  Major New Feature: Extramural Configs
 
-This release adds comprehensive support for managing **external WireGuard configurations** from commercial VPN providers (Mullvad, ProtonVPN, NordVPN, etc.) and employer networks alongside your mesh infrastructure.
+This release adds detailed support for managing **external WireGuard configurations** from commercial VPN providers (Mullvad, ProtonVPN, NordVPN, etc.) and employer networks alongside your mesh infrastructure.
 
 ### What is Extramural Configs?
 
@@ -18,34 +18,34 @@ Extramural configs allow you to:
 
 ### Key Features
 
-✅ **Import Sponsor Configs** - Parse and store .conf files from any VPN provider
+✓ **Import Sponsor Configs** - Parse and store .conf files from any VPN provider
 ```bash
 wg-friend extramural import mullvad.conf --sponsor "Mullvad VPN" --peer "my-laptop"
 ```
 
-✅ **Multi-Provider Support** - Manage configs from multiple VPN providers simultaneously
+✓ **Multi-Provider Support** - Manage configs from multiple VPN providers simultaneously
 ```bash
 wg-friend extramural list
 wg-friend extramural list --sponsor "Mullvad VPN"
 wg-friend extramural list --peer "my-laptop"
 ```
 
-✅ **Server Endpoint Switching** - Change between different server locations
+✓ **Server Endpoint Switching** - Change between different server locations
 ```bash
 wg-friend extramural switch-peer my-laptop/Mullvad-VPN eu-central-1
 ```
 
-✅ **Config Generation** - Generate .conf files for deployment
+✓ **Config Generation** - Generate .conf files for deployment
 ```bash
 wg-friend extramural generate my-laptop/Mullvad-VPN --output /etc/wireguard/wg-mullvad.conf
 ```
 
-✅ **Config Updates** - Easy updates when sponsor sends new configs
+✓ **Config Updates** - Easy updates when sponsor sends new configs
 ```bash
 wg-friend extramural import new-mullvad.conf --sponsor "Mullvad VPN" --peer "my-laptop"
 ```
 
-✅ **Complete Separation** - Extramural configs are completely independent from your mesh network
+✓ **Complete Separation** - Extramural configs are completely independent from your mesh network
 
 ### New CLI Commands
 
@@ -84,9 +84,9 @@ New tables added (automatically created on first run):
 
 ### Documentation
 
-- 📖 **[Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md)** - Complete user guide with examples
-- 📋 **[Implementation Summary](EXTRAMURAL_IMPLEMENTATION.md)** - Technical details
-- 🎯 **[Design Document](https://github.com/graemester/wireguard-friend/blob/main/plans/extramural-configs-design.md)** - Architecture and design
+-  **[Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md)** - Complete user guide with examples
+-  **[Implementation Summary](EXTRAMURAL_IMPLEMENTATION.md)** - Technical details
+-  **[Design Document](https://github.com/graemester/wireguard-friend/blob/main/plans/extramural-configs-design.md)** - Architecture and design
 
 ### Example Workflow
 
@@ -134,7 +134,7 @@ wg-friend extramural import ~/Downloads/mullvad-updated.conf \
 
 ### Testing
 
-✅ **End-to-End Test** - Complete workflow test covering:
+✓ **End-to-End Test** - Complete workflow test covering:
 - Database initialization
 - Entity creation
 - Config import
@@ -151,10 +151,10 @@ python3 v1/test_extramural_e2e.py
 
 ## Compatibility
 
-- ✅ **Backward Compatible** - No breaking changes to existing mesh functionality
-- ✅ **Database Migration** - Existing databases automatically upgraded with new tables
-- ✅ **Python 3.7+** - Same requirements as v1.0.0
-- ✅ **Dependencies** - No new dependencies required
+- ✓ **Backward Compatible** - No breaking changes to existing mesh functionality
+- ✓ **Database Migration** - Existing databases automatically upgraded with new tables
+- ✓ **Python 3.7+** - Same requirements as v1.0.0
+- ✓ **Dependencies** - No new dependencies required
 
 ## What's NOT in This Release
 
@@ -224,4 +224,4 @@ Thanks to the WireGuard community for creating such an elegant VPN protocol, and
 
 ---
 
-**Full Changelog**: v1.0.0...v1.0.1
+**Complete Changelog**: v1.0.0...v1.0.1

@@ -440,7 +440,7 @@ def test_roundtrip():
     configs = list(import_dir.glob("*.conf"))
 
     if not configs:
-        print("❌ No configs found in import/")
+        print("✗ No configs found in import/")
         return
 
     parser = SemanticParser()
@@ -492,21 +492,21 @@ def test_roundtrip():
         # Validate addresses
         for addr in parsed.interface.addresses:
             valid, msg = validator.validate_ip_address(addr)
-            status = "✓" if valid else "❌"
+            status = "✓" if valid else "✗"
             print(f"   {status} Address {addr}: {msg}")
             all_valid = all_valid and valid
 
         # Validate private key
         if parsed.interface.private_key:
             valid, msg = validator.validate_key(parsed.interface.private_key)
-            status = "✓" if valid else "❌"
+            status = "✓" if valid else "✗"
             print(f"   {status} PrivateKey: {msg}")
             all_valid = all_valid and valid
 
         # Validate port
         if parsed.interface.listen_port:
             valid, msg = validator.validate_port(parsed.interface.listen_port)
-            status = "✓" if valid else "❌"
+            status = "✓" if valid else "✗"
             print(f"   {status} ListenPort {parsed.interface.listen_port}: {msg}")
             all_valid = all_valid and valid
 
@@ -514,17 +514,17 @@ def test_roundtrip():
         for i, peer in enumerate(parsed.peers, 1):
             if peer.public_key:
                 valid, msg = validator.validate_key(peer.public_key)
-                status = "✓" if valid else "❌"
+                status = "✓" if valid else "✗"
                 print(f"   {status} Peer {i} PublicKey: {msg}")
                 all_valid = all_valid and valid
 
             for ip in peer.allowed_ips:
                 valid, msg = validator.validate_ip_address(ip)
-                status = "✓" if valid else "❌"
+                status = "✓" if valid else "✗"
                 print(f"   {status} Peer {i} AllowedIP {ip}: {msg}")
                 all_valid = all_valid and valid
 
-        print(f"\n   Overall validation: {'✓ PASS' if all_valid else '❌ FAIL'}")
+        print(f"\n   Overall validation: {'✓ PASS' if all_valid else '✗ FAIL'}")
 
         # Generate
         print("\n3. GENERATION (from semantic attributes)")
@@ -537,7 +537,7 @@ def test_roundtrip():
 
         print(f"   Original lines:  {comparison['original_lines']}")
         print(f"   Generated lines: {comparison['generated_lines']}")
-        print(f"   Exact match: {'✓ YES' if comparison['exact_match'] else '❌ NO'}")
+        print(f"   Exact match: {'✓ YES' if comparison['exact_match'] else '✗ NO'}")
 
         if comparison['exact_match']:
             total_exact += 1
@@ -564,7 +564,7 @@ def test_roundtrip():
     if total_exact == total_configs:
         print("✓ PERFECT FIDELITY - All configs reproduced exactly!")
     else:
-        print("⚠ PARTIAL FIDELITY - Some differences found")
+        print("WARNING: PARTIAL FIDELITY - Some differences found")
         print("  (This may be acceptable if only comment/whitespace repositioning)")
 
 

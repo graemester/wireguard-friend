@@ -248,7 +248,7 @@ def run_ssh_setup_wizard(db: WireGuardDBv2, user: str = 'root') -> int:
             servers.append(('Subnet Router', hostname, endpoint))
 
     if not servers:
-        print("⚠  No servers with endpoints found in database.")
+        print("WARNING:  No servers with endpoints found in database.")
         print("Add servers with endpoints first, then run this wizard.")
         return 1
 
@@ -294,7 +294,7 @@ def run_ssh_setup_wizard(db: WireGuardDBv2, user: str = 'root') -> int:
         public_key_path = existing_key.with_suffix('.pub')
 
         if not public_key_path.exists():
-            print(f"⚠  Public key not found: {public_key_path}")
+            print(f"WARNING:  Public key not found: {public_key_path}")
             print("Generating new keypair...")
             private_key = generate_ssh_key()
             if not private_key:
@@ -364,9 +364,9 @@ def run_ssh_setup_wizard(db: WireGuardDBv2, user: str = 'root') -> int:
     successful = sum(1 for _, _, success in test_results if success)
     failed = len(test_results) - successful
 
-    print(f"\nTotal servers:      {len(remote_servers)}")
-    print(f"Successfully setup: {successful}")
-    print(f"Failed:             {failed}")
+    print(f"\nTotal servers: {len(remote_servers)}")
+    print(f"Setup: {successful}")
+    print(f"Failed: {failed}")
     print()
 
     if failed > 0:
@@ -382,7 +382,7 @@ def run_ssh_setup_wizard(db: WireGuardDBv2, user: str = 'root') -> int:
         print()
 
     if successful == len(remote_servers):
-        print("✓ All servers configured successfully!")
+        print("✓ All servers configured")
         print()
         print("You can now deploy configs without passwords:")
         print("  wg-friend deploy")

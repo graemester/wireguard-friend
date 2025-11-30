@@ -284,16 +284,16 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2):
 
 
 def run_import(args) -> int:
-    """Import existing configs into v2 database"""
+    """Import existing configs into database"""
     print("=" * 70)
-    print("IMPORT CONFIGS TO V2")
+    print("IMPORT CONFIGS")
     print("=" * 70)
     print()
 
     # Check if database exists
     db_path = Path(args.db)
     if db_path.exists():
-        print(f"⚠  Database already exists: {db_path}")
+        print(f"WARNING:  Database already exists: {db_path}")
         response = input("Overwrite? (y/N): ").strip().lower()
         if response not in ('y', 'yes'):
             print("Cancelled.")
@@ -320,12 +320,12 @@ def run_import(args) -> int:
 
         # TODO: Import subnet routers
         if args.snr:
-            print("\n⚠  Subnet router import not yet implemented")
+            print("\nWARNING:  Subnet router import not yet implemented")
             print("   Use 'wg-friend add router' to add routers manually")
 
         # TODO: Import remotes
         if args.remote:
-            print("\n⚠  Remote import not yet implemented")
+            print("\nWARNING:  Remote import not yet implemented")
             print("   Use 'wg-friend add peer' to add peers manually")
 
         # Record initial state snapshot
@@ -333,7 +333,7 @@ def run_import(args) -> int:
 
         print()
         print("=" * 70)
-        print("IMPORT COMPLETE")
+        print("Import done")
         print("=" * 70)
         print(f"✓ Database created: {db_path}")
         print(f"✓ Coordination server imported")

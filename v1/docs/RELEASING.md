@@ -26,8 +26,10 @@ Review and update:
 Run tests:
 ```bash
 cd v1
+python3 test_config_detector.py  # CRITICAL: Catches config parsing bugs
 python3 test_permanent_guid.py
 python3 test_roundtrip.py
+python3 test_extramural_e2e.py
 # ... other tests
 ```
 
@@ -122,8 +124,10 @@ Create `RELEASE_NOTES_vX.X.X.md` with:
 
 - [ ] Version updated in CLI
 - [ ] Documentation updated
-- [ ] Tests pass
+- [ ] Tests pass (including test_config_detector.py)
 - [ ] Manual testing complete
+- [ ] Binary rebuilt: `pyinstaller v1/wg-friend.spec --distpath=./dist --workpath=./build --clean`
+- [ ] Binary version verified: `./dist/wg-friend --version`
 - [ ] RELEASE_NOTES created
 - [ ] Commit and push
 - [ ] Tag created and pushed

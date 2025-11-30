@@ -171,7 +171,7 @@ Comment categories and display order:
 ### 2. Tracks Entities Across Time
 - Same entity before and after key rotation
 - Can query: "Show me all configs where alice-phone appeared"
-- Full history of key changes
+- Complete history of key changes
 
 ### 3. Automatic Default Hostname
 - Don't need to invent names for unnamed peers
@@ -180,7 +180,7 @@ Comment categories and display order:
   - Default human-readable name
 
 ### 4. Future-Proof
-- Can implement advanced features:
+- Can implement additional features:
   - Timeline: "Show network topology at any point in time"
   - Audit: "Which entities have never rotated keys?"
   - Recovery: "Restore alice-phone to state before rotation"
@@ -259,7 +259,7 @@ AllowedIPs = {entity.allowed_ips}
 
 ## Testing
 
-See `v2/test_permanent_guid.py` for comprehensive tests:
+See `v2/test_permanent_guid.py` for detailed tests:
 - ✓ Assignment on import
 - ✓ Hostname defaulting
 - ✓ Comment linking
@@ -275,6 +275,6 @@ The permanent_guid system provides:
 - **Flexible keys**: Rotate without losing history
 - **Reliable comments**: Always linked correctly
 - **Automatic naming**: GUID serves as default hostname
-- **Full history**: All changes tracked
+- **Complete history**: All changes tracked
 
 All this from a single insight: **The first public key is special**.

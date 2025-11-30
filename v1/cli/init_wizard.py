@@ -184,7 +184,7 @@ def run_init_wizard(db_path: str) -> int:
     # Check if database already exists
     db_file = Path(db_path)
     if db_file.exists():
-        print(f"⚠  Database already exists: {db_path}")
+        print(f"WARNING:  Database already exists: {db_path}")
         if not prompt_yes_no("Overwrite?", default=False):
             print("Cancelled.")
             return 1

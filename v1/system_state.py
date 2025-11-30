@@ -487,7 +487,7 @@ def demonstrate_system_state():
 
         print()
         print("=" * 80)
-        print("TIME AWARENESS ACHIEVED ✓")
+        print("Time awareness working ✓")
         print("=" * 80)
         print("\nEach state is a complete snapshot of the network.")
         print("We can reconstruct the network at ANY point in time.")

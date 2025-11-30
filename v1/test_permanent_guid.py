@@ -66,7 +66,7 @@ def test_permanent_guid_on_real_config():
     config_path = Path("/home/ged/wireguard-friend/import/coordination.conf")
 
     if not config_path.exists():
-        print("\n❌ coordination.conf not found")
+        print("\n✗ coordination.conf not found")
         return
 
     print(f"\nConfig: {config_path.name}")
@@ -79,7 +79,7 @@ def test_permanent_guid_on_real_config():
     valid, msg = parser.validate_structure(entities)
     print(f"1. ENTITY PARSING")
     print(f"   Entities: {len(entities)}")
-    print(f"   Valid: {'✓' if valid else '❌'} {msg}")
+    print(f"   Valid: {'✓' if valid else '✗'} {msg}")
     print()
 
     # Extract peer data (skip interface)
@@ -96,7 +96,7 @@ def test_permanent_guid_on_real_config():
         hostname = extract_hostname_from_entity(entity)
 
         if not public_key:
-            print(f"   ⚠ Peer {i}: No public key found, skipping")
+            print(f"   WARNING: Peer {i}: No public key found, skipping")
             continue
 
         # First public key = permanent GUID
@@ -324,7 +324,7 @@ if __name__ == "__main__":
     test_database_storage()
 
     print("\n" + "=" * 80)
-    print("ALL TESTS COMPLETE")
+    print("Tests done")
     print("=" * 80)
     print()
     print("The permanent_guid system is ready:")

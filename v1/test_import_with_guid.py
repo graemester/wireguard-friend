@@ -195,14 +195,14 @@ def generate_peer_config(peer: ParsedPeer) -> str:
 def test_import_workflow():
     """Test complete import workflow with permanent_guid"""
     print("=" * 80)
-    print("COMPLETE IMPORT WORKFLOW TEST")
+    print("Import workflow test")
     print("=" * 80)
     print()
 
     config_path = Path("/home/ged/wireguard-friend/import/coordination.conf")
 
     if not config_path.exists():
-        print("❌ coordination.conf not found")
+        print("✗ coordination.conf not found")
         return
 
     print(f"Config: {config_path.name}")
@@ -215,7 +215,7 @@ def test_import_workflow():
 
     valid, msg = parser.validate_structure(entities)
     print(f"   Entities: {len(entities)}")
-    print(f"   Valid: {'✓' if valid else '❌'} {msg}")
+    print(f"   Valid: {'✓' if valid else '✗'} {msg}")
     print()
 
     # 2. PARSE PEERS (extract semantic meaning + assign permanent_guid)

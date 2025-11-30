@@ -75,7 +75,7 @@ def list_configs(db_path: Path, sponsor: Optional[str] = None, peer: Optional[st
         print(f"  Active Endpoint: {active_peer.endpoint if active_peer else 'None'}")
 
         if config.pending_remote_update:
-            print(f"  ⚠️  PENDING REMOTE UPDATE - New public key: {config.local_public_key[:32]}...")
+            print(f"  WARNING:  PENDING REMOTE UPDATE - New public key: {config.local_public_key[:32]}...")
 
         if config.last_deployed_at:
             print(f"  Last Deployed: {config.last_deployed_at}")
@@ -164,7 +164,7 @@ def show_config(db_path: Path, config_spec: str):
 
     print(f"\nStatus:")
     if config.pending_remote_update:
-        print(f"  ⚠️  PENDING REMOTE UPDATE")
+        print(f"  WARNING:  PENDING REMOTE UPDATE")
         print(f"  You rotated your local key. Update your public key at sponsor:")
         print(f"  New public key: {config.local_public_key}")
     else:
@@ -205,7 +205,7 @@ def import_config(
             sponsor_support_url=support_url
         )
 
-        print(f"\n✓ Successfully imported config")
+        print(f"\n✓ Imported config")
         print(f"  Config ID: {config_id}")
         print(f"  Sponsor: {sponsor} (ID: {sponsor_id})")
         print(f"  Local Peer: {peer} (ID: {peer_id})")

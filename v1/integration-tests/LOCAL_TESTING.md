@@ -25,11 +25,11 @@ These tests require Linux because:
 - Docker on Mac/Windows uses a Linux VM (tests will still work, but need extra setup)
 
 **Supported:**
-- Ubuntu 20.04+ ✅
-- Debian 11+ ✅
-- Fedora 33+ ✅
-- Arch Linux ✅
-- Any Linux with kernel 5.6+ ✅
+- Ubuntu 20.04+ ✓
+- Debian 11+ ✓
+- Fedora 33+ ✓
+- Arch Linux ✓
+- Any Linux with kernel 5.6+ ✓
 
 ### 2. Install Docker
 
@@ -165,7 +165,7 @@ Generated keypairs:
 
 ...
 
-✓ All public keys validated successfully
+✓ All public keys validated 
 ```
 
 This test doesn't need Docker - it just validates the key derivation logic.
@@ -182,12 +182,12 @@ Building subnet-router
 Building remote-1
 Building remote-2
 Building lan-device
-Successfully built...
+built...
 ```
 
 This takes ~2-5 minutes the first time (downloads Alpine Linux, installs WireGuard).
 
-### Step 5: Run Full Integration Test
+### Step 5: Run Complete Integration Test
 ```bash
 make test
 ```
@@ -246,7 +246,7 @@ All commands run from `v2/integration-tests/` directory:
 
 ```bash
 make help      # Show all available commands
-make test      # Run full integration test suite
+make test      # Run complete integration test suite
 make build     # Build Docker images (first time only)
 make up        # Start containers for manual testing
 make down      # Stop containers
@@ -505,7 +505,7 @@ WireGuard VPN (10.66.0.0/24)
 
 ---
 
-## Advanced: Running Without Docker
+## Additional: Running Without Docker
 
 If you can't use Docker, you can test with **Linux network namespaces**:
 

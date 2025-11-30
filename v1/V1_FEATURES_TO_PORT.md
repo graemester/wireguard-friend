@@ -2,34 +2,34 @@
 
 ## Executive Summary
 
-Comprehensive review of v1 codebase (3,598 lines) identified **12 major features** that should be ported to v2.
+Detailed review of v1 codebase (3,598 lines) identified **12 major features** that should be ported to v2.
 
 ---
 
-## ✅ Already Ported
+## ✓ Already Ported
 
 1. **Config Type Detection** (`ConfigDetector`)
    - 3+ peers → coordination_server
    - FORWARD/POSTROUTING detection
    - Endpoint presence checking
-   - **Status:** ✅ Ported to `v2/config_detector.py`
+   - **Status:** ✓ Ported to `v2/config_detector.py`
 
 2. **Entity Parsing** (`RawBlockParser`)
    - Bracket delimiter rule
    - Raw block extraction
-   - **Status:** ✅ v2 has `entity_parser.py`
+   - **Status:** ✓ v2 has `entity_parser.py`
 
 3. **Basic CRUD** (Create/Read/Update/Delete peers)
    - Add peer
    - Remove peer
    - Rotate keys
-   - **Status:** ✅ v2 has `peer_manager.py`
+   - **Status:** ✓ v2 has `peer_manager.py`
 
 ---
 
-## 🚧 Missing from v2 (High Priority)
+##  Missing from v2 (High Priority)
 
-### 1. **Live Peer Status Monitoring** ⭐⭐⭐
+### 1. **Live Peer Status Monitoring** 
 **File:** `v1/src/peer_manager.py` (701 lines)
 
 **What it does:**
@@ -59,7 +59,7 @@ def is_online(self) -> bool:
 
 ---
 
-### 2. **Preshared Key (PSK) Support** ⭐⭐⭐
+### 2. **Preshared Key (PSK) Support** 
 **File:** `v1/wg-friend-maintain.py:1348`
 
 **What it does:**
@@ -91,7 +91,7 @@ def _add_preshared_key(self, peer: Dict):
 
 ---
 
-### 3. **Port-Based Firewall Rules** ⭐⭐
+### 3. **Port-Based Firewall Rules** 
 **File:** `v1/wg-friend-maintain.py:103`
 
 **What it does:**
@@ -126,7 +126,7 @@ def _generate_port_firewall_rules(self, peer_ipv4: str, target_ip: str, allowed_
 
 ---
 
-### 4. **SSH Setup Wizard** ⭐⭐
+### 4. **SSH Setup Wizard** 
 **File:** `v1/wg-friend-maintain.py:353`
 
 **What it does:**
@@ -146,11 +146,11 @@ def _generate_port_firewall_rules(self, peer_ipv4: str, target_ip: str, allowed_
 
 ---
 
-### 5. **Remote Assist Instructions Generator** ⭐
+### 5. **Remote Assist Instructions Generator** 
 **File:** `v1/wg-friend-maintain.py:149`
 
 **What it does:**
-- Generates comprehensive setup guide for non-technical users
+- Generates detailed setup guide for non-technical users
 - Platform-specific instructions (Windows/macOS/Linux)
 - Step-by-step with screenshots descriptions
 - Troubleshooting section
@@ -165,7 +165,7 @@ def _generate_port_firewall_rules(self, peer_ipv4: str, target_ip: str, allowed_
 
 ---
 
-### 6. **Individual Config View/Export** ⭐
+### 6. **Individual Config View/Export** 
 **Files:** `v1/wg-friend-maintain.py:693, 702, 905, 924`
 
 **What it does:**
@@ -184,12 +184,12 @@ def _generate_port_firewall_rules(self, peer_ipv4: str, target_ip: str, allowed_
 
 ---
 
-### 7. **Per-Peer QR Code Generation** ⭐
+### 7. **Per-Peer QR Code Generation** 
 **File:** `v1/wg-friend-maintain.py:1244`
 
 **What it does:**
 - Generate QR code for specific peer on demand
-- Not just during full generation
+- Not just during complete generation
 - Useful for re-sending to user
 
 **Why important:**
@@ -200,7 +200,7 @@ def _generate_port_firewall_rules(self, peer_ipv4: str, target_ip: str, allowed_
 
 ---
 
-### 8. **Localhost Detection for Deployment** ⭐
+### 8. **Localhost Detection for Deployment** 
 **File:** `v1/wg-friend-maintain.py:32`
 
 **What it does:**
@@ -222,9 +222,9 @@ def is_local_host(host: str) -> bool:
 
 ---
 
-## 🔍 Medium Priority Features
+##  Medium Priority Features
 
-### 9. **Metadata Database** ⭐
+### 9. **Metadata Database** 
 **File:** `v1/src/metadata_db.py` (243 lines)
 
 **What it does:**
@@ -241,15 +241,15 @@ def is_local_host(host: str) -> bool:
 
 **Effort to port:** Medium (database schema extension)
 
-**Note:** v2 has `key_rotation_history` table but not full metadata tracking
+**Note:** v2 has `key_rotation_history` table but not complete metadata tracking
 
 ---
 
-### 10. **SSH Client Class** ⭐
+### 10. **SSH Client Class** 
 **File:** `v1/src/ssh_client.py` (227 lines)
 
 **What it does:**
-- Robust SSH connection handling
+- Reliable SSH connection handling
 - Context manager support
 - Command execution with timeout
 - File upload/download
@@ -259,7 +259,7 @@ def is_local_host(host: str) -> bool:
 **Current v2 status:** v2 uses subprocess.run(['ssh', ...])
 
 **Why important:**
-- More robust than subprocess
+- More reliable than subprocess
 - Better error messages
 - Connection reuse
 
@@ -300,7 +300,7 @@ def is_local_host(host: str) -> bool:
 **Current v2 status:** v2 generates directly
 
 **Why important:**
-- Proven templates from v1
+- Working templates from v1
 - Handles edge cases
 - Consistent output
 
@@ -308,30 +308,30 @@ def is_local_host(host: str) -> bool:
 
 ---
 
-## 📊 Feature Matrix
+##  Feature Matrix
 
 | Feature | v1 | v2 | Priority | Effort |
 |---------|----|----|----------|--------|
-| Config detection | ✅ | ✅ | - | - |
-| Basic CRUD | ✅ | ✅ | - | - |
-| Key rotation | ✅ | ✅ | - | - |
-| SSH deployment | ✅ | ✅ | - | - |
-| Live peer status | ✅ | ❌ | ⭐⭐⭐ | Medium |
-| Preshared keys | ✅ | ❌ | ⭐⭐⭐ | Low |
-| Port firewall rules | ✅ | ❌ | ⭐⭐ | Low |
-| SSH setup wizard | ✅ | ❌ | ⭐⭐ | Medium |
-| Remote assist guide | ✅ | ❌ | ⭐ | Low |
-| Individual view/export | ✅ | ❌ | ⭐ | Low |
-| Per-peer QR codes | ✅ | ❌ | ⭐ | Very Low |
-| Localhost detection | ✅ | ❌ | ⭐ | Low |
-| Metadata tracking | ✅ | Partial | ⭐ | Medium |
-| SSH client class | ✅ | Partial | ⭐ | Low |
-| Rich TUI | ✅ | ❌ | ⭐ | Low |
-| Template system | ✅ | ❌ | ⭐ | Low |
+| Config detection | ✓ | ✓ | - | - |
+| Basic CRUD | ✓ | ✓ | - | - |
+| Key rotation | ✓ | ✓ | - | - |
+| SSH deployment | ✓ | ✓ | - | - |
+| Live peer status | ✓ | ✗ |  | Medium |
+| Preshared keys | ✓ | ✗ |  | Low |
+| Port firewall rules | ✓ | ✗ |  | Low |
+| SSH setup wizard | ✓ | ✗ |  | Medium |
+| Remote assist guide | ✓ | ✗ |  | Low |
+| Individual view/export | ✓ | ✗ |  | Low |
+| Per-peer QR codes | ✓ | ✗ |  | Very Low |
+| Localhost detection | ✓ | ✗ |  | Low |
+| Metadata tracking | ✓ | Partial |  | Medium |
+| SSH client class | ✓ | Partial |  | Low |
+| Rich TUI | ✓ | ✗ |  | Low |
+| Template system | ✓ | ✗ |  | Low |
 
 ---
 
-## 🎯 Recommended Porting Priority
+##  Recommended Porting Priority
 
 ### Phase 1 (Before v1.0.0 Release)
 1. **Preshared key support** (Low effort, high value)
@@ -346,7 +346,7 @@ def is_local_host(host: str) -> bool:
 ### Phase 3 (v1.2.0)
 7. **Individual config view/export** (Low effort, convenience)
 8. **Remote assist guide generator** (Low effort, nice-to-have)
-9. **SSH client class** (Low effort, robustness)
+9. **SSH client class** (Low effort, reliableness)
 10. **Rich library TUI** (Low effort, polish)
 
 ### Future
@@ -355,7 +355,7 @@ def is_local_host(host: str) -> bool:
 
 ---
 
-## 💡 Questions for User
+##  Questions for User
 
 1. **Live peer status**: Do you want this for v1.0.0? It's a killer feature but requires SSH integration.
 
@@ -369,7 +369,7 @@ def is_local_host(host: str) -> bool:
 
 ---
 
-## 📝 Notes
+##  Notes
 
 - v1 had 3,598 lines of well-tested code
 - v2 currently has ~2,500 lines

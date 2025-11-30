@@ -172,7 +172,7 @@ AllowedIPs = 10.66.0.30/32
 
     # Validate structure
     valid, msg = parser.validate_structure(entities)
-    print(f"Structure validation: {'✓ VALID' if valid else '❌ INVALID'}")
+    print(f"Structure validation: {'✓ VALID' if valid else '✗ INVALID'}")
     print(f"  {msg}")
     print()
 

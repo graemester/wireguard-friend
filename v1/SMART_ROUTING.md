@@ -60,7 +60,7 @@ Import existing configs? [y/N]: _
 1. Creates `import/` directory
 2. Checks if configs already present
 3. If not, asks user to copy configs there and press Enter
-4. **Analyzes each config to detect type** (uses v1's proven detection logic)
+4. **Analyzes each config to detect type** (uses v1's working detection logic)
 5. Auto-detects coordination server config
 6. Shows classified configs and asks to proceed
 7. Imports coordination server
@@ -297,4 +297,4 @@ Instead of making users memorize commands, WireGuard Friend v2 tries to understa
 - Migrating from manual setup? → Import suggestion
 - Already set up? → Jump to management
 
-This is especially powerful for users who run `wg-friend` weeks or months after initial setup - it just works, no need to remember commands.
+This is especially useful for users who run `wg-friend` weeks or months after initial setup - it just works, no need to remember commands.

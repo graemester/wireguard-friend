@@ -410,7 +410,7 @@ def remove_peer(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
         print(f"  Permanent GUID: {permanent_guid[:30]}...")
         print(f"  Reason: {reason}")
         print()
-        print("⚠  This will DELETE the peer from the database.")
+        print("WARNING:  This will DELETE the peer from the database.")
         print()
 
         if not prompt_yes_no("Are you sure?", default=False):
@@ -606,7 +606,7 @@ def add_preshared_key(db: WireGuardDBv2, peer_type: str, peer_id: int) -> bool:
         print(f"\n{action} preshared key for: {hostname}")
 
         if current_psk:
-            print("  ⚠  This peer already has a preshared key.")
+            print("  WARNING:  This peer already has a preshared key.")
             print("  Continuing will replace it with a new one.")
 
         print()
@@ -641,7 +641,7 @@ def add_preshared_key(db: WireGuardDBv2, peer_type: str, peer_id: int) -> bool:
                 WHERE id = ?
             """, (preshared_key, peer_id))
 
-    print(f"✓ Preshared key {action.lower()}d successfully!")
+    print(f"✓ Preshared key {action.lower()}d")
     print()
     print("Next steps:")
     print("  1. Regenerate configs: wg-friend generate")

@@ -131,7 +131,7 @@ PersistentKeepalive = 25
         print(f"✓ Imported config (ID: {config_id})")
 
     except RuntimeError as e:
-        print(f"⚠ Import requires wg tools: {e}")
+        print(f"WARNING: Import requires wg tools: {e}")
         print("  Continuing with manual config creation...\n")
 
         # Create config manually
@@ -292,7 +292,7 @@ PersistentKeepalive = 25
 
     # ===== FINAL SUMMARY =====
     print("=" * 80)
-    print("✅ END-TO-END TEST COMPLETED SUCCESSFULLY")
+    print("✓ End-to-end test passed")
     print("=" * 80)
     print()
     print(f"Test database: {db_path}")
@@ -308,7 +308,7 @@ if __name__ == "__main__":
     try:
         sys.exit(test_end_to_end())
     except Exception as e:
-        print(f"\n❌ TEST FAILED: {e}")
+        print(f"\n✗ TEST FAILED: {e}")
         import traceback
         traceback.print_exc()
         sys.exit(1)

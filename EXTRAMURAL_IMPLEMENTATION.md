@@ -1,18 +1,18 @@
 # Extramural Configs Implementation Summary
 
 **Implementation Date:** 2025-11-30
-**Status:** ✅ Complete
+**Status:** ✓ Complete
 **Design Document:** [plans/extramural-configs-design.md](https://github.com/graemester/wireguard-friend/blob/main/plans/extramural-configs-design.md)
 
 ## Overview
 
-Successfully implemented the Extramural Configs feature for managing external WireGuard configurations (commercial VPNs, employer networks) completely independently from the mesh network infrastructure.
+implemented the Extramural Configs feature for managing external WireGuard configurations (commercial VPNs, employer networks) completely independently from the mesh network infrastructure.
 
 ## What Was Implemented
 
 ### 1. Database Schema (`v1/extramural_schema.py`)
 
-✅ **Complete database schema with 7 tables:**
+✓ **Complete database schema with 7 tables:**
 
 - `ssh_host` - Shared SSH connection details (reusable resource)
 - `sponsor` - External VPN providers/services
@@ -22,7 +22,7 @@ Successfully implemented the Extramural Configs feature for managing external Wi
 - `extramural_state_snapshot` - State tracking
 - `extramural_state_change` - Change history
 
-✅ **Database features:**
+✓ **Database features:**
 - Foreign key constraints with proper CASCADE/SET NULL behavior
 - Single active peer enforcement via trigger
 - Indexes for performance optimization
@@ -31,7 +31,7 @@ Successfully implemented the Extramural Configs feature for managing external Wi
 
 ### 2. Core Operations (`v1/extramural_ops.py`)
 
-✅ **Comprehensive CRUD operations for all entities:**
+✓ **Comprehensive CRUD operations for all entities:**
 
 **SSH Hosts:**
 - `add_ssh_host()` - Create new SSH host config
@@ -75,13 +75,13 @@ Successfully implemented the Extramural Configs feature for managing external Wi
 - `update_extramural_peer()` - Update fields
 - `delete_extramural_peer()` - Delete peer
 
-✅ **Utility functions:**
+✓ **Utility functions:**
 - `generate_wireguard_keypair()` - Generate WG keys using wg tools
 
 ### 3. Config Import (`v1/extramural_import.py`)
 
-✅ **WireGuard config parser:**
-- `ExtramuralConfigParser` - Full WireGuard .conf file parser
+✓ **WireGuard config parser:**
+- `ExtramuralConfigParser` - Complete WireGuard .conf file parser
 - Handles [Interface] and [Peer] sections
 - Parses all standard WireGuard fields
 - Supports multiple addresses (IPv4 and IPv6)
@@ -89,7 +89,7 @@ Successfully implemented the Extramural Configs feature for managing external Wi
 - Extracts PostUp/PostDown commands
 - Validates required fields
 
-✅ **Import functionality:**
+✓ **Import functionality:**
 - `import_extramural_config()` - Complete import workflow
 - Auto-creates missing sponsors and local peers
 - Derives public key from private key
@@ -99,7 +99,7 @@ Successfully implemented the Extramural Configs feature for managing external Wi
 
 ### 4. Config Generator (`v1/extramural_generator.py`)
 
-✅ **Config generation:**
+✓ **Config generation:**
 - `ExtramuralConfigGenerator` - Generate .conf files from database
 - `generate_config()` - Generate single config with active peer only
 - `generate_all_configs()` - Batch generate with filters
@@ -110,7 +110,7 @@ Successfully implemented the Extramural Configs feature for managing external Wi
 
 ### 5. CLI Commands (`v1/cli/extramural.py`)
 
-✅ **Complete command-line interface:**
+✓ **Complete command-line interface:**
 
 ```bash
 # Entity management
@@ -126,7 +126,7 @@ wg-friend extramural generate <peer/sponsor> [--output FILE]
 wg-friend extramural switch-peer <peer/sponsor> <peer_name>
 ```
 
-✅ **CLI features:**
+✓ **CLI features:**
 - Integrated into main `wg-friend` command
 - Proper argument parsing with argparse
 - Config spec parsing (peer/sponsor or config_id)
@@ -135,7 +135,7 @@ wg-friend extramural switch-peer <peer/sponsor> <peer_name>
 
 ### 6. Main CLI Integration (`v1/wg-friend`)
 
-✅ **Fully integrated extramural commands:**
+✓ **Fully integrated extramural commands:**
 - Added `extramural` subcommand with 8 sub-commands
 - Imported extramural CLI module
 - Added command routing in main handler
@@ -143,7 +143,7 @@ wg-friend extramural switch-peer <peer/sponsor> <peer_name>
 
 ### 7. Schema Integration (`v1/schema_semantic.py`)
 
-✅ **Unified database initialization:**
+✓ **Unified database initialization:**
 - Added `_init_extramural_schema()` method
 - Called during main schema initialization
 - Both mesh and extramural tables created together
@@ -151,7 +151,7 @@ wg-friend extramural switch-peer <peer/sponsor> <peer_name>
 
 ### 8. Testing & Documentation
 
-✅ **Comprehensive end-to-end test (`v1/test_extramural_e2e.py`):**
+✓ **Comprehensive end-to-end test (`v1/test_extramural_e2e.py`):**
 - Database initialization
 - Entity creation (SSH hosts, sponsors, local peers)
 - Config import from .conf file
@@ -160,9 +160,9 @@ wg-friend extramural switch-peer <peer/sponsor> <peer_name>
 - Config generation
 - Sponsor update simulation
 - Statistics gathering
-- **Status: ALL TESTS PASSING ✅**
+- **Status: ALL TESTS PASSING ✓**
 
-✅ **Complete documentation (`v1/docs/EXTRAMURAL_CONFIGS.md`):**
+✓ **Complete documentation (`v1/docs/EXTRAMURAL_CONFIGS.md`):**
 - Overview and key concepts
 - Quick start guide
 - Common workflows
@@ -190,24 +190,24 @@ wg-friend extramural switch-peer <peer/sponsor> <peer_name>
 
 ## Design Compliance
 
-✅ **All design requirements implemented:**
+✓ **All design requirements implemented:**
 
-- ✅ Complete separation from mesh infrastructure
-- ✅ SSH hosts as shared first-class resources
-- ✅ Local-only control model (user controls local endpoint, sponsor controls server)
-- ✅ Full entity hierarchy (Sponsor → Local Peer → Config → Peer)
-- ✅ Multiple peers per config with single active enforcement
-- ✅ Pending remote update flag for key rotation tracking
-- ✅ Config import from sponsor .conf files
-- ✅ Config generation to .conf files
-- ✅ Peer endpoint switching
-- ✅ Config updates from sponsor (primary use case)
-- ✅ State tracking infrastructure
-- ✅ CLI commands for all operations
+- ✓ Complete separation from mesh infrastructure
+- ✓ SSH hosts as shared first-class resources
+- ✓ Local-only control model (user controls local endpoint, sponsor controls server)
+- ✓ Complete entity hierarchy (Sponsor → Local Peer → Config → Peer)
+- ✓ Multiple peers per config with single active enforcement
+- ✓ Pending remote update flag for key rotation tracking
+- ✓ Config import from sponsor .conf files
+- ✓ Config generation to .conf files
+- ✓ Peer endpoint switching
+- ✓ Config updates from sponsor (primary use case)
+- ✓ State tracking infrastructure
+- ✓ CLI commands for all operations
 
 ## What Works
 
-✅ **Fully functional features:**
+✓ **Fully functional features:**
 
 1. **Import sponsor configs** - Parse and store .conf files from any VPN provider
 2. **Multiple sponsors** - Manage configs from Mullvad, ProtonVPN, employer VPNs, etc.
@@ -241,19 +241,19 @@ These are clearly defined in the design and database schema, making future imple
 EXTRAMURAL CONFIGS - END-TO-END TEST
 ================================================================================
 
-STEP 1: Initialize Database ✅
-STEP 2: Add Entities (SSH hosts, sponsors, local peers) ✅
-STEP 3: Import Sponsor Config File ✅
-STEP 4: Add Multiple Server Endpoints ✅
-STEP 5: List All Peers for Config ✅
-STEP 6: Switch Active Peer ✅
-STEP 7: Generate WireGuard Config ✅
-STEP 8: Config Summary ✅
-STEP 9: Update Config from Sponsor ✅
-STEP 10: Statistics ✅
+STEP 1: Initialize Database ✓
+STEP 2: Add Entities (SSH hosts, sponsors, local peers) ✓
+STEP 3: Import Sponsor Config File ✓
+STEP 4: Add Multiple Server Endpoints ✓
+STEP 5: List All Peers for Config ✓
+STEP 6: Switch Active Peer ✓
+STEP 7: Generate WireGuard Config ✓
+STEP 8: Config Summary ✓
+STEP 9: Update Config from Sponsor ✓
+STEP 10: Statistics ✓
 
 ================================================================================
-✅ END-TO-END TEST COMPLETED SUCCESSFULLY
+✓ END-TO-END TEST COMPLETED SUCCESSFULLY
 ================================================================================
 
 All extramural features working correctly!
@@ -321,23 +321,23 @@ ssh_host (shared resource)
 
 | Requirement | Status | Notes |
 |------------|---------|-------|
-| Complete separation from mesh | ✅ | Separate tables, no mesh dependencies |
-| SSH hosts as shared resources | ✅ | Reusable by both systems |
-| Local-only control model | ✅ | You control local endpoint only |
-| Entity hierarchy | ✅ | Sponsor → Peer → Config → Endpoint |
-| Import existing configs | ✅ | Full .conf parser |
-| Create new configs | ✅ | Manual keypair generation |
-| Rotate local key | ✅ | Sets pending_remote_update |
+| Complete separation from mesh | ✓ | Separate tables, no mesh dependencies |
+| SSH hosts as shared resources | ✓ | Reusable by both systems |
+| Local-only control model | ✓ | You control local endpoint only |
+| Entity hierarchy | ✓ | Sponsor → Peer → Config → Endpoint |
+| Import existing configs | ✓ | Complete .conf parser |
+| Create new configs | ✓ | Manual keypair generation |
+| Rotate local key | ✓ | Sets pending_remote_update |
 | Deploy config | ⏳ | Infrastructure ready |
-| Switch active peer | ✅ | Trigger enforces single active |
-| Update peer details | ✅ | update_config_from_sponsor() |
-| CLI commands | ✅ | All specified commands |
+| Switch active peer | ✓ | Trigger enforces single active |
+| Update peer details | ✓ | update_config_from_sponsor() |
+| CLI commands | ✓ | All specified commands |
 | TUI integration | ⏳ | Future |
-| State tracking | ✅ | Schema ready, operations pending |
+| State tracking | ✓ | Schema ready, operations pending |
 
 ## Conclusion
 
-The Extramural Configs feature is **fully functional** with all core operations working correctly. Users can now manage external VPN configurations alongside their mesh network infrastructure using a clean, intuitive CLI interface.
+The Extramural Configs feature is **functional** with all core operations working correctly. Users can now manage external VPN configurations alongside their mesh network infrastructure using a clean, intuitive CLI interface.
 
 The implementation stays true to the design document's principles while providing a solid foundation for future enhancements like SSH deployment and TUI integration.
 

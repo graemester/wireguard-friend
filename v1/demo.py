@@ -231,7 +231,7 @@ def demonstrate_v2_system():
 
         print()
         print("=" * 70)
-        print("DEMONSTRATION COMPLETE")
+        print("Demonstration done")
         print("=" * 70)
 
     finally:

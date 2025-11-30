@@ -284,7 +284,7 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
             if endpoint and endpoint != 'UNKNOWN':
                 deployments.append(('Coordination Server', hostname, config_file, endpoint))
             else:
-                print(f"\n⚠  Skipping {hostname}: No endpoint configured")
+                print(f"\nWARNING:  Skipping {hostname}: No endpoint configured")
 
         # Subnet Routers
         cursor.execute("""
@@ -309,7 +309,7 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
             deployments.append(('Remote', hostname, config_file, endpoint))
 
     if not deployments:
-        print("\n⚠  No deployable hosts found (endpoints not configured)")
+        print("\nWARNING:  No deployable hosts found (endpoints not configured)")
         return 0
 
     # Summary

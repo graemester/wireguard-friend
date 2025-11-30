@@ -4,17 +4,17 @@ End-to-end tests that verify WireGuard configurations actually work with real ne
 
 ---
 
-📖 **[→ LOCAL_TESTING.md - Complete guide for running tests on your own machine](LOCAL_TESTING.md)**
+ **[→ LOCAL_TESTING.md - Complete guide for running tests on your own machine](LOCAL_TESTING.md)**
 
 ---
 
 ## What This Tests
 
-✅ **Config Generation**: WireGuard-friend generates valid configs
-✅ **WireGuard Startup**: Configs can actually start WireGuard
-✅ **Basic Connectivity**: Peers can ping each other through VPN
-✅ **Routing**: Traffic routes correctly through subnet router
-✅ **LAN Access**: Remote clients can reach devices behind subnet router
+✓ **Config Generation**: WireGuard-friend generates valid configs
+✓ **WireGuard Startup**: Configs can actually start WireGuard
+✓ **Basic Connectivity**: Peers can ping each other through VPN
+✓ **Routing**: Traffic routes correctly through subnet router
+✓ **LAN Access**: Remote clients can reach devices behind subnet router
 
 ## Architecture
 

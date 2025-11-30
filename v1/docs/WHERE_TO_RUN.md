@@ -7,9 +7,9 @@
 ### Quick Answer
 
 ```
-Coordination Server:  ⚠️  Possible, but not recommended
-Subnet Router:        ✅  YES - Best choice for most setups
-Client (Laptop):      ✅  YES - Great for power users
+Coordination Server:  WARNING:  Possible, but not recommended
+Subnet Router:        ✓  YES - Best choice for most setups
+Client (Laptop):      ✓  YES - Great for power users
 ```
 
 **Recommended: Pick ONE location and stick with it.** SSH into that machine when you need to manage your network.
@@ -35,7 +35,7 @@ WireGuard Friend is a **management tool**, not a runtime service. It:
 
 **Ideal workflow:** Pick one machine, install it there, SSH to that machine when you need to make changes. Don't move the database around unless you have a good reason.
 
-## Option 1: Subnet Router (Recommended ⭐)
+## Option 1: Subnet Router (Recommended )
 
 **Why this works well:**
 ```
@@ -64,17 +64,17 @@ Your Network:
 ```
 
 **Advantages:**
-- ✅ Already managing WireGuard configs locally
-- ✅ On your LAN - easy to access
-- ✅ Has network access to coordination server
-- ✅ Single point of management
-- ✅ Can manage both its own config and CS config
-- ✅ Database stays on local network (safer)
-- ✅ Don't need to expose management tools to internet
+- ✓ Already managing WireGuard configs locally
+- ✓ On your LAN - easy to access
+- ✓ Has network access to coordination server
+- ✓ Single point of management
+- ✓ Can manage both its own config and CS config
+- ✓ Database stays on local network (safer)
+- ✓ Don't need to expose management tools to internet
 
 **Disadvantages:**
-- ⚠️ Adds Python dependencies to router
-- ⚠️ If router goes down, can't manage network (but can use backup)
+- WARNING: Adds Python dependencies to router
+- WARNING: If router goes down, can't manage network (but can use backup)
 
 **Perfect for:**
 - Home networks
@@ -111,17 +111,17 @@ Your Network:
 ```
 
 **Advantages:**
-- ✅ Don't clutter servers with management tools
-- ✅ Work offline (except deployments)
-- ✅ Use your familiar development environment
-- ✅ Easy to backup database with other files
-- ✅ Keep WireGuard servers minimal/clean
-- ✅ Multiple admins can each have their own copy
+- ✓ Don't clutter servers with management tools
+- ✓ Work offline (except deployments)
+- ✓ Use your familiar development environment
+- ✓ Easy to backup database with other files
+- ✓ Keep WireGuard servers minimal/clean
+- ✓ Multiple admins can each have their own copy
 
 **Disadvantages:**
-- ⚠️ Need network access when deploying
-- ⚠️ Database moves if you switch machines (but it's portable!)
-- ⚠️ Need to set up SSH keys from your workstation
+- WARNING: Need network access when deploying
+- WARNING: Database moves if you switch machines (but it's portable!)
+- WARNING: Need to set up SSH keys from your workstation
 
 **Perfect for:**
 - Developers/power users
@@ -143,16 +143,16 @@ Your Network:
 ```
 
 **Advantages:**
-- ✅ Direct access to CS config files
-- ✅ Central location for management
-- ✅ No SSH needed for CS deployments (local copy)
-- ✅ Always accessible (if server is up)
+- ✓ Direct access to CS config files
+- ✓ Central location for management
+- ✓ No SSH needed for CS deployments (local copy)
+- ✓ Always accessible (if server is up)
 
 **Disadvantages:**
-- ⚠️ Adds dependencies to production server
-- ⚠️ Database contains private keys (security consideration)
-- ⚠️ Need to SSH into server to manage
-- ⚠️ Mixing management and runtime concerns
+- WARNING: Adds dependencies to production server
+- WARNING: Database contains private keys (security consideration)
+- WARNING: Need to SSH into server to manage
+- WARNING: Mixing management and runtime concerns
 
 **Perfect for:**
 - Small setups with only CS (no subnet routers)
@@ -182,15 +182,15 @@ Your Network:
 ```
 
 **Advantages:**
-- ✅ Clean separation of concerns
-- ✅ Always available on your network
-- ✅ Can run automated tasks (backups, monitoring)
-- ✅ Multiple admins can SSH to same box
-- ✅ Database in one central location
+- ✓ Clean separation of concerns
+- ✓ Always available on your network
+- ✓ Can run automated tasks (backups, monitoring)
+- ✓ Multiple admins can SSH to same box
+- ✓ Database in one central location
 
 **Disadvantages:**
-- ⚠️ Need to maintain another device
-- ⚠️ Overkill for simple setups
+- WARNING: Need to maintain another device
+- WARNING: Overkill for simple setups
 
 **Perfect for:**
 - Larger networks with multiple sites
@@ -244,22 +244,22 @@ $ python3 wg-friend-maintain.py --db wg-friend-test.db
 Wherever you run wireguard-friend, you need:
 
 **Required:**
-- ✅ Python 3.8+ installed
-- ✅ Dependencies: `pip install -r requirements.txt`
-- ✅ Network access to WireGuard hosts (for deployments)
-- ✅ SSH keys set up for password-less access (for deployments)
+- ✓ Python 3.8+ installed
+- ✓ Dependencies: `pip install -r requirements.txt`
+- ✓ Network access to WireGuard hosts (for deployments)
+- ✓ SSH keys set up for password-less access (for deployments)
 
 **Optional but useful:**
-- 🔄 Git (for version controlling the database)
-- 🔄 Backup solution (NAS, cloud storage, etc.)
-- 🔄 Text editor for manual config tweaks
+-  Git (for version controlling the database)
+-  Backup solution (NAS, cloud storage, etc.)
+-  Text editor for manual config tweaks
 
 **NOT required:**
-- ❌ Static IP address
-- ❌ Domain name
-- ❌ Always-on server
-- ❌ Root access on WireGuard hosts (regular user with sudo for wg commands)
-- ❌ Database on network storage (local is better)
+- ✗ Static IP address
+- ✗ Domain name
+- ✗ Always-on server
+- ✗ Root access on WireGuard hosts (regular user with sudo for wg commands)
+- ✗ Database on network storage (local is better)
 
 ## Deployment Model
 
@@ -441,11 +441,11 @@ A: Run on your workstation or a dedicated admin machine.
 
 | Location | Complexity | Security | Flexibility | Best For |
 |----------|------------|----------|-------------|----------|
-| Subnet Router | ⭐⭐ | ⭐⭐⭐ | ⭐⭐ | Home networks, pragmatic choice |
-| Workstation | ⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ | Developers, clean servers |
-| Coordination Server | ⭐⭐ | ⭐⭐ | ⭐⭐⭐ | Small setups, CS-only |
-| Dedicated Admin | ⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | Teams, larger networks |
-| Anywhere | ⭐⭐⭐⭐ | Varies | ⭐⭐⭐⭐⭐ | Maximum flexibility |
+| Subnet Router |  |  |  | Home networks, pragmatic choice |
+| Workstation |  |  |  | Developers, clean servers |
+| Coordination Server |  |  |  | Small setups, CS-only |
+| Dedicated Admin |  |  |  | Teams, larger networks |
+| Anywhere |  | Varies |  | Maximum flexibility |
 
 ## The Real Answer
 
@@ -475,10 +475,10 @@ The database is portable and you *can* move it around, but the ideal workflow is
 | CS-only network | Your workstation | Direct |
 
 **The keys:**
-- ✅ Pick one "home" for the database
-- ✅ Back it up regularly to NAS/cloud
-- ✅ SSH to the admin machine when needed
-- ❌ Don't move database around for daily use
+- ✓ Pick one "home" for the database
+- ✓ Back it up regularly to NAS/cloud
+- ✓ SSH to the admin machine when needed
+- ✗ Don't move database around for daily use
 
 ```bash
 ./backup-database.sh /mnt/nas/backups

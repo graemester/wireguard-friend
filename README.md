@@ -50,7 +50,7 @@ WireGuard Friend manages WireGuard configurations for networks using a coordinat
 - Live peer status monitoring via wg show
 - Preshared key support for post-quantum resistance
 
-### Extramural Configs (NEW in v1.0.1) 🎉
+### Extramural Configs (NEW in v1.0.1) 
 - **Manage external VPN configs** from commercial providers (Mullvad, ProtonVPN, etc.)
 - **Import sponsor-provided configs** with automatic parsing
 - **Switch between server endpoints** easily
@@ -171,7 +171,7 @@ wg-friend extramural switch-peer my-laptop/Mullvad-VPN eu-central-1
 # Generate .conf file
 wg-friend extramural generate my-laptop/Mullvad-VPN --output /etc/wireguard/wg-mullvad.conf
 
-# See full guide
+# See complete guide
 # v1/docs/EXTRAMURAL_CONFIGS.md
 ```
 

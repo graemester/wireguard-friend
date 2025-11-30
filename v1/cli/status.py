@@ -318,7 +318,7 @@ def show_live_peer_status(db: WireGuardDBv2, interface: str = 'wg0', user: str =
         cs_endpoint, cs_hostname = row
 
     if not cs_endpoint or cs_endpoint == 'UNKNOWN':
-        print(f"\n⚠  Coordination server '{cs_hostname}' has no endpoint configured")
+        print(f"\nWARNING:  Coordination server '{cs_hostname}' has no endpoint configured")
         print("Cannot retrieve live status without endpoint")
         return
 

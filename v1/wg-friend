@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-WireGuard Friend v2 - Main CLI Entry Point
+WireGuard Friend - Main CLI Entry Point
 
 Usage:
   wg-friend init              # First-run wizard
@@ -40,7 +40,7 @@ from v1.config_detector import ConfigDetector
 def main():
     """Main CLI entry point"""
     parser = argparse.ArgumentParser(
-        description='WireGuard Friend v2 - VPN Configuration Manager',
+        description='WireGuard Friend - VPN Configuration Manager',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -207,7 +207,7 @@ Examples:
 
         # No database → First-run experience
         print("=" * 70)
-        print("  WireGuard Friend v2")
+        print("  WireGuard Friend")
         print("=" * 70)
         print()
         print("Welcome! This tool helps you manage WireGuard VPN networks.")

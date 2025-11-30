@@ -1,7 +1,7 @@
 # Extramural Configs - External VPN Management
 
 **Version:** 1.0.0
-**Status:** ✅ Fully Implemented
+**Status:** ✓ Fully Implemented
 
 ## Overview
 
@@ -113,7 +113,7 @@ wg-friend extramural import new-mullvad.conf \
 # The pending_remote_update flag is automatically cleared
 ```
 
-### SSH Deployment (Advanced)
+### SSH Deployment (Additional)
 
 If you want to deploy configs to remote devices via SSH:
 
@@ -266,7 +266,7 @@ peers = ops.list_extramural_peers(config_id)
 ops.set_active_peer(peers[1].id)  # Switch to second peer
 ```
 
-### Advanced: Config Updates
+### Additional: Config Updates
 
 ```python
 # Scenario 1: Sponsor sends updated config
