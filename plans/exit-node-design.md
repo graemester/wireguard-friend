@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document describes a proposed extension to WireGuard Friend that allows remotes to optionally route their internet traffic through a dedicated exit node. This is distinct from the coordination server and enables use cases like:
+This document describes a proposed extension to WireGuard Friend that allows remotes (or a new entity type, an on-LAN "exit only" client) to optionally route their internet traffic through a dedicated exit node. This is distinct from the coordination server and enables use cases like:
 
 - Exiting internet traffic in a specific geography
 - Offloading data ingress/egress from the coordination server
