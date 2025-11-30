@@ -83,12 +83,12 @@ def capture_current_topology(db: WireGuardDBv2) -> tuple:
 
         # Capture remotes
         cursor.execute("""
-            SELECT current_public_key, hostname, ipv4_address, ipv6_address, endpoint, access_level
+            SELECT current_public_key, hostname, ipv4_address, ipv6_address, access_level
             FROM remote
             ORDER BY hostname
         """)
         for row in cursor.fetchall():
-            pubkey, hostname, ipv4, ipv6, endpoint, access_level = row
+            pubkey, hostname, ipv4, ipv6, access_level = row
 
             remote_snapshots.append(EntitySnapshot(
                 entity_type='remote',
@@ -98,7 +98,7 @@ def capture_current_topology(db: WireGuardDBv2) -> tuple:
                 ipv4_address=ipv4,
                 ipv6_address=ipv6,
                 allowed_ips=[ipv4] if ipv4 else [],
-                endpoint=endpoint
+                endpoint=None  # Remotes don't have endpoints (they're clients)
             ))
 
     return cs_snapshot, router_snapshots, remote_snapshots

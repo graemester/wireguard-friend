@@ -46,6 +46,8 @@ a = Analysis(
         'nacl.bindings',
         'nacl.public',
         'nacl.utils',
+        '_cffi_backend',
+        'cffi',
     ],
     hookspath=[],
     hooksconfig={},

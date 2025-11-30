@@ -66,7 +66,7 @@ Examples:
 
     parser.add_argument('--db', default='wireguard.db',
                        help='Database file (default: wireguard.db)')
-    parser.add_argument('--version', action='version', version='wg-friend v1.0.1')
+    parser.add_argument('--version', action='version', version='wg-friend v1.0.2')
 
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 
