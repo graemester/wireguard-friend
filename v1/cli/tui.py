@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from v1.schema_semantic import WireGuardDBv2
 from v1.cli.peer_manager import add_remote, add_router, list_peers, rotate_keys, remove_peer
-from v1.cli.status import show_network_overview, show_recent_rotations
+from v1.cli.status import show_network_overview, show_recent_rotations, show_state_history, show_entity_history
 
 
 def print_menu(title: str, options: List[str], include_quit: bool = True):
@@ -44,7 +44,7 @@ def get_menu_choice(max_choice: int, allow_quit: bool = True) -> Optional[int]:
             print(f"  Invalid choice. Enter 1-{max_choice} or 'q' to quit.")
 
 
-def main_menu(db: WireGuardDBv2) -> bool:
+def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
     """
     Display main menu and handle user choice.
 
@@ -60,12 +60,14 @@ def main_menu(db: WireGuardDBv2) -> bool:
             "Remove Peer",
             "Rotate Keys",
             "Recent Key Rotations",
+            "State History Timeline",
+            "Peer History",
             "Generate Configs (requires running separate command)",
             "Deploy Configs (requires running separate command)",
         ]
     )
 
-    choice = get_menu_choice(8)
+    choice = get_menu_choice(10)
     if choice is None:
         return False
 
@@ -97,12 +99,20 @@ def main_menu(db: WireGuardDBv2) -> bool:
         input("\nPress Enter to continue...")
 
     elif choice == 7:
+        # State History Timeline
+        state_history_menu(db, db_path)
+
+    elif choice == 8:
+        # Peer History
+        peer_history_menu(db, db_path)
+
+    elif choice == 9:
         # Generate Configs
         print("\nTo generate configs, run:")
         print("  wg-friend generate --qr")
         input("\nPress Enter to continue...")
 
-    elif choice == 8:
+    elif choice == 10:
         # Deploy Configs
         print("\nTo deploy configs, run:")
         print("  wg-friend deploy --restart")
@@ -233,6 +243,43 @@ def rotate_keys_menu(db: WireGuardDBv2):
         input("\nPress Enter to continue...")
 
 
+def state_history_menu(db: WireGuardDBv2, db_path: str):
+    """Menu for viewing state history timeline"""
+    # Show timeline first
+    show_state_history(db_path, limit=20)
+
+    # Offer to view specific state details
+    print("─" * 70)
+    state_id_input = input("Enter state ID for details (or Enter to go back): ").strip()
+
+    if state_id_input:
+        try:
+            state_id = int(state_id_input)
+            show_state_history(db_path, state_id=state_id)
+            input("\nPress Enter to continue...")
+        except ValueError:
+            print("Invalid state ID.")
+            input("\nPress Enter to continue...")
+
+
+def peer_history_menu(db: WireGuardDBv2, db_path: str):
+    """Menu for viewing individual peer history"""
+    # List peers first
+    list_peers(db)
+
+    print("\n" + "─" * 70)
+    print("PEER HISTORY")
+    print("─" * 70)
+
+    peer_name = input("Enter peer hostname or ID (or 'q' to cancel): ").strip()
+
+    if peer_name in ('q', 'quit', 'cancel', ''):
+        return
+
+    show_entity_history(db, db_path, peer_name)
+    input("\nPress Enter to continue...")
+
+
 def run_tui(db_path: str) -> int:
     """Run the interactive TUI"""
     db = WireGuardDBv2(db_path)
@@ -248,7 +295,7 @@ def run_tui(db_path: str) -> int:
     # Main loop
     while True:
         try:
-            continue_running = main_menu(db)
+            continue_running = main_menu(db, db_path)
             if not continue_running:
                 print("\nGoodbye!")
                 return 0

@@ -13,6 +13,7 @@ Usage:
   wg-friend deploy            # Deploy configs via SSH
   wg-friend status            # View peer status
   wg-friend status --live     # View live peer connections (wg show)
+  wg-friend status --history  # View state history timeline
   wg-friend ssh-setup         # SSH key setup wizard
   wg-friend maintain          # Interactive TUI mode
 """
@@ -117,6 +118,9 @@ Examples:
     status_parser.add_argument('--interface', default='wg0', help='WireGuard interface name (default: wg0)')
     status_parser.add_argument('--user', default='root', help='SSH user for coordination server (default: root)')
     status_parser.add_argument('--full', action='store_true', help='Show full details')
+    status_parser.add_argument('--history', action='store_true', help='Show state history timeline')
+    status_parser.add_argument('--state', type=int, help='Show details for specific state ID (use with --history)')
+    status_parser.add_argument('--entity', help='Show history for specific peer (hostname or ID)')
 
     # maintain - Interactive TUI
     maintain_parser = subparsers.add_parser('maintain', help='Interactive maintenance mode')
