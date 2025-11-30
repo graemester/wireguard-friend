@@ -33,6 +33,7 @@ from v1.cli.deploy import deploy_configs
 from v1.cli.status import show_status
 from v1.cli.tui import run_tui
 from v1.cli.ssh_setup import ssh_setup
+from v1.cli import extramural
 from v1.config_detector import ConfigDetector
 
 
@@ -65,7 +66,7 @@ Examples:
 
     parser.add_argument('--db', default='wireguard.db',
                        help='Database file (default: wireguard.db)')
-    parser.add_argument('--version', action='version', version='wg-friend v1.0.0')
+    parser.add_argument('--version', action='version', version='wg-friend v1.0.1')
 
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 
@@ -135,6 +136,61 @@ Examples:
     # ssh-setup - SSH setup wizard
     ssh_setup_parser = subparsers.add_parser('ssh-setup', help='SSH key setup wizard')
     ssh_setup_parser.add_argument('--user', default='root', help='SSH user for servers (default: root)')
+
+    # extramural - External VPN config management
+    extramural_parser = subparsers.add_parser('extramural', help='Manage external VPN configs (Mullvad, employer VPNs, etc.)')
+    extramural_sub = extramural_parser.add_subparsers(dest='extramural_command')
+
+    # extramural list
+    em_list = extramural_sub.add_parser('list', help='List extramural configs')
+    em_list.add_argument('--sponsor', help='Filter by sponsor name')
+    em_list.add_argument('--peer', help='Filter by local peer name')
+
+    # extramural show
+    em_show = extramural_sub.add_parser('show', help='Show detailed config info')
+    em_show.add_argument('config', help='Config spec (peer/sponsor or config_id)')
+
+    # extramural import
+    em_import = extramural_sub.add_parser('import', help='Import config from sponsor .conf file')
+    em_import.add_argument('config_file', type=Path, help='Path to sponsor .conf file')
+    em_import.add_argument('--sponsor', required=True, help='Sponsor name (e.g., "Mullvad VPN")')
+    em_import.add_argument('--peer', required=True, help='Local peer name (e.g., "my-laptop")')
+    em_import.add_argument('--interface', help='Interface name (default: filename)')
+    em_import.add_argument('--website', help='Sponsor website URL')
+    em_import.add_argument('--support', help='Sponsor support URL')
+
+    # extramural generate
+    em_gen = extramural_sub.add_parser('generate', help='Generate .conf file from database')
+    em_gen.add_argument('config', help='Config spec (peer/sponsor or config_id)')
+    em_gen.add_argument('--output', type=Path, help='Output file path')
+
+    # extramural add-sponsor
+    em_sponsor = extramural_sub.add_parser('add-sponsor', help='Add a new sponsor')
+    em_sponsor.add_argument('name', help='Sponsor name')
+    em_sponsor.add_argument('--website', help='Website URL')
+    em_sponsor.add_argument('--support', help='Support URL')
+    em_sponsor.add_argument('--notes', help='Notes')
+
+    # extramural add-peer
+    em_peer = extramural_sub.add_parser('add-peer', help='Add a new local peer')
+    em_peer.add_argument('name', help='Peer name')
+    em_peer.add_argument('--ssh-host', help='SSH host name')
+    em_peer.add_argument('--notes', help='Notes')
+
+    # extramural add-ssh-host
+    em_ssh = extramural_sub.add_parser('add-ssh-host', help='Add a new SSH host')
+    em_ssh.add_argument('name', help='SSH host name')
+    em_ssh.add_argument('--host', required=True, help='Hostname or IP')
+    em_ssh.add_argument('--port', type=int, default=22, help='SSH port (default: 22)')
+    em_ssh.add_argument('--user', help='SSH user')
+    em_ssh.add_argument('--key-path', help='SSH key path')
+    em_ssh.add_argument('--config-dir', default='/etc/wireguard', help='WireGuard config directory')
+    em_ssh.add_argument('--notes', help='Notes')
+
+    # extramural switch-peer
+    em_switch = extramural_sub.add_parser('switch-peer', help='Switch active server endpoint')
+    em_switch.add_argument('config', help='Config spec (peer/sponsor or config_id)')
+    em_switch.add_argument('peer_name', help='Name of peer to make active')
 
     # Parse args
     args = parser.parse_args()
@@ -309,6 +365,39 @@ Examples:
             return run_generate_qr(args)
         elif args.command == 'ssh-setup':
             return ssh_setup(args)
+        elif args.command == 'extramural':
+            db_path = Path(args.db)
+            if args.extramural_command == 'list':
+                return extramural.list_configs(db_path, sponsor=args.sponsor, peer=args.peer)
+            elif args.extramural_command == 'show':
+                return extramural.show_config(db_path, args.config)
+            elif args.extramural_command == 'import':
+                return extramural.import_config(
+                    db_path, args.config_file, args.sponsor, args.peer,
+                    interface=args.interface, website=args.website, support_url=args.support
+                )
+            elif args.extramural_command == 'generate':
+                return extramural.generate_config(db_path, args.config, output=args.output)
+            elif args.extramural_command == 'add-sponsor':
+                return extramural.add_sponsor(
+                    db_path, args.name, website=args.website,
+                    support_url=args.support, notes=args.notes
+                )
+            elif args.extramural_command == 'add-peer':
+                return extramural.add_local_peer(
+                    db_path, args.name, ssh_host=args.ssh_host, notes=args.notes
+                )
+            elif args.extramural_command == 'add-ssh-host':
+                return extramural.add_ssh_host(
+                    db_path, args.name, host=args.host, port=args.port,
+                    user=args.user, key_path=args.key_path,
+                    config_dir=args.config_dir, notes=args.notes
+                )
+            elif args.extramural_command == 'switch-peer':
+                return extramural.switch_active_peer(db_path, args.config, args.peer_name)
+            else:
+                extramural_parser.print_help()
+                return 1
         else:
             parser.print_help()
             return 1

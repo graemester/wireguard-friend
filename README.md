@@ -3,7 +3,7 @@
 Command-line tool for managing WireGuard VPN networks with hub-and-spoke topology.
 
 > **Repository Structure:**
-> **v1/** - Current stable release (v1.0.0)
+> **v1/** - Current stable release (v1.0.1)
 > **v-alpha/** - Archived original version
 
 ---
@@ -39,6 +39,7 @@ WireGuard Friend manages WireGuard configurations for networks using a coordinat
 
 ## Features
 
+### Mesh Network Management
 - Import existing WireGuard configurations into SQLite database
 - Generate new configurations from scratch via interactive wizard
 - Automated IP allocation for new peers
@@ -48,6 +49,14 @@ WireGuard Friend manages WireGuard configurations for networks using a coordinat
 - SSH deployment with automatic backups
 - Live peer status monitoring via wg show
 - Preshared key support for post-quantum resistance
+
+### Extramural Configs (NEW in v1.0.1) 🎉
+- **Manage external VPN configs** from commercial providers (Mullvad, ProtonVPN, etc.)
+- **Import sponsor-provided configs** with automatic parsing
+- **Switch between server endpoints** easily
+- **Update configs** when providers send changes
+- **Complete separation** from mesh infrastructure
+- See [Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md) for details
 
 ## Installation
 
@@ -147,6 +156,25 @@ wg-friend qr
 # For scanning with WireGuard mobile app
 ```
 
+### Manage External VPN Configs (Extramural)
+
+```bash
+# Import config from Mullvad, ProtonVPN, etc.
+wg-friend extramural import mullvad.conf --sponsor "Mullvad VPN" --peer "my-laptop"
+
+# List all external configs
+wg-friend extramural list
+
+# Switch between VPN server locations
+wg-friend extramural switch-peer my-laptop/Mullvad-VPN eu-central-1
+
+# Generate .conf file
+wg-friend extramural generate my-laptop/Mullvad-VPN --output /etc/wireguard/wg-mullvad.conf
+
+# See full guide
+# v1/docs/EXTRAMURAL_CONFIGS.md
+```
+
 ### SSH Setup
 
 ```bash
@@ -239,8 +267,10 @@ wg-friend maintain           # Interactive TUI
 
 ## Documentation
 
-- v1/quick-start.md - Detailed walkthrough
-- v1/COMMAND_REFERENCE.md - Command reference
+- **[Quick Start](v1/quick-start.md)** - Detailed walkthrough for mesh networks
+- **[Command Reference](v1/COMMAND_REFERENCE.md)** - All commands
+- **[Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md)** - NEW: External VPN management
+- **[Release Notes](RELEASE_NOTES_v1.0.1.md)** - What's new in v1.0.1
 
 ## Project Structure
 

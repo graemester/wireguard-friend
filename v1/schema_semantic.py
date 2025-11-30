@@ -315,6 +315,179 @@ class WireGuardDBv2:
 
             logger.info(f"V2 semantic schema initialized at {self.db_path}")
 
+            # ===== EXTRAMURAL CONFIGS (External VPN Management) =====
+            # Initialize extramural schema in the same database
+            self._init_extramural_schema(cursor)
+
+    def _init_extramural_schema(self, cursor):
+        """Initialize extramural config schema tables"""
+        # SSH HOST (Shared Resource)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ssh_host (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                ssh_host TEXT NOT NULL,
+                ssh_port INTEGER DEFAULT 22,
+                ssh_user TEXT,
+                ssh_key_path TEXT,
+                config_directory TEXT DEFAULT '/etc/wireguard',
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # SPONSOR (External VPN Provider)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS sponsor (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                website TEXT,
+                support_url TEXT,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # LOCAL PEER (Your Devices)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS local_peer (
+                id INTEGER PRIMARY KEY,
+                permanent_guid TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL UNIQUE,
+                ssh_host_id INTEGER REFERENCES ssh_host(id) ON DELETE SET NULL,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # EXTRAMURAL CONFIG
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extramural_config (
+                id INTEGER PRIMARY KEY,
+                local_peer_id INTEGER NOT NULL REFERENCES local_peer(id) ON DELETE CASCADE,
+                sponsor_id INTEGER NOT NULL REFERENCES sponsor(id) ON DELETE CASCADE,
+                permanent_guid TEXT NOT NULL UNIQUE,
+                interface_name TEXT,
+                local_private_key TEXT NOT NULL,
+                local_public_key TEXT NOT NULL,
+                assigned_ipv4 TEXT,
+                assigned_ipv6 TEXT,
+                dns_servers TEXT,
+                listen_port INTEGER,
+                mtu INTEGER,
+                table_setting TEXT,
+                config_path TEXT,
+                last_deployed_at TIMESTAMP,
+                pending_remote_update BOOLEAN DEFAULT 0,
+                last_key_rotation_at TIMESTAMP,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(local_peer_id, sponsor_id)
+            )
+        """)
+
+        # EXTRAMURAL PEER (Sponsor's Servers)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extramural_peer (
+                id INTEGER PRIMARY KEY,
+                config_id INTEGER NOT NULL REFERENCES extramural_config(id) ON DELETE CASCADE,
+                name TEXT,
+                public_key TEXT NOT NULL,
+                endpoint TEXT,
+                allowed_ips TEXT NOT NULL,
+                preshared_key TEXT,
+                persistent_keepalive INTEGER,
+                is_active BOOLEAN DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # TRIGGER: Ensure single active peer per config
+        cursor.execute("""
+            CREATE TRIGGER IF NOT EXISTS ensure_single_active_peer
+            AFTER UPDATE OF is_active ON extramural_peer
+            WHEN NEW.is_active = 1
+            BEGIN
+                UPDATE extramural_peer
+                SET is_active = 0
+                WHERE config_id = NEW.config_id
+                AND id != NEW.id;
+            END
+        """)
+
+        # Extension to command_pair table
+        cursor.execute("""
+            SELECT sql FROM sqlite_master
+            WHERE type='table' AND name='command_pair'
+        """)
+        result = cursor.fetchone()
+
+        if result:
+            # Check if column exists
+            cursor.execute("PRAGMA table_info(command_pair)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if 'extramural_config_id' not in columns:
+                cursor.execute("""
+                    ALTER TABLE command_pair
+                    ADD COLUMN extramural_config_id INTEGER
+                    REFERENCES extramural_config(id) ON DELETE CASCADE
+                """)
+                logger.info("Added extramural_config_id to command_pair table")
+
+        # EXTRAMURAL STATE TRACKING
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extramural_state_snapshot (
+                id INTEGER PRIMARY KEY,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                description TEXT,
+                snapshot_data TEXT NOT NULL
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS extramural_state_change (
+                id INTEGER PRIMARY KEY,
+                snapshot_id INTEGER NOT NULL REFERENCES extramural_state_snapshot(id),
+                change_type TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id INTEGER,
+                entity_name TEXT,
+                old_value TEXT,
+                new_value TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # INDEXES FOR PERFORMANCE
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_local_peer_ssh_host
+            ON local_peer(ssh_host_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_extramural_config_peer
+            ON extramural_config(local_peer_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_extramural_config_sponsor
+            ON extramural_config(sponsor_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_extramural_peer_config
+            ON extramural_peer(config_id)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_extramural_peer_active
+            ON extramural_peer(config_id, is_active)
+        """)
+
+        logger.info("Extramural schema integrated")
+
     def get_version(self) -> str:
         """Return database version"""
         return "2.0.0-semantic"
