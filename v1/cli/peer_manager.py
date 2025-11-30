@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from v1.schema_semantic import WireGuardDBv2
 from v1.keygen import generate_keypair, generate_preshared_key
 from v1.cli.config_generator import generate_remote_config
+from v1.state_tracker import record_add_remote, record_add_router, record_remove_peer, record_rotate_keys
 
 
 def get_next_available_ip(db: WireGuardDBv2, entity_type: str) -> Tuple[str, str]:
@@ -193,7 +194,11 @@ def add_remote(db: WireGuardDBv2, hostname: Optional[str] = None) -> int:
         ))
         remote_id = cursor.lastrowid
 
+    # Record state snapshot
+    state_id = record_add_remote(str(db.db_path), db, hostname, public_key)
+
     print(f"✓ Added remote: {hostname} (ID: {remote_id})")
+    print(f"✓ State snapshot recorded (State #{state_id})")
     print()
     print("Next steps:")
     print(f"  1. Regenerate configs: wg-friend generate")
@@ -295,7 +300,11 @@ def add_router(db: WireGuardDBv2, hostname: Optional[str] = None) -> int:
             VALUES (?, ?)
         """, (router_id, lan_network))
 
+    # Record state snapshot
+    state_id = record_add_router(str(db.db_path), db, hostname, public_key)
+
     print(f"✓ Added subnet router: {hostname} (ID: {router_id})")
+    print(f"✓ State snapshot recorded (State #{state_id})")
     print()
     print("Next steps:")
     print(f"  1. Regenerate configs: wg-friend generate")
@@ -430,7 +439,11 @@ def remove_peer(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
         else:
             cursor.execute("DELETE FROM remote WHERE id = ?", (peer_id,))
 
+    # Record state snapshot (after removal)
+    state_id = record_remove_peer(str(db.db_path), db, peer_type, hostname, current_pubkey)
+
     print(f"✓ Removed {peer_type}: {hostname}")
+    print(f"✓ State snapshot recorded (State #{state_id})")
     print()
     print("Next steps:")
     print(f"  1. Regenerate configs: wg-friend generate")
@@ -535,10 +548,14 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
                 WHERE id = ?
             """, (new_pubkey, new_privkey, peer_id))
 
+    # Record state snapshot
+    state_id = record_rotate_keys(str(db.db_path), db, peer_type, hostname, old_pubkey, new_pubkey)
+
     print(f"✓ Rotated keys for: {hostname}")
     print(f"  Old: {old_pubkey[:30]}...")
     print(f"  New: {new_pubkey[:30]}...")
     print(f"  GUID: {permanent_guid[:30]}... (unchanged)")
+    print(f"✓ State snapshot recorded (State #{state_id})")
     print()
     print("Next steps:")
     print(f"  1. Regenerate configs: wg-friend generate")
