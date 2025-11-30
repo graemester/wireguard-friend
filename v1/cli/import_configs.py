@@ -15,6 +15,7 @@ from v1.patterns import PatternRecognizer
 from v1.comments import CommentCategorizer, CommentCategory
 from v1.schema_semantic import WireGuardDBv2
 from v1.keygen import derive_public_key
+from v1.state_tracker import record_import
 
 
 def parse_interface_section(entity, categorizer):
@@ -327,6 +328,9 @@ def run_import(args) -> int:
             print("\n⚠  Remote import not yet implemented")
             print("   Use 'wg-friend add peer' to add peers manually")
 
+        # Record initial state snapshot
+        state_id = record_import(str(db_path), db, len(cs_peers))
+
         print()
         print("=" * 70)
         print("IMPORT COMPLETE")
@@ -334,6 +338,7 @@ def run_import(args) -> int:
         print(f"✓ Database created: {db_path}")
         print(f"✓ Coordination server imported")
         print(f"✓ Found {len(cs_peers)} peers (stored as references)")
+        print(f"✓ State snapshot recorded (State #{state_id})")
         print()
         print("Next steps:")
         print(f"  1. Review database: sqlite3 {db_path}")
