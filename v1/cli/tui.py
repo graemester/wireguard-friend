@@ -59,15 +59,13 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
             "Add Peer",
             "Remove Peer",
             "Rotate Keys",
-            "Recent Key Rotations",
-            "State History Timeline",
-            "Peer History",
+            "History",
             "Generate Configs (requires running separate command)",
             "Deploy Configs (requires running separate command)",
         ]
     )
 
-    choice = get_menu_choice(10)
+    choice = get_menu_choice(8)
     if choice is None:
         return False
 
@@ -94,25 +92,16 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         rotate_keys_menu(db)
 
     elif choice == 6:
-        # Recent Rotations
-        show_recent_rotations(db, limit=20)
-        input("\nPress Enter to continue...")
+        # History submenu
+        history_menu(db, db_path)
 
     elif choice == 7:
-        # State History Timeline
-        state_history_menu(db, db_path)
-
-    elif choice == 8:
-        # Peer History
-        peer_history_menu(db, db_path)
-
-    elif choice == 9:
         # Generate Configs
         print("\nTo generate configs, run:")
         print("  wg-friend generate --qr")
         input("\nPress Enter to continue...")
 
-    elif choice == 10:
+    elif choice == 8:
         # Deploy Configs
         print("\nTo deploy configs, run:")
         print("  wg-friend deploy --restart")
@@ -241,6 +230,37 @@ def rotate_keys_menu(db: WireGuardDBv2):
     except Exception as e:
         print(f"\nError rotating keys: {e}")
         input("\nPress Enter to continue...")
+
+
+def history_menu(db: WireGuardDBv2, db_path: str):
+    """History submenu - key rotations, state timeline, peer history"""
+    print_menu(
+        "HISTORY",
+        [
+            "Recent Key Rotations",
+            "State History Timeline",
+            "Peer History",
+            "Back to Main Menu",
+        ],
+        include_quit=False
+    )
+
+    choice = get_menu_choice(4, allow_quit=False)
+    if choice == 4:
+        return
+
+    if choice == 1:
+        # Recent Key Rotations
+        show_recent_rotations(db, limit=20)
+        input("\nPress Enter to continue...")
+
+    elif choice == 2:
+        # State History Timeline
+        state_history_menu(db, db_path)
+
+    elif choice == 3:
+        # Peer History
+        peer_history_menu(db, db_path)
 
 
 def state_history_menu(db: WireGuardDBv2, db_path: str):
