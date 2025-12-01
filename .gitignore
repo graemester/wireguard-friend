@@ -33,3 +33,6 @@ output/
 # Legacy/archived files
 archive/
 backups/
+build/
+v1/build/
+v1/dist/
