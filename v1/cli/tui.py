@@ -28,6 +28,7 @@ except ImportError:
 
 from v1.schema_semantic import WireGuardDBv2
 from v1.cli.peer_manager import add_remote, add_router, list_peers, rotate_keys, remove_peer
+from v1.cli.documentation import documentation_menu
 from v1.cli.status import show_network_overview, show_recent_rotations, show_state_history, show_entity_history
 from v1.cli.manage_peers import manage_peers_menu
 
@@ -127,7 +128,6 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int
     print_menu(
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
-            "Network Status [view topology and connections]",
             "Manage Peers [view, edit, and manage all peers]",
             "Add Peer [add new device to network]",
             "Remove Peer [revoke a device's access]",
@@ -136,6 +136,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int
             "Extramural [manage commercial VPN configs]",
             "Generate Configs [create .conf files from database]",
             "Deploy Configs [push configs via SSH]",
+            "Documentation [built-in help]",
         ]
     )
 
@@ -158,41 +159,40 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int
     empty_count = 0
 
     if choice == 1:
-        # Network Status
-        show_network_overview(db)
-        input("\nPress Enter to continue...")
-
-    elif choice == 2:
         # Manage Peers - drill-down interface
         manage_peers_menu(db, db_path)
 
-    elif choice == 3:
+    elif choice == 2:
         # Add Peer
         peer_type_menu(db)
 
-    elif choice == 4:
+    elif choice == 3:
         # Remove Peer
         remove_peer_menu(db)
 
-    elif choice == 5:
+    elif choice == 4:
         # Rotate Keys
         rotate_keys_menu(db)
 
-    elif choice == 6:
+    elif choice == 5:
         # History submenu
         history_menu(db, db_path)
 
-    elif choice == 7:
+    elif choice == 6:
         # Extramural configs
         extramural_menu(db_path)
 
-    elif choice == 8:
+    elif choice == 7:
         # Generate Configs
         generate_configs_menu(db, db_path)
 
-    elif choice == 9:
+    elif choice == 8:
         # Deploy Configs
         deploy_configs_menu(db, db_path)
+
+    elif choice == 9:
+        # Documentation
+        documentation_menu()
 
     return (True, 0)  # Reset empty count after any action
 
