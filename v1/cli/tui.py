@@ -10,7 +10,7 @@ from typing import List, Dict, Optional
 
 # Version info (keep in sync with wg-friend)
 VERSION = "1.0.7"
-BUILD_NAME = "harrier"  # Rich TUI + Phased Workflow
+BUILD_NAME = "kestrel"  # Alternate Screen + Keypress Navigation
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -32,6 +32,73 @@ from v1.cli.documentation import documentation_menu
 from v1.cli.status import show_network_overview, show_recent_rotations, show_state_history, show_entity_history
 from v1.cli.manage_peers import manage_peers_menu
 
+
+# =============================================================================
+# TERMINAL HELPERS
+# =============================================================================
+
+def enter_alternate_screen():
+    """Enter terminal alternate screen buffer"""
+    print("\033[?1049h", end="", flush=True)
+
+
+def exit_alternate_screen():
+    """Exit terminal alternate screen buffer"""
+    print("\033[?1049l", end="", flush=True)
+
+
+def clear_screen():
+    """Clear screen and move cursor to home"""
+    if RICH_AVAILABLE:
+        console.clear()
+    print("\033[H", end="", flush=True)
+
+
+def getch() -> str:
+    """Read a single keypress without waiting for Enter"""
+    import tty
+    import termios
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
+
+
+def get_keypress_choice(max_choice: int, allow_quit: bool = True) -> Optional[int]:
+    """
+    Get a single keypress menu choice.
+
+    Returns:
+        Choice number (1-max_choice), None for quit, -1 for other keys
+    """
+    sys.stdout.flush()
+    ch = getch()
+
+    # Quit keys
+    if allow_quit and ch.lower() == 'q':
+        return None
+    if ch == '\x03':  # Ctrl+C
+        return None
+    if ch == '\x1b':  # Escape
+        return None
+
+    # Number keys
+    if ch.isdigit():
+        num = int(ch)
+        if 1 <= num <= max_choice:
+            return num
+
+    return -1  # Invalid/ignored key
+
+
+# =============================================================================
+# MENU DISPLAY
+# =============================================================================
 
 def print_menu(title: str, options: List[str], include_quit: bool = True):
     """
@@ -116,16 +183,14 @@ def get_menu_choice(max_choice: int, allow_quit: bool = True, default_back: bool
             print(f"  Invalid choice. Enter 1-{max_choice} or 'q' to quit.")
 
 
-def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int = 0) -> tuple:
+def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
     """
-    Display main menu and handle user choice.
-
-    Args:
-        empty_count: Number of consecutive empty Enters so far
+    Display main menu and handle user choice (single keypress).
 
     Returns:
-        Tuple of (continue_running: bool, new_empty_count: int)
+        True to continue, False to exit
     """
+    clear_screen()
     print_menu(
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
@@ -141,23 +206,15 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int
         ]
     )
 
-    choice = get_menu_choice(9)
+    choice = get_keypress_choice(9)
 
-    # 'q' pressed - exit immediately
+    # Quit
     if choice is None:
-        return (False, 0)
+        return False
 
-    # Empty Enter pressed - track consecutive count
+    # Invalid key - just redraw menu
     if choice == -1:
-        empty_count += 1
-        if empty_count >= 3:
-            return (False, 0)
-        remaining = 3 - empty_count
-        print(f"  Press Enter {remaining} more time{'s' if remaining > 1 else ''} to exit, or 'q' to quit now.")
-        return (True, empty_count)
-
-    # Valid choice - reset empty count
-    empty_count = 0
+        return True
 
     if choice == 1:
         # Manage Peers - drill-down interface
@@ -195,7 +252,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int
         # Documentation
         documentation_menu()
 
-    return (True, 0)  # Reset empty count after any action
+    return True
 
 
 def peer_type_menu(db: WireGuardDBv2):
@@ -1391,29 +1448,29 @@ def extramural_manage_local_peers(ops):
 
 
 def run_tui(db_path: str) -> int:
-    """Run the interactive TUI"""
+    """Run the interactive TUI in alternate screen"""
     db = WireGuardDBv2(db_path)
 
-    # Go straight to menu - no welcome screen friction
+    enter_alternate_screen()
 
-    # Main loop - track consecutive empty Enters for exit
-    empty_count = 0
-    while True:
-        try:
-            continue_running, empty_count = main_menu(db, db_path, empty_count)
-            if not continue_running:
-                print("\nGoodbye!")
+    try:
+        while True:
+            try:
+                continue_running = main_menu(db, db_path)
+                if not continue_running:
+                    return 0
+            except KeyboardInterrupt:
                 return 0
-        except KeyboardInterrupt:
-            print("\n\nGoodbye!")
-            return 0
-        except Exception as e:
-            print(f"\n\nError: {e}")
-            import traceback
-            traceback.print_exc()
-            print("\nReturning to main menu...")
-            input("Press Enter to continue...")
-            empty_count = 0  # Reset on error
+            except Exception as e:
+                clear_screen()
+                print(f"\n\nError: {e}")
+                import traceback
+                traceback.print_exc()
+                print("\nPress any key to continue...")
+                getch()
+    finally:
+        exit_alternate_screen()
+        print("Goodbye!")
 
 
 if __name__ == '__main__':
