@@ -76,3 +76,5 @@ At the end of each feature cycle, follow this sequence:
    ```bash
    sudo cp /home/ged/wireguard-friend/dist/wg-friend /usr/local/bin/
    ```
+
+4. **Remind user of build name** - Tell them the version and build name so they know what they're running (e.g., "v1.0.5 harrier")
