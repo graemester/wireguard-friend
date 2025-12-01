@@ -764,6 +764,7 @@ def show_topic_list():
         console.print(Panel(
             "\n".join(lines),
             title="[bold]DOCUMENTATION[/bold]",
+            title_align="left",
             subtitle="[dim]Built-in Help System[/dim]",
             border_style="cyan",
             padding=(0, 2),
@@ -845,6 +846,7 @@ def show_topic_content(topic_key: str, topic_title: str):
             console.print(Panel(
                 page_content,
                 title=f"[bold]{topic_title}[/bold]",
+                title_align="left",
                 subtitle=f"[dim]{progress}[/dim]",
                 border_style="green",
                 padding=(0, 2),

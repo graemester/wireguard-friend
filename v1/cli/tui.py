@@ -58,6 +58,7 @@ def print_menu(title: str, options: List[str], include_quit: bool = True):
         console.print(Panel(
             "\n".join(menu_lines),
             title=f"[bold]{title}[/bold]",
+            title_align="left",
             border_style="cyan",
             padding=(1, 2)
         ))

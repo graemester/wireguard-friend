@@ -235,6 +235,7 @@ def show_peer_list(db: WireGuardDBv2) -> Optional[PeerInfo]:
             console.print(Panel(
                 list_content,
                 title=f"[bold]{title}[/bold]",
+                title_align="left",
                 subtitle="[dim]Enter number to view | Type to filter | \\[B]ack[/dim]",
                 border_style="cyan",
                 padding=(0, 2)
@@ -405,6 +406,7 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
         console.print(Panel(
             f"[dim]{breadcrumb}[/dim]",
             title="[bold]PEER DETAILS[/bold]",
+            title_align="left",
             border_style="cyan",
             padding=(0, 2)
         ))
@@ -413,6 +415,7 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
             console.print(Panel(
                 section_content,
                 title=f"[bold]{section_name}[/bold]",
+                title_align="left",
                 border_style="dim",
                 padding=(0, 1)
             ))
@@ -427,6 +430,7 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
         console.print(Panel(
             "\n".join(action_lines),
             title="[bold]ACTIONS[/bold]",
+            title_align="left",
             border_style="yellow",
             padding=(0, 1)
         ))
