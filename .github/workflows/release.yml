@@ -62,7 +62,7 @@ jobs:
       - name: Build binary
         run: |
           cd v1
-          pyinstaller wg-friend.spec
+          pyinstaller --clean wg-friend.spec
           mv dist/wg-friend dist/${{ matrix.asset_name }}
 
       - name: Test binary
