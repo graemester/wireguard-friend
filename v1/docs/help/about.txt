@@ -1,5 +1,5 @@
-ABOUT WIREGUARD FRIEND
-======================
+WIREGUARD FRIEND: Make Wireguard Fun Again!
+===========================================
 
 Version: See main menu banner
 License: MIT
@@ -16,6 +16,11 @@ PROJECT LINKS
 
   Documentation:
     https://github.com/graemester/wireguard-friend/tree/main/v1/docs
+
+  Looking for a VPS?  I use Interserver and love it. 
+  - $3/month will get you a "slice" that can be your coordination server and lots more!
+  - Use this link to sign up and they'll give me some free time!
+    https://www.interserver.net/r/1029305
 
 
 WHAT IS WIREGUARD?
@@ -52,6 +57,8 @@ WireGuard Friend aims to be:
 
 CONTRIBUTING
 ------------
+
+Claude Code has helped me a lot!
 
 Contributions welcome! See the GitHub repository for:
   - Development setup
