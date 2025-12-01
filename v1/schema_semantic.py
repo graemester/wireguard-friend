@@ -137,6 +137,7 @@ class WireGuardDBv2:
 
                     -- Access control
                     access_level TEXT NOT NULL,  -- 'full_access', 'vpn_only', 'lan_only', 'custom'
+                    allowed_ips TEXT,            -- Stored AllowedIPs from config (e.g., "10.66.0.0/24, 192.168.1.0/24")
 
                     -- Metadata
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -439,6 +440,24 @@ class WireGuardDBv2:
                     REFERENCES extramural_config(id) ON DELETE CASCADE
                 """)
                 logger.info("Added extramural_config_id to command_pair table")
+
+        # Migration: Add allowed_ips to remote table
+        cursor.execute("""
+            SELECT sql FROM sqlite_master
+            WHERE type='table' AND name='remote'
+        """)
+        result = cursor.fetchone()
+
+        if result:
+            cursor.execute("PRAGMA table_info(remote)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if 'allowed_ips' not in columns:
+                cursor.execute("""
+                    ALTER TABLE remote
+                    ADD COLUMN allowed_ips TEXT
+                """)
+                logger.info("Added allowed_ips to remote table")
 
         # EXTRAMURAL STATE TRACKING
         cursor.execute("""

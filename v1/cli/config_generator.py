@@ -240,22 +240,24 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
     lines.append(f"PublicKey = {cs['current_public_key']}")
     lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
 
-    # AllowedIPs based on access level
-    access = remote.get('access_level', 'full_access')
-    if access == 'full_access':
-        # VPN network + all advertised LANs
-        allowed_ips = [cs['network_ipv4'], cs['network_ipv6']] + advertised_networks
-    elif access == 'vpn_only':
-        # Just VPN network
-        allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
-    elif access == 'lan_only':
-        # Just advertised LANs
-        allowed_ips = advertised_networks
+    # Use stored AllowedIPs if available, otherwise compute from access_level
+    stored_allowed_ips = remote.get('allowed_ips')
+    if stored_allowed_ips:
+        # Use exactly what was imported
+        lines.append(f"AllowedIPs = {stored_allowed_ips}")
     else:
-        # Custom - stored in database
-        allowed_ips = [cs['network_ipv4']]  # Default fallback
+        # Fallback: compute from access_level (legacy/new peers)
+        access = remote.get('access_level', 'full_access')
+        if access == 'full_access':
+            allowed_ips = [cs['network_ipv4'], cs['network_ipv6']] + advertised_networks
+        elif access == 'vpn_only':
+            allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
+        elif access == 'lan_only':
+            allowed_ips = advertised_networks if advertised_networks else [cs['network_ipv4'], cs['network_ipv6']]
+        else:
+            allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
 
-    lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
+        lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
     lines.append(f"PersistentKeepalive = 25")
 
     return '\n'.join(lines) + '\n'

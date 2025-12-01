@@ -390,6 +390,23 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
         ))
         router_id = cursor.lastrowid
 
+        # Update CS endpoint if we found it and CS has UNKNOWN
+        if endpoint:
+            # Parse endpoint (host:port format)
+            if ':' in endpoint:
+                cs_endpoint = endpoint.rsplit(':', 1)[0]
+            else:
+                cs_endpoint = endpoint
+
+            cursor.execute("""
+                UPDATE coordination_server
+                SET endpoint = ?
+                WHERE id = ? AND (endpoint IS NULL OR endpoint = 'UNKNOWN')
+            """, (cs_endpoint, cs_id))
+
+            if cursor.rowcount > 0:
+                print(f"  ✓ Updated CS endpoint: {cs_endpoint}")
+
         # Insert advertised networks
         for network in lan_networks:
             cursor.execute("""
@@ -486,33 +503,24 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs
         peer_data = parse_peer_section(entities[1], categorizer)
 
     endpoint = peer_data.get('endpoint') if peer_data else None
+    allowed_ips_list = peer_data.get('allowed_ips', []) if peer_data else []
+    allowed_ips = ', '.join(allowed_ips_list) if allowed_ips_list else None
 
-    # Infer access level from AllowedIPs, then confirm with user
-    access_level = 'full_access'
-    if peer_data:
-        allowed = peer_data.get('allowed_ips', [])
-        if '0.0.0.0/0' in allowed or '::/0' in allowed:
+    # Store the AllowedIPs exactly as imported
+    if allowed_ips:
+        print(f"  AllowedIPs: {allowed_ips}")
+
+    # Infer access level from AllowedIPs for display purposes
+    access_level = 'custom'  # Default to custom since we store actual IPs
+    if allowed_ips_list:
+        if '0.0.0.0/0' in allowed_ips_list or '::/0' in allowed_ips_list:
             access_level = 'full_access'
-        # Note: presence of LAN routes in AllowedIPs doesn't mean restricted access
-        # it just means LAN traffic is routed through VPN
+        elif any('192.168' in ip or '10.' in ip for ip in allowed_ips_list):
+            access_level = 'lan_only'
+        else:
+            access_level = 'vpn_only'
 
-    # Prompt user to confirm/set access level
-    print(f"\n  Set access level for {hostname}:")
-    print(f"    1. full_access - Full VPN + internet routing")
-    print(f"    2. vpn_only   - VPN peers only, no LAN access")
-    print(f"    3. lan_only   - VPN + LAN access, no internet routing")
-    print()
-
-    access_map = {'1': 'full_access', '2': 'vpn_only', '3': 'lan_only'}
-    default_num = {'full_access': '1', 'vpn_only': '2', 'lan_only': '3'}.get(access_level, '1')
-
-    choice = input(f"  Access level [{default_num}]: ").strip()
-    if choice in access_map:
-        access_level = access_map[choice]
-    elif choice == '':
-        pass  # Keep default
-    else:
-        print(f"  Invalid choice, using {access_level}")
+    print(f"  Inferred access level: {access_level}")
 
     # Insert into database
     with db._connection() as conn:
@@ -522,8 +530,8 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs
             INSERT INTO remote (
                 cs_id, permanent_guid, current_public_key, hostname,
                 ipv4_address, ipv6_address, private_key,
-                access_level
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                access_level, allowed_ips
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             cs_id,
             permanent_guid,
@@ -532,9 +540,27 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs
             ipv4_addr or '10.66.0.30/32',
             ipv6_addr or '',
             interface['private_key'],
-            access_level
+            access_level,
+            allowed_ips
         ))
         remote_id = cursor.lastrowid
+
+        # Update CS endpoint if we found it and CS has UNKNOWN
+        if endpoint:
+            # Parse endpoint (host:port format)
+            if ':' in endpoint:
+                cs_endpoint = endpoint.rsplit(':', 1)[0]
+            else:
+                cs_endpoint = endpoint
+
+            cursor.execute("""
+                UPDATE coordination_server
+                SET endpoint = ?
+                WHERE id = ? AND (endpoint IS NULL OR endpoint = 'UNKNOWN')
+            """, (cs_endpoint, cs_id))
+
+            if cursor.rowcount > 0:
+                print(f"  ✓ Updated CS endpoint: {cs_endpoint}")
 
     print(f"  ✓ Imported remote client (ID: {remote_id})")
     print(f"  ✓ Access level: {access_level}")
