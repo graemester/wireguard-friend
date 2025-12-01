@@ -779,9 +779,9 @@ def extramural_by_sponsor(ops, db_path: str):
         print(f"\n  b. Back")
         print()
 
-        choice = input("Select sponsor (or 'b' to go back): ").strip().lower()
+        choice = input("Select sponsor (or Enter to go back): ").strip().lower()
 
-        if choice == 'b':
+        if choice == 'b' or not choice:
             return
 
         try:
@@ -828,9 +828,9 @@ def extramural_sponsor_detail(ops, sponsor, db_path: str):
     print(f"\n  b. Back")
     print()
 
-    choice = input("Select config (or 'b' to go back): ").strip().lower()
+    choice = input("Select config (or Enter to go back): ").strip().lower()
 
-    if choice == 'b':
+    if choice == 'b' or not choice:
         return
 
     try:
@@ -867,9 +867,9 @@ def extramural_by_local_peer(ops, db_path: str):
         print(f"\n  b. Back")
         print()
 
-        choice = input("Select local peer (or 'b' to go back): ").strip().lower()
+        choice = input("Select local peer (or Enter to go back): ").strip().lower()
 
-        if choice == 'b':
+        if choice == 'b' or not choice:
             return
 
         try:
@@ -920,9 +920,9 @@ def extramural_local_peer_detail(ops, peer, db_path: str):
     print(f"\n  b. Back")
     print()
 
-    choice = input("Select config (or 'b' to go back): ").strip().lower()
+    choice = input("Select config (or Enter to go back): ").strip().lower()
 
-    if choice == 'b':
+    if choice == 'b' or not choice:
         return
 
     try:
