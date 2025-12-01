@@ -72,8 +72,209 @@ def load_external_content(topic_key: str) -> Optional[str]:
     return None  # Use embedded fallback
 
 
+def generate_sysinfo() -> str:
+    """Generate dynamic system information content."""
+    import os
+    import platform
+    import sqlite3
+
+    # Get version info from tui module
+    try:
+        from v1.cli.tui import VERSION, BUILD_NAME
+    except ImportError:
+        VERSION = "unknown"
+        BUILD_NAME = "unknown"
+
+    lines = []
+    lines.append("SYSTEM INFORMATION")
+    lines.append("==================")
+    lines.append("")
+
+    # Version
+    lines.append("VERSION")
+    lines.append("-------")
+    lines.append(f"  WireGuard Friend: v{VERSION}")
+    lines.append(f"  Build Name: {BUILD_NAME}")
+    lines.append("")
+
+    # Environment
+    lines.append("ENVIRONMENT")
+    lines.append("-----------")
+    lines.append(f"  Working Directory: {os.getcwd()}")
+
+    # Find database
+    db_path = None
+    for candidate in ['wireguard.db', './wireguard.db']:
+        if os.path.exists(candidate):
+            db_path = os.path.abspath(candidate)
+            break
+    if db_path:
+        db_size = os.path.getsize(db_path)
+        if db_size > 1024 * 1024:
+            size_str = f"{db_size / 1024 / 1024:.1f} MB"
+        elif db_size > 1024:
+            size_str = f"{db_size / 1024:.1f} KB"
+        else:
+            size_str = f"{db_size} bytes"
+        lines.append(f"  Database: {db_path}")
+        lines.append(f"  Database Size: {size_str}")
+    else:
+        lines.append("  Database: (not found in current directory)")
+    lines.append("")
+
+    # Python info
+    lines.append("PYTHON")
+    lines.append("------")
+    lines.append(f"  Version: {platform.python_version()}")
+    lines.append(f"  Implementation: {platform.python_implementation()}")
+    lines.append(f"  Executable: {sys.executable}")
+    lines.append("")
+
+    # Platform
+    lines.append("PLATFORM")
+    lines.append("--------")
+    lines.append(f"  System: {platform.system()}")
+    lines.append(f"  Release: {platform.release()}")
+    lines.append(f"  Machine: {platform.machine()}")
+    lines.append("")
+
+    # Dependencies
+    lines.append("DEPENDENCIES")
+    lines.append("------------")
+
+    deps = [
+        ("rich", "Terminal UI"),
+        ("nacl", "Cryptography (PyNaCl)"),
+        ("qrcode", "QR code generation"),
+        ("paramiko", "SSH deployment"),
+    ]
+
+    for module_name, description in deps:
+        try:
+            mod = __import__(module_name)
+            version = getattr(mod, '__version__', 'installed')
+            lines.append(f"  {description}: {version}")
+        except ImportError:
+            lines.append(f"  {description}: (not installed)")
+
+    # SQLite version
+    lines.append(f"  SQLite: {sqlite3.sqlite_version}")
+    lines.append("")
+
+    # Database stats (if available)
+    if db_path and os.path.exists(db_path):
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.cursor()
+
+            lines.append("DATABASE STATS")
+            lines.append("--------------")
+
+            # Count entities
+            try:
+                cursor.execute("SELECT COUNT(*) FROM coordination_server")
+                cs_count = cursor.fetchone()[0]
+                lines.append(f"  Coordination Servers: {cs_count}")
+            except:
+                pass
+
+            try:
+                cursor.execute("SELECT COUNT(*) FROM subnet_router")
+                router_count = cursor.fetchone()[0]
+                lines.append(f"  Subnet Routers: {router_count}")
+            except:
+                pass
+
+            try:
+                cursor.execute("SELECT COUNT(*) FROM remote")
+                remote_count = cursor.fetchone()[0]
+                lines.append(f"  Remote Clients: {remote_count}")
+            except:
+                pass
+
+            try:
+                cursor.execute("SELECT COUNT(*) FROM extramural_config")
+                ext_count = cursor.fetchone()[0]
+                lines.append(f"  Extramural Configs: {ext_count}")
+            except:
+                pass
+
+            conn.close()
+            lines.append("")
+
+            # Get coordination server endpoint for connectivity test
+            try:
+                cursor = sqlite3.connect(db_path).cursor()
+                cursor.execute("SELECT endpoint FROM coordination_server WHERE id = 1")
+                row = cursor.fetchone()
+                cs_endpoint = row[0] if row else None
+            except:
+                cs_endpoint = None
+        except:
+            cs_endpoint = None
+    else:
+        cs_endpoint = None
+
+    # Connectivity tests
+    import socket
+
+    lines.append("CONNECTIVITY")
+    lines.append("------------")
+
+    def test_connection(host: str, port: int, timeout: float = 2.0) -> tuple:
+        """Test TCP connection, return (success, latency_ms or error)"""
+        import time
+        try:
+            start = time.time()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(timeout)
+            sock.connect((host, port))
+            latency = (time.time() - start) * 1000
+            sock.close()
+            return True, f"{latency:.0f}ms"
+        except socket.timeout:
+            return False, "timeout"
+        except socket.gaierror:
+            return False, "DNS failed"
+        except Exception as e:
+            return False, str(e)[:20]
+
+    # Test Cloudflare (HTTPS port)
+    ok, result = test_connection("1.1.1.1", 443)
+    status = f"OK ({result})" if ok else f"FAILED ({result})"
+    lines.append(f"  Cloudflare (1.1.1.1:443): {status}")
+
+    # Test coordination server if we have one
+    if cs_endpoint:
+        # Parse endpoint (might be hostname:port or just hostname)
+        if ':' in cs_endpoint:
+            host, port_str = cs_endpoint.rsplit(':', 1)
+            try:
+                port = int(port_str)
+            except ValueError:
+                host = cs_endpoint
+                port = 51820
+        else:
+            host = cs_endpoint
+            port = 51820
+
+        ok, result = test_connection(host, port)
+        status = f"OK ({result})" if ok else f"FAILED ({result})"
+        lines.append(f"  Coordination Server ({host}:{port}): {status}")
+    else:
+        lines.append("  Coordination Server: (not configured)")
+
+    lines.append("")
+
+    return "\n".join(lines)
+
+
 def get_content(topic_key: str) -> str:
     """Get content for a topic, trying external sources first."""
+    # Dynamic content
+    if topic_key == "sysinfo":
+        return generate_sysinfo()
+
     external = load_external_content(topic_key)
     if external:
         return external
@@ -92,8 +293,12 @@ TOPICS = [
     ("Deploying Configs", "deploy"),
     ("Extramural (Commercial VPNs)", "extramural"),
     ("Troubleshooting", "troubleshooting"),
+    ("System Info", "sysinfo"),
     ("About & Links", "about"),
 ]
+
+# Topics with dynamic content (generated at runtime)
+DYNAMIC_TOPICS = {"sysinfo"}
 
 CONTENT = {
     "quickstart": """
@@ -918,7 +1123,7 @@ def documentation_menu():
             if ch.lower() in ('q', '\x1b', '\x03'):
                 return
 
-            # Try to parse as topic number (1-8)
+            # Try to parse as topic number (1-9)
             if ch.isdigit():
                 topic_num = int(ch)
                 if 1 <= topic_num <= len(TOPICS):
