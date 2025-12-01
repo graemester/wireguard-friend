@@ -1137,21 +1137,65 @@ def extramural_import_config(ops, db_path: str):
             input("\nPress Enter to continue...")
             return
 
-    # Get or create sponsor
-    sponsor_name = input("Sponsor name (e.g., 'Mullvad', 'Work VPN'): ").strip()
+    # Get or create sponsor - show existing sponsors for selection
+    existing_sponsors = ops.list_sponsors()
+    sponsor_name = None
+    sponsor_website = None
+
+    if existing_sponsors:
+        print("\nExisting sponsors:")
+        for i, s in enumerate(existing_sponsors, 1):
+            print(f"  {i}. {s.name}")
+        print(f"  n. New sponsor")
+        print()
+
+        choice = input("Select sponsor or 'n' for new: ").strip().lower()
+
+        if choice == 'n' or not choice:
+            sponsor_name = input("New sponsor name (e.g., 'Mullvad', 'Work VPN'): ").strip()
+            if sponsor_name:
+                sponsor_website = input("Sponsor website (optional): ").strip() or None
+        else:
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(existing_sponsors):
+                    sponsor_name = existing_sponsors[idx].name
+            except ValueError:
+                pass
+    else:
+        sponsor_name = input("Sponsor name (e.g., 'Mullvad', 'Work VPN'): ").strip()
+        if sponsor_name:
+            sponsor_website = input("Sponsor website (optional): ").strip() or None
+
     if not sponsor_name:
         print("\nSponsor name required.")
         input("\nPress Enter to continue...")
         return
 
-    # Check if sponsor exists
-    sponsor = ops.get_sponsor_by_name(sponsor_name)
-    sponsor_website = None
-    if not sponsor:
-        sponsor_website = input("Sponsor website (optional): ").strip() or None
+    # Get or create local peer - show existing peers for selection
+    existing_peers = ops.list_local_peers()
+    peer_name = None
 
-    # Get or create local peer
-    peer_name = input("Local peer name (e.g., 'my-laptop', 'phone'): ").strip()
+    if existing_peers:
+        print("\nExisting local peers:")
+        for i, p in enumerate(existing_peers, 1):
+            print(f"  {i}. {p.name}")
+        print(f"  n. New local peer")
+        print()
+
+        choice = input("Select local peer or 'n' for new: ").strip().lower()
+
+        if choice == 'n' or not choice:
+            peer_name = input("New local peer name (e.g., 'my-laptop', 'phone'): ").strip()
+        else:
+            try:
+                idx = int(choice) - 1
+                if 0 <= idx < len(existing_peers):
+                    peer_name = existing_peers[idx].name
+            except ValueError:
+                pass
+    else:
+        peer_name = input("Local peer name (e.g., 'my-laptop', 'phone'): ").strip()
     if not peer_name:
         print("\nLocal peer name required.")
         input("\nPress Enter to continue...")
