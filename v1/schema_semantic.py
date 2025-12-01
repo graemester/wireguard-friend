@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class WireGuardDBv2:
     """V2 Database - semantic attributes, no raw blocks"""
 
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
+    def __init__(self, db_path: Path | str):
+        self.db_path = Path(db_path) if isinstance(db_path, str) else db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_schema()
 

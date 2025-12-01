@@ -2,10 +2,15 @@
 
 import sys
 from pathlib import Path
+import nacl
 
 # Get the v1 directory
 v1_dir = Path(SPECPATH)
 repo_root = v1_dir.parent
+
+# Find actual location of installed packages for binary collection
+nacl_path = Path(nacl.__file__).parent.parent  # Go up to site-packages
+site_packages = str(nacl_path)
 
 block_cipher = None
 
@@ -37,7 +42,12 @@ v1_modules = [
 a = Analysis(
     ['wg-friend'],
     pathex=[str(repo_root)],
-    binaries=[],
+    binaries=[
+        # CFFI backend (required by PyNaCl)
+        (f'{site_packages}/_cffi_backend*.so', '.'),
+        # libsodium wrapper (required by PyNaCl)
+        (f'{site_packages}/nacl/_sodium.abi3.so', 'nacl'),
+    ],
     datas=[],
     hiddenimports=v1_modules + [
         'sqlite3',
