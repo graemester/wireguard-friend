@@ -88,6 +88,8 @@ Format: `MAJOR.MINOR.PATCH` (e.g., v1.0.6)
 
 ## Feature Cycle Workflow
 
+**TRIGGER: When user says "close the feature cycle" or "run the feature cycle", execute ALL steps below in sequence.**
+
 At the end of each feature cycle, follow this sequence:
 
 1. **Bump version** - Increment the PATCH version (third segment) in both:
