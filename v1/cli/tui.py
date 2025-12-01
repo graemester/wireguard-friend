@@ -268,8 +268,8 @@ def peer_type_menu(db: WireGuardDBv2):
         include_quit=False
     )
 
-    choice = get_menu_choice(3, allow_quit=False, default_back=True)
-    if choice == 3:
+    choice = get_keypress_choice(3, allow_quit=False)
+    if choice is None or choice == 3 or choice == -1:
         return
 
     if choice == 1:
@@ -278,10 +278,10 @@ def peer_type_menu(db: WireGuardDBv2):
             add_remote(db)
             print("\n✓ Remote added")
             print("  Run 'wg-friend generate' to create updated configs.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
         except Exception as e:
             print(f"\nError adding remote: {e}")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
     elif choice == 2:
         # Add router
@@ -289,10 +289,10 @@ def peer_type_menu(db: WireGuardDBv2):
             add_router(db)
             print("\n✓ Router added")
             print("  Run 'wg-friend generate' to create updated configs.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
         except Exception as e:
             print(f"\nError adding router: {e}")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
 
 def remove_peer_menu(db: WireGuardDBv2):
@@ -311,14 +311,14 @@ def remove_peer_menu(db: WireGuardDBv2):
 
     if peer_type not in ('router', 'remote'):
         print("Invalid peer type.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     try:
         peer_id = int(input("Peer ID: ").strip())
     except ValueError:
         print("Invalid peer ID.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     reason = input("Reason for removal [Manual revocation]: ").strip()
@@ -330,10 +330,10 @@ def remove_peer_menu(db: WireGuardDBv2):
         if success:
             print("\n✓ Peer removed")
             print("  Run 'wg-friend generate' to create updated configs.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
     except Exception as e:
         print(f"\nError removing peer: {e}")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
 
 
 def rotate_keys_menu(db: WireGuardDBv2):
@@ -352,7 +352,7 @@ def rotate_keys_menu(db: WireGuardDBv2):
 
     if peer_type not in ('cs', 'router', 'remote'):
         print("Invalid peer type.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     peer_id = None
@@ -361,7 +361,7 @@ def rotate_keys_menu(db: WireGuardDBv2):
             peer_id = int(input("Peer ID: ").strip())
         except ValueError:
             print("Invalid peer ID.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
 
     reason = input("Reason for rotation [Scheduled rotation]: ").strip()
@@ -374,10 +374,10 @@ def rotate_keys_menu(db: WireGuardDBv2):
             print("\n✓ Keys rotated")
             print("  Run 'wg-friend generate' to create updated configs.")
             print("  Then 'wg-friend deploy' to push to servers.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
     except Exception as e:
         print(f"\nError rotating keys: {e}")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
 
 
 def history_menu(db: WireGuardDBv2, db_path: str):
@@ -394,14 +394,14 @@ def history_menu(db: WireGuardDBv2, db_path: str):
         include_quit=False
     )
 
-    choice = get_menu_choice(4, allow_quit=False, default_back=True)
-    if choice == 4:
+    choice = get_keypress_choice(4, allow_quit=False)
+    if choice is None or choice == 4 or choice == -1:
         return
 
     if choice == 1:
         # Recent Key Rotations
         show_recent_rotations(db, limit=20)
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
 
     elif choice == 2:
         # State History Timeline
@@ -426,10 +426,10 @@ def state_history_menu(db: WireGuardDBv2, db_path: str):
         try:
             state_id = int(state_id_input)
             show_state_history(db_path, state_id=state_id)
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
         except ValueError:
             print("Invalid state ID.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
 
 def peer_history_menu(db: WireGuardDBv2, db_path: str):
@@ -448,7 +448,7 @@ def peer_history_menu(db: WireGuardDBv2, db_path: str):
         return
 
     show_entity_history(db, db_path, peer_name)
-    input("\nPress Enter to continue...")
+    print("\nPress any key..."); getch()
 
 
 def generate_configs_menu(db: WireGuardDBv2, db_path: str):
@@ -468,9 +468,9 @@ def generate_configs_menu(db: WireGuardDBv2, db_path: str):
         include_quit=False
     )
 
-    choice = get_menu_choice(4, allow_quit=False, default_back=True)
+    choice = get_keypress_choice(4, allow_quit=False)
 
-    if choice == 4:
+    if choice is None or choice == 4 or choice == -1:
         return
 
     if choice == 3:
@@ -498,7 +498,7 @@ def generate_configs_menu(db: WireGuardDBv2, db_path: str):
     else:
         print("\nGeneration failed. Check errors above.")
 
-    input("\nPress Enter to continue...")
+    print("\nPress any key..."); getch()
 
 
 def generate_single_entity_config(db: WireGuardDBv2, db_path: str):
@@ -531,7 +531,7 @@ def generate_single_entity_config(db: WireGuardDBv2, db_path: str):
 
     if not entities:
         print("\nNo entities found in database.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     print(f"\n{'=' * 70}")
@@ -554,7 +554,7 @@ def generate_single_entity_config(db: WireGuardDBv2, db_path: str):
         idx = int(choice) - 1
         if not (0 <= idx < len(entities)):
             print("Invalid choice.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
 
         etype, eid, hostname = entities[idx]
@@ -616,7 +616,7 @@ def generate_single_entity_config(db: WireGuardDBv2, db_path: str):
     except ValueError:
         print("Invalid choice.")
 
-    input("\nPress Enter to continue...")
+    print("\nPress any key..."); getch()
 
 
 def deploy_configs_menu(db: WireGuardDBv2, db_path: str):
@@ -629,7 +629,7 @@ def deploy_configs_menu(db: WireGuardDBv2, db_path: str):
     if not Path('generated').exists():
         print("\nNo configs found in 'generated/' directory.")
         print("Generate configs first (option 8).")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     print_menu(
@@ -644,9 +644,9 @@ def deploy_configs_menu(db: WireGuardDBv2, db_path: str):
         include_quit=False
     )
 
-    choice = get_menu_choice(5, allow_quit=False, default_back=True)
+    choice = get_keypress_choice(5, allow_quit=False)
 
-    if choice == 5:
+    if choice is None or choice == 5 or choice == -1:
         return
 
     # Create args object for deploy_configs
@@ -672,7 +672,7 @@ def deploy_configs_menu(db: WireGuardDBv2, db_path: str):
         entity = input("\nEntity hostname to deploy: ").strip()
         if not entity:
             print("Cancelled.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
         args.entity = entity
 
@@ -684,7 +684,7 @@ def deploy_configs_menu(db: WireGuardDBv2, db_path: str):
     else:
         print("\nDeployment had failures. Check errors above.")
 
-    input("\nPress Enter to continue...")
+    print("\nPress any key..."); getch()
 
 
 def extramural_menu(db_path: str):
@@ -711,12 +711,15 @@ def extramural_menu(db_path: str):
             include_quit=False
         )
 
-        choice = get_menu_choice(8, allow_quit=False, default_back=True)
+        choice = get_keypress_choice(8, allow_quit=False)
 
-        if choice == 8:
+        if choice is None or choice == 8:
             return
 
-        elif choice == 1:
+        if choice == -1:
+            continue  # Invalid key, redraw
+
+        if choice == 1:
             # List all configs
             extramural_list_all(ops, db_path)
 
@@ -756,7 +759,7 @@ def extramural_generate_single(ops, db_path: str):
     if not configs:
         print("\nNo extramural configs found.")
         print("Import a config first using option 4.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     print(f"\n{'=' * 70}")
@@ -787,7 +790,7 @@ def extramural_generate_single(ops, db_path: str):
         idx = int(choice) - 1
         if not (0 <= idx < len(configs)):
             print("Invalid choice.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
 
         config = configs[idx]
@@ -836,7 +839,7 @@ def extramural_generate_single(ops, db_path: str):
     except ValueError:
         print("Invalid choice.")
 
-    input("\nPress Enter to continue...")
+    print("\nPress any key..."); getch()
 
 
 def extramural_list_all(ops, db_path: str):
@@ -849,7 +852,8 @@ def extramural_list_all(ops, db_path: str):
             print("\nNo extramural configs found.")
             print("\nTo add one, use 'Import Config File' or the CLI:")
             print("  wg-friend extramural import <config.conf> --sponsor <name> --peer <device>")
-            input("\nPress Enter to continue...")
+            print("\nPress any key to continue...")
+            getch()
             return
 
         print(f"\n{'=' * 70}")
@@ -886,12 +890,9 @@ def extramural_list_all(ops, db_path: str):
             idx = int(choice) - 1
             if 0 <= idx < len(configs):
                 extramural_config_detail(ops, configs[idx], db_path)
-            else:
-                print("Invalid choice.")
-                input("\nPress Enter to continue...")
+            # Invalid number - just loop and redraw
         except ValueError:
-            print("Invalid choice.")
-            input("\nPress Enter to continue...")
+            pass  # Invalid input - just loop and redraw
 
 
 def extramural_by_sponsor(ops, db_path: str):
@@ -901,7 +902,8 @@ def extramural_by_sponsor(ops, db_path: str):
 
     if not sponsors:
         print("\nNo sponsors found. Add one first.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key to continue...")
+        getch()
         return
 
     while True:
@@ -928,10 +930,8 @@ def extramural_by_sponsor(ops, db_path: str):
             idx = int(choice) - 1
             if 0 <= idx < len(sponsors):
                 extramural_sponsor_detail(ops, sponsors[idx], db_path)
-            else:
-                print("Invalid choice.")
         except ValueError:
-            print("Invalid choice.")
+            pass  # Invalid input - just loop and redraw
 
 
 def extramural_sponsor_detail(ops, sponsor, db_path: str):
@@ -947,7 +947,7 @@ def extramural_sponsor_detail(ops, sponsor, db_path: str):
 
     if not configs:
         print("No configs for this sponsor.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     print("Configs:")
@@ -989,7 +989,7 @@ def extramural_by_local_peer(ops, db_path: str):
 
     if not peers:
         print("\nNo local peers found. Add one first.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     while True:
@@ -1019,10 +1019,8 @@ def extramural_by_local_peer(ops, db_path: str):
             idx = int(choice) - 1
             if 0 <= idx < len(peers):
                 extramural_local_peer_detail(ops, peers[idx], db_path)
-            else:
-                print("Invalid choice.")
         except ValueError:
-            print("Invalid choice.")
+            pass  # Invalid input - just loop and redraw
 
 
 def extramural_local_peer_detail(ops, peer, db_path: str):
@@ -1042,7 +1040,7 @@ def extramural_local_peer_detail(ops, peer, db_path: str):
 
     if not configs:
         print("No configs for this peer.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     print("Configs:")
@@ -1124,16 +1122,19 @@ def extramural_config_detail(ops, config, db_path: str):
             include_quit=False
         )
 
-        choice = get_menu_choice(6, allow_quit=False, default_back=True)
+        choice = get_keypress_choice(6, allow_quit=False)
 
-        if choice == 6:
+        if choice is None or choice == 6:
             return
 
-        elif choice == 1:
+        if choice == -1:
+            continue  # Invalid key, redraw
+
+        if choice == 1:
             # Switch active endpoint
             if len(ext_peers) <= 1:
                 print("\nOnly one endpoint available.")
-                input("\nPress Enter to continue...")
+                print("\nPress any key..."); getch()
                 continue
 
             print("\nSelect new active endpoint:")
@@ -1150,7 +1151,7 @@ def extramural_config_detail(ops, config, db_path: str):
                     ext_peers = ops.list_extramural_peers(config.id)
             except ValueError:
                 pass
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
         elif choice == 2:
             # View full config
@@ -1159,7 +1160,7 @@ def extramural_config_detail(ops, config, db_path: str):
             print(f"\n{'─' * 70}")
             print(content)
             print(f"{'─' * 70}")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
         elif choice == 3:
             # Generate config file
@@ -1176,7 +1177,7 @@ def extramural_config_detail(ops, config, db_path: str):
 
             gen.generate_config(config.id, output_path)
             print(f"\n✓ Config written to: {output_path}")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
         elif choice == 4:
             # Mark remote updated
@@ -1187,7 +1188,7 @@ def extramural_config_detail(ops, config, db_path: str):
                 print("\n✓ Pending update cleared.")
                 # Refresh config
                 config = ops.get_extramural_config(config.id)
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
         elif choice == 5:
             # Delete config
@@ -1200,11 +1201,11 @@ def extramural_config_detail(ops, config, db_path: str):
             if confirm == 'DELETE':
                 ops.delete_extramural_config(config.id)
                 print("\n✓ Config deleted.")
-                input("\nPress Enter to continue...")
+                print("\nPress any key..."); getch()
                 return  # Exit the config detail view
             else:
                 print("\nDeletion cancelled.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
 
 
 def extramural_import_config(ops, db_path: str):
@@ -1250,18 +1251,18 @@ def extramural_import_config(ops, db_path: str):
 
         if not lines:
             print("\nNo config content provided.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
 
         # Validate we got both sections
         content = '\n'.join(lines)
         if '[Interface]' not in content:
             print("\nError: No [Interface] section found in pasted content.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
         if '[Peer]' not in content:
             print("\nError: No [Peer] section found in pasted content.")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
 
         # Write to temp file
@@ -1280,7 +1281,7 @@ def extramural_import_config(ops, db_path: str):
         config_file = P(config_path)
         if not config_file.exists():
             print(f"\nError: File not found: {config_file}")
-            input("\nPress Enter to continue...")
+            print("\nPress any key..."); getch()
             return
 
     # Get or create sponsor - show existing sponsors for selection
@@ -1315,7 +1316,7 @@ def extramural_import_config(ops, db_path: str):
 
     if not sponsor_name:
         print("\nSponsor name required.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     # Get or create local peer - show existing peers for selection
@@ -1344,7 +1345,7 @@ def extramural_import_config(ops, db_path: str):
         peer_name = input("Local peer name (e.g., 'my-laptop', 'phone'): ").strip()
     if not peer_name:
         print("\nLocal peer name required.")
-        input("\nPress Enter to continue...")
+        print("\nPress any key..."); getch()
         return
 
     # Interface name - use sponsor name as default for pasted content
@@ -1380,7 +1381,7 @@ def extramural_import_config(ops, db_path: str):
             except:
                 pass
 
-    input("\nPress Enter to continue...")
+    print("\nPress any key..."); getch()
 
 
 def extramural_manage_sponsors(ops):
@@ -1422,7 +1423,7 @@ def extramural_manage_sponsors(ops):
                 except Exception as e:
                     print(f"\nError: {e}")
 
-                input("\nPress Enter to continue...")
+                print("\nPress any key..."); getch()
 
 
 def extramural_manage_local_peers(ops):
@@ -1466,7 +1467,7 @@ def extramural_manage_local_peers(ops):
                 except Exception as e:
                     print(f"\nError: {e}")
 
-                input("\nPress Enter to continue...")
+                print("\nPress any key..."); getch()
 
 
 def run_tui(db_path: str) -> int:
