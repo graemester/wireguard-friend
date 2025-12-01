@@ -315,7 +315,7 @@ Examples:
 
         # No database → First-run experience
         print("=" * 70)
-        print("  WireGuard Friend")
+        print(f"  WireGuard Friend v{VERSION} ({BUILD_NAME})")
         print("=" * 70)
         print()
         print("Welcome! This tool helps you manage WireGuard VPN networks.")

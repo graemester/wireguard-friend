@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Optional
 
+# Version info (keep in sync with wg-friend)
+VERSION = "1.0.4"
+BUILD_NAME = "falcon"
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from v1.schema_semantic import WireGuardDBv2
@@ -70,7 +74,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         True to continue, False to exit
     """
     print_menu(
-        "WIREGUARD FRIEND - MAIN MENU",
+        f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
             "Network Status",
             "List All Peers",
