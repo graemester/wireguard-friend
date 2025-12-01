@@ -23,6 +23,42 @@ class ExtramuralConfigGenerator:
     def __init__(self, db_path: Path):
         from v1.extramural_ops import ExtramuralOps
         self.ops = ExtramuralOps(db_path)
+        self.db_path = db_path
+
+    def _get_commands(self, config_id: int) -> tuple:
+        """
+        Retrieve PostUp/PostDown commands for an extramural config.
+
+        Args:
+            config_id: ID of the extramural config
+
+        Returns:
+            Tuple of (postup_commands, postdown_commands) lists
+        """
+        import json
+        import sqlite3
+
+        postup_commands = []
+        postdown_commands = []
+
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+
+            cursor.execute("""
+                SELECT up_commands, down_commands
+                FROM command_pair
+                WHERE extramural_config_id = ?
+                ORDER BY execution_order
+            """, (config_id,))
+
+            for row in cursor.fetchall():
+                up = json.loads(row['up_commands']) if row['up_commands'] else []
+                down = json.loads(row['down_commands']) if row['down_commands'] else []
+                postup_commands.extend(up)
+                postdown_commands.extend(down)
+
+        return postup_commands, postdown_commands
 
     def generate_config(
         self,
@@ -85,7 +121,12 @@ class ExtramuralConfigGenerator:
         if config.table_setting:
             lines.append(f"Table = {config.table_setting}")
 
-        # TODO: Add PostUp/PostDown from command_pair table
+        # Add PostUp/PostDown from command_pair table
+        postup_commands, postdown_commands = self._get_commands(config_id)
+        for cmd in postup_commands:
+            lines.append(f"PostUp = {cmd}")
+        for cmd in postdown_commands:
+            lines.append(f"PostDown = {cmd}")
 
         # Empty line before peer section
         lines.append("")
@@ -142,6 +183,8 @@ class ExtramuralConfigGenerator:
             sponsor_id=sponsor_id
         )
 
+        from datetime import datetime
+
         for config in configs:
             # Get peer and sponsor names for filename
             peer = self.ops.get_local_peer(config.local_peer_id)
@@ -151,14 +194,11 @@ class ExtramuralConfigGenerator:
                 logger.warning(f"Skipping config {config.id}: missing peer or sponsor")
                 continue
 
-            # Determine filename
-            if config.interface_name:
-                filename = f"{config.interface_name}.conf"
-            else:
-                # Format: peer-sponsor.conf
-                peer_slug = peer.name.lower().replace(' ', '-')
-                sponsor_slug = sponsor.name.lower().replace(' ', '-')
-                filename = f"{peer_slug}-{sponsor_slug}.conf"
+            # Determine filename: [Sponsor]-[hostname]-date.conf
+            sponsor_slug = sponsor.name.lower().replace(' ', '-')
+            peer_slug = peer.name.lower().replace(' ', '-')
+            date_str = datetime.now().strftime('%Y%m%d')
+            filename = f"{sponsor_slug}-{peer_slug}-{date_str}.conf"
 
             output_path = output_dir / filename
 

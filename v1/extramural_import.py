@@ -14,6 +14,7 @@ import re
 import logging
 from pathlib import Path
 from typing import Optional, List, Dict, Tuple
+from datetime import datetime
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
@@ -43,11 +44,19 @@ class ParsedExtramuralConfig:
     postup_commands: List[str] = None
     postdown_commands: List[str] = None
 
+    # Comments from original config (section -> list of comments)
+    comments: Dict[str, List[str]] = None
+
+    # Raw config content for perfect fidelity
+    raw_config: Optional[str] = None
+
     def __post_init__(self):
         if self.postup_commands is None:
             self.postup_commands = []
         if self.postdown_commands is None:
             self.postdown_commands = []
+        if self.comments is None:
+            self.comments = {'interface': [], 'peer': []}
 
 
 class ExtramuralConfigParser:
@@ -75,22 +84,31 @@ class ExtramuralConfigParser:
             raise ValueError(f"Config file not found: {config_path}")
 
         with open(config_path, 'r') as f:
-            lines = f.readlines()
+            raw_content = f.read()
+            lines = raw_content.splitlines()
 
         self.interface_fields = {}
         self.peers = []
         self.current_section = None
+        self.comments = {'interface': [], 'peer': []}
 
         for line in lines:
-            line = line.strip()
+            stripped = line.strip()
 
-            # Skip empty lines and comments
-            if not line or line.startswith('#') or line.startswith(';'):
+            # Capture comments
+            if stripped.startswith('#') or stripped.startswith(';'):
+                if self.current_section:
+                    section_key = 'peer' if self.current_section == 'peer' else 'interface'
+                    self.comments[section_key].append(stripped)
+                continue
+
+            # Skip empty lines
+            if not stripped:
                 continue
 
             # Section headers
-            if line.startswith('['):
-                section = line.strip('[]').lower()
+            if stripped.startswith('['):
+                section = stripped.strip('[]').lower()
                 if section == 'interface':
                     self.current_section = 'interface'
                 elif section == 'peer':
@@ -99,8 +117,8 @@ class ExtramuralConfigParser:
                 continue
 
             # Parse key-value pairs
-            if '=' in line:
-                key, value = line.split('=', 1)
+            if '=' in stripped:
+                key, value = stripped.split('=', 1)
                 key = key.strip()
                 value = value.strip()
 
@@ -205,7 +223,9 @@ class ExtramuralConfigParser:
             peer_preshared_key=peer.get('PresharedKey'),
             peer_persistent_keepalive=persistent_keepalive,
             postup_commands=postup_commands,
-            postdown_commands=postdown_commands
+            postdown_commands=postdown_commands,
+            comments=self.comments,
+            raw_config=raw_content
         )
 
     @staticmethod
@@ -317,6 +337,10 @@ def import_extramural_config(
         else:
             ipv4_addr = addr
 
+    # Store comments as JSON
+    import json
+    comments_json = json.dumps(parsed.comments) if parsed.comments else None
+
     # Create config
     config_id = ops.add_extramural_config(
         local_peer_id=local_peer_id,
@@ -332,7 +356,9 @@ def import_extramural_config(
         mtu=parsed.mtu,
         table_setting=parsed.table,
         config_path=str(config_path),
-        notes=f"Imported from {config_path}"
+        notes=f"Imported from {config_path}",
+        raw_config=parsed.raw_config,
+        comments=comments_json
     )
 
     logger.info(f"Created extramural config (ID: {config_id})")
@@ -360,9 +386,36 @@ def import_extramural_config(
 
     logger.info(f"Added sponsor peer: {peer_endpoint_name} (ID: {peer_id})")
 
-    # TODO: Handle PostUp/PostDown commands (store in command_pair table)
+    # Store PostUp/PostDown commands in command_pair table
     if parsed.postup_commands or parsed.postdown_commands:
-        logger.warning("PostUp/PostDown commands found but not yet implemented for storage")
+        import json
+        import sqlite3
+
+        with sqlite3.connect(db_path) as conn:
+            cursor = conn.cursor()
+
+            # Store as a single command_pair with extramural_config_id
+            cursor.execute("""
+                INSERT INTO command_pair (
+                    entity_type, entity_id,
+                    pattern_name, rationale, scope,
+                    up_commands, down_commands,
+                    execution_order,
+                    extramural_config_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                'extramural', config_id,
+                'sponsor_provided',  # pattern_name
+                'Commands from sponsor-provided config',  # rationale
+                'interface',  # scope
+                json.dumps(parsed.postup_commands),
+                json.dumps(parsed.postdown_commands),
+                0,  # execution_order
+                config_id
+            ))
+
+            conn.commit()
+            logger.info(f"Stored {len(parsed.postup_commands)} PostUp and {len(parsed.postdown_commands)} PostDown commands")
 
     return config_id, sponsor_id, local_peer_id
 

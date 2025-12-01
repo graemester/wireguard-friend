@@ -116,6 +116,24 @@ class ExtramuralDB:
                 )
             """)
 
+            # Add raw_config and comments columns if they don't exist
+            cursor.execute("PRAGMA table_info(extramural_config)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if 'raw_config' not in columns:
+                cursor.execute("""
+                    ALTER TABLE extramural_config
+                    ADD COLUMN raw_config TEXT
+                """)
+                logger.info("Added raw_config column to extramural_config table")
+
+            if 'comments' not in columns:
+                cursor.execute("""
+                    ALTER TABLE extramural_config
+                    ADD COLUMN comments TEXT
+                """)
+                logger.info("Added comments column to extramural_config table")
+
             # ===== EXTRAMURAL PEER (Sponsor's Servers) =====
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS extramural_peer (

@@ -144,7 +144,7 @@ def parse_peer_section(entity, categorizer):
     return peer_data
 
 
-def import_coordination_server(config_path: Path, db: WireGuardDBv2):
+def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: str = None):
     """Import coordination server config"""
     parser = EntityParser()
     entities = parser.parse_file(config_path)
@@ -203,6 +203,10 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2):
     else:
         network_ipv6 = "fd66::/64"
 
+    # Use provided hostname or default
+    if not hostname:
+        hostname = 'coordination-server'
+
     # Insert into database
     with db._connection() as conn:
         cursor = conn.cursor()
@@ -218,7 +222,7 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2):
         """, (
             permanent_guid,
             public_key,
-            'coordination-server',
+            hostname,
             endpoint or 'UNKNOWN',  # TODO: prompt
             listen_port,
             interface.get('mtu'),
@@ -283,6 +287,261 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2):
     return cs_id, peers
 
 
+def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs_pubkey: str = None):
+    """
+    Import subnet router config.
+
+    Args:
+        config_path: Path to subnet router .conf file
+        db: Database connection
+        hostname: Friendly name for this router
+        cs_pubkey: Expected CS public key (to validate peer section)
+
+    Returns:
+        router_id
+    """
+    parser = EntityParser()
+    entities = parser.parse_file(config_path)
+
+    valid, msg = parser.validate_structure(entities)
+    if not valid:
+        raise ValueError(f"Invalid config structure: {msg}")
+
+    categorizer = CommentCategorizer()
+    pattern_recognizer = PatternRecognizer()
+
+    # Parse [Interface]
+    interface = parse_interface_section(entities[0], categorizer)
+
+    if not interface['private_key']:
+        raise ValueError("No PrivateKey found in [Interface]")
+
+    public_key = derive_public_key(interface['private_key'])
+    permanent_guid = public_key
+
+    # Parse addresses
+    ipv4_addr = None
+    ipv6_addr = None
+    for addr in interface['addresses']:
+        if ':' in addr:
+            ipv6_addr = addr
+        else:
+            ipv4_addr = addr
+
+    if not hostname:
+        hostname = config_path.stem
+
+    print(f"\nSubnet Router: {hostname}")
+    print(f"  permanent_guid: {permanent_guid[:30]}...")
+    print(f"  Addresses: {interface['addresses']}")
+
+    # Get CS ID
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM coordination_server LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("No coordination server found - import CS first")
+        cs_id = row[0]
+
+    # Parse [Peer] section to get endpoint
+    peer_data = None
+    if len(entities) > 1:
+        peer_data = parse_peer_section(entities[1], categorizer)
+
+    endpoint = peer_data.get('endpoint') if peer_data else None
+
+    # Try to infer LAN network from AllowedIPs or PostUp/PostDown
+    lan_networks = []
+    if peer_data:
+        for ip in peer_data.get('allowed_ips', []):
+            # Skip VPN networks and default routes
+            if ip.startswith('10.') or ip.startswith('fd') or ip in ('0.0.0.0/0', '::/0'):
+                continue
+            if ip.startswith('192.168.') or ip.startswith('172.'):
+                lan_networks.append(ip)
+
+    # Recognize patterns
+    pairs, singletons, unrecognized = pattern_recognizer.recognize_pairs(
+        interface['postup'],
+        interface['postdown']
+    )
+
+    # Insert into database
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO subnet_router (
+                cs_id, permanent_guid, current_public_key, hostname,
+                ipv4_address, ipv6_address, private_key,
+                lan_interface, endpoint
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            cs_id,
+            permanent_guid,
+            public_key,
+            hostname,
+            ipv4_addr or '10.66.0.20/32',
+            ipv6_addr,
+            interface['private_key'],
+            'eth0',  # Default - user can update later
+            endpoint
+        ))
+        router_id = cursor.lastrowid
+
+        # Insert advertised networks
+        for network in lan_networks:
+            cursor.execute("""
+                INSERT INTO advertised_network (subnet_router_id, network_cidr)
+                VALUES (?, ?)
+            """, (router_id, network))
+
+        # Store command pairs
+        import json
+        for i, pair in enumerate(pairs):
+            cursor.execute("""
+                INSERT INTO command_pair (
+                    entity_type, entity_id,
+                    pattern_name, rationale, scope,
+                    up_commands, down_commands,
+                    execution_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                'subnet_router', router_id,
+                pair.pattern_name,
+                pair.rationale,
+                pair.scope.value,
+                json.dumps(pair.up_commands if isinstance(pair.up_commands, list) else [pair.up_commands]),
+                json.dumps(pair.down_commands if isinstance(pair.down_commands, list) else [pair.down_commands]),
+                i
+            ))
+
+    print(f"  ✓ Imported subnet router (ID: {router_id})")
+    if lan_networks:
+        print(f"  ✓ LAN networks: {', '.join(lan_networks)}")
+
+    return router_id
+
+
+def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs_pubkey: str = None):
+    """
+    Import remote client config.
+
+    Args:
+        config_path: Path to client .conf file
+        db: Database connection
+        hostname: Friendly name for this remote
+        cs_pubkey: Expected CS public key (to validate peer section)
+
+    Returns:
+        remote_id
+    """
+    parser = EntityParser()
+    entities = parser.parse_file(config_path)
+
+    valid, msg = parser.validate_structure(entities)
+    if not valid:
+        raise ValueError(f"Invalid config structure: {msg}")
+
+    categorizer = CommentCategorizer()
+
+    # Parse [Interface]
+    interface = parse_interface_section(entities[0], categorizer)
+
+    if not interface['private_key']:
+        raise ValueError("No PrivateKey found in [Interface]")
+
+    public_key = derive_public_key(interface['private_key'])
+    permanent_guid = public_key
+
+    # Parse addresses
+    ipv4_addr = None
+    ipv6_addr = None
+    for addr in interface['addresses']:
+        if ':' in addr:
+            ipv6_addr = addr
+        else:
+            ipv4_addr = addr
+
+    if not hostname:
+        hostname = config_path.stem
+
+    print(f"\nRemote Client: {hostname}")
+    print(f"  permanent_guid: {permanent_guid[:30]}...")
+    print(f"  Addresses: {interface['addresses']}")
+
+    # Get CS ID
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM coordination_server LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("No coordination server found - import CS first")
+        cs_id = row[0]
+
+    # Parse [Peer] section to get endpoint
+    peer_data = None
+    if len(entities) > 1:
+        peer_data = parse_peer_section(entities[1], categorizer)
+
+    endpoint = peer_data.get('endpoint') if peer_data else None
+
+    # Infer access level from AllowedIPs, then confirm with user
+    access_level = 'full_access'
+    if peer_data:
+        allowed = peer_data.get('allowed_ips', [])
+        if '0.0.0.0/0' in allowed or '::/0' in allowed:
+            access_level = 'full_access'
+        # Note: presence of LAN routes in AllowedIPs doesn't mean restricted access
+        # it just means LAN traffic is routed through VPN
+
+    # Prompt user to confirm/set access level
+    print(f"\n  Set access level for {hostname}:")
+    print(f"    1. full_access - Full VPN + internet routing")
+    print(f"    2. vpn_only   - VPN peers only, no LAN access")
+    print(f"    3. lan_only   - VPN + LAN access, no internet routing")
+    print()
+
+    access_map = {'1': 'full_access', '2': 'vpn_only', '3': 'lan_only'}
+    default_num = {'full_access': '1', 'vpn_only': '2', 'lan_only': '3'}.get(access_level, '1')
+
+    choice = input(f"  Access level [{default_num}]: ").strip()
+    if choice in access_map:
+        access_level = access_map[choice]
+    elif choice == '':
+        pass  # Keep default
+    else:
+        print(f"  Invalid choice, using {access_level}")
+
+    # Insert into database
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO remote (
+                cs_id, permanent_guid, current_public_key, hostname,
+                ipv4_address, ipv6_address, private_key,
+                access_level
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            cs_id,
+            permanent_guid,
+            public_key,
+            hostname,
+            ipv4_addr or '10.66.0.30/32',
+            ipv6_addr or '',
+            interface['private_key'],
+            access_level
+        ))
+        remote_id = cursor.lastrowid
+
+    print(f"  ✓ Imported remote client (ID: {remote_id})")
+    print(f"  ✓ Access level: {access_level}")
+
+    return remote_id
+
+
 def run_import(args) -> int:
     """Import existing configs into database"""
     print("=" * 70)
@@ -315,18 +574,68 @@ def run_import(args) -> int:
     db = WireGuardDBv2(db_path)
 
     try:
+        # Get hostname from args if provided (from entity review)
+        cs_hostname = getattr(args, 'cs_name', None)
+
         # Import coordination server
-        cs_id, cs_peers = import_coordination_server(cs_path, db)
+        cs_id, cs_peers = import_coordination_server(cs_path, db, hostname=cs_hostname)
 
-        # TODO: Import subnet routers
-        if args.snr:
-            print("\nWARNING:  Subnet router import not yet implemented")
-            print("   Use 'wg-friend add router' to add routers manually")
+        # Track import counts
+        snr_count = 0
+        remote_count = 0
 
-        # TODO: Import remotes
-        if args.remote:
-            print("\nWARNING:  Remote import not yet implemented")
-            print("   Use 'wg-friend add peer' to add peers manually")
+        # Check if we have confirmed entities from entity review
+        confirmed_entities = getattr(args, 'entities', None)
+
+        if confirmed_entities:
+            # Import all confirmed entities (CS was already done above)
+            for entity in confirmed_entities:
+                if entity.config_type == 'coordination_server':
+                    continue  # Already imported
+
+                elif entity.config_type == 'subnet_router':
+                    try:
+                        router_id = import_subnet_router(
+                            entity.path, db, hostname=entity.friendly_name
+                        )
+                        snr_count += 1
+                    except Exception as e:
+                        print(f"\n  Error importing subnet router {entity.path.name}: {e}")
+
+                elif entity.config_type == 'client':
+                    try:
+                        remote_id = import_remote(
+                            entity.path, db, hostname=entity.friendly_name
+                        )
+                        remote_count += 1
+                    except Exception as e:
+                        print(f"\n  Error importing remote {entity.path.name}: {e}")
+
+        else:
+            # Legacy mode: use args.snr and args.remote if provided
+            if args.snr:
+                for snr_path in args.snr:
+                    snr_file = Path(snr_path)
+                    if snr_file.exists():
+                        try:
+                            router_id = import_subnet_router(snr_file, db)
+                            snr_count += 1
+                        except Exception as e:
+                            print(f"\n  Error importing subnet router {snr_file.name}: {e}")
+                    else:
+                        print(f"\n  Warning: File not found: {snr_path}")
+
+            if args.remote:
+                for remote_path in args.remote:
+                    remote_file = Path(remote_path)
+                    if remote_file.exists():
+                        try:
+                            remote_id = import_remote(remote_file, db)
+                            remote_count += 1
+                        except Exception as e:
+                            print(f"\n  Error importing remote {remote_file.name}: {e}")
+                    else:
+                        print(f"\n  Warning: File not found: {remote_path}")
 
         # Record initial state snapshot
         state_id = record_import(str(db_path), db, len(cs_peers))
@@ -337,14 +646,26 @@ def run_import(args) -> int:
         print("=" * 70)
         print(f"✓ Database created: {db_path}")
         print(f"✓ Coordination server imported")
-        print(f"✓ Found {len(cs_peers)} peers (stored as references)")
+        print(f"✓ Found {len(cs_peers)} peers in CS config")
+        if snr_count > 0:
+            print(f"✓ Imported {snr_count} subnet router(s)")
+        if remote_count > 0:
+            print(f"✓ Imported {remote_count} remote client(s)")
         print(f"✓ State snapshot recorded (State #{state_id})")
         print()
-        print("Next steps:")
-        print(f"  1. Review database: sqlite3 {db_path}")
-        print(f"  2. Add missing entities: wg-friend add peer/router")
-        print(f"  3. Generate configs: wg-friend generate")
-        print()
+
+        # Offer to enter maintenance mode
+        response = input("Enter maintenance mode? [Y/n]: ").strip().lower()
+        if response in ('', 'y', 'yes'):
+            from v1.cli.tui import run_tui
+            return run_tui(str(db_path))
+        else:
+            print()
+            print("Next steps:")
+            print(f"  1. Review database: sqlite3 {db_path}")
+            print(f"  2. Add missing entities: wg-friend add peer/router")
+            print(f"  3. Generate configs: wg-friend generate")
+            print()
 
         return 0
 

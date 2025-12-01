@@ -466,8 +466,9 @@ def deploy_configs(args) -> int:
     dry_run = getattr(args, 'dry_run', False)
 
     # Deploy to specific host or all hosts?
-    if hasattr(args, 'host') and args.host:
-        return deploy_single(db, output_dir, args.host, user=user, restart=restart, dry_run=dry_run)
+    entity = getattr(args, 'entity', None) or getattr(args, 'host', None)
+    if entity:
+        return deploy_single(db, output_dir, entity, user=user, restart=restart, dry_run=dry_run)
     else:
         failures = deploy_all(db, output_dir, user=user, restart=restart, dry_run=dry_run)
         return 1 if failures > 0 else 0

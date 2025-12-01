@@ -86,6 +86,8 @@ class ExtramuralConfig:
     pending_remote_update: bool = False
     last_key_rotation_at: Optional[datetime] = None
     notes: Optional[str] = None
+    raw_config: Optional[str] = None
+    comments: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -366,7 +368,8 @@ class ExtramuralOps:
 
         valid_fields = {
             'interface_name', 'assigned_ipv4', 'assigned_ipv6', 'dns_servers',
-            'listen_port', 'mtu', 'table_setting', 'config_path', 'notes'
+            'listen_port', 'mtu', 'table_setting', 'config_path', 'notes',
+            'raw_config', 'comments'
         }
         optional = {k: v for k, v in kwargs.items() if k in valid_fields}
 

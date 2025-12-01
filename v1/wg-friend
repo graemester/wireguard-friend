@@ -27,7 +27,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from v1.cli.init_wizard import run_init_wizard
 from v1.cli.import_configs import run_import
-from v1.cli.peer_manager import add_peer, rotate_keys, revoke_peer, run_preshared_key, run_generate_qr
+from v1.schema_semantic import WireGuardDBv2
+from v1.cli.peer_manager import add_peer, add_router, add_remote, rotate_keys, revoke_peer, run_preshared_key, run_generate_qr
 from v1.cli.config_generator import generate_configs
 from v1.cli.deploy import deploy_configs
 from v1.cli.status import show_status
@@ -103,6 +104,13 @@ Examples:
     revoke_parser = subparsers.add_parser('revoke', help='Revoke peer access')
     revoke_parser.add_argument('peer', help='Peer name or permanent_guid')
 
+    # list - List all peers
+    list_parser = subparsers.add_parser('list', help='List all peers in database')
+
+    # remove - Remove peer (alias for revoke with interactive selection)
+    remove_parser = subparsers.add_parser('remove', help='Remove a peer from the network')
+    remove_parser.add_argument('peer', nargs='?', help='Peer type:id (e.g., router:1, remote:2) or omit for interactive')
+
     # generate - Generate configs
     generate_parser = subparsers.add_parser('generate', help='Generate all configs from database')
     generate_parser.add_argument('--output', default='generated', help='Output directory')
@@ -112,6 +120,9 @@ Examples:
     deploy_parser = subparsers.add_parser('deploy', help='Deploy configs via SSH')
     deploy_parser.add_argument('--entity', help='Deploy specific entity (or all if not specified)')
     deploy_parser.add_argument('--dry-run', action='store_true', help='Show what would be deployed')
+    deploy_parser.add_argument('--output', default='generated', help='Config directory (default: generated)')
+    deploy_parser.add_argument('--user', default='root', help='SSH user (default: root)')
+    deploy_parser.add_argument('--restart', action='store_true', help='Restart WireGuard after deploy')
 
     # status - View peer status
     status_parser = subparsers.add_parser('status', help='View peer connection status')
@@ -279,41 +290,41 @@ Examples:
                 except Exception as e:
                     print(f"  • {conf.name}: [error: {e}]")
 
-            # Find coordination server
-            cs_conf = None
-            for conf, config_type, _ in classified_configs:
-                if config_type == 'coordination_server':
-                    cs_conf = conf
-                    break
-
-            if not cs_conf:
-                print("\n⚠  No coordination server config detected!")
-                print("Looking for a config with:")
-                print("  - 3+ peers, OR")
-                print("  - FORWARD/POSTROUTING rules in PostUp")
-                print()
-                print("You can still import manually:")
-                print("  wg-friend import --cs <coordination-server-config>")
+            if not classified_configs:
+                print("\nNo valid configs detected.")
                 return 1
 
-            print(f"\nReady to import:")
-            for conf, config_type, peer_count in classified_configs:
-                marker = "→" if conf == cs_conf else " "
-                print(f"  {marker} {conf.name}: {config_type} ({peer_count} peers)")
-            print()
+            # Interactive review of each entity
+            from v1.cli.entity_review import review_detected_entities, get_cs_entity
 
+            confirmed_entities = review_detected_entities(classified_configs)
+
+            if not confirmed_entities:
+                print("\nNo entities confirmed. Run wg-friend again when ready.")
+                return 0
+
+            # Get the CS entity
+            cs_entity = get_cs_entity(confirmed_entities)
+            if not cs_entity:
+                print("\nNo coordination server selected. Cannot proceed.")
+                return 1
+
+            # Confirm and proceed
             response = input("Proceed with import? [Y/n]: ").strip().lower()
             if response not in ('n', 'no'):
-                print(f"\nImporting coordination server from: {cs_conf.name}")
-                print("(Other configs will need to be added manually with 'wg-friend add')")
+                print(f"\nImporting from: {cs_entity.path.name}")
+                print(f"Coordination server name: {cs_entity.friendly_name}")
                 print()
 
-                # Build import args
+                # Build import args with confirmed entities
                 class ImportArgs:
-                    cs = str(cs_conf)
+                    cs = str(cs_entity.path)
+                    cs_name = cs_entity.friendly_name
                     snr = None
                     remote = None
                     db = args.db
+                    # Pass the full entity list for future use
+                    entities = confirmed_entities
 
                 return run_import(ImportArgs())
             else:
@@ -343,14 +354,59 @@ Examples:
         elif args.command == 'import':
             return run_import(args)
         elif args.command == 'add':
+            db = WireGuardDBv2(args.db)
             if args.add_type == 'peer':
-                return add_peer(args)
+                add_remote(db, hostname=getattr(args, 'name', None))
+                return 0
             elif args.add_type == 'router':
-                return add_router(args)
+                add_router(db, hostname=getattr(args, 'name', None))
+                return 0
         elif args.command == 'rotate':
             return rotate_keys(args)
         elif args.command == 'revoke':
             return revoke_peer(args)
+        elif args.command == 'list':
+            db = WireGuardDBv2(args.db)
+            from v1.cli.peer_manager import list_peers
+            list_peers(db)
+            return 0
+        elif args.command == 'remove':
+            db = WireGuardDBv2(args.db)
+            from v1.cli.peer_manager import list_peers, remove_peer
+            # If peer specified, parse type:id format
+            if args.peer:
+                if ':' in args.peer:
+                    peer_type, peer_id = args.peer.split(':', 1)
+                    try:
+                        peer_id = int(peer_id)
+                        remove_peer(db, peer_type, peer_id)
+                        return 0
+                    except ValueError:
+                        print(f"Error: Invalid peer ID: {peer_id}")
+                        return 1
+                else:
+                    print("Error: Peer must be in format 'type:id' (e.g., router:1, remote:2)")
+                    return 1
+            else:
+                # Interactive mode
+                list_peers(db)
+                print("\n" + "─" * 70)
+                print("REMOVE PEER")
+                print("─" * 70)
+                peer_type = input("Peer type [router/remote] (or 'q' to cancel): ").strip().lower()
+                if peer_type in ('q', 'quit', 'cancel', ''):
+                    return 0
+                if peer_type not in ('router', 'remote'):
+                    print("Invalid peer type.")
+                    return 1
+                try:
+                    peer_id = int(input("Peer ID: ").strip())
+                except ValueError:
+                    print("Invalid peer ID.")
+                    return 1
+                reason = input("Reason for removal [Manual revocation]: ").strip() or "Manual revocation"
+                remove_peer(db, peer_type, peer_id, reason)
+                return 0
         elif args.command == 'generate':
             return generate_configs(args)
         elif args.command == 'deploy':
