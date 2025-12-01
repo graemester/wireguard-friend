@@ -58,11 +58,19 @@ Detailed feature set
 
 The author is not about hype, perfection framing, or completion fetishes. Documentation should be practical and straightforward.
 
+## Versioning Convention
+
+Format: `MAJOR.MINOR.PATCH` (e.g., v1.0.6)
+
+- **PATCH** (third segment): Increment each feature cycle / dev build
+- **MINOR** (second segment): Increment for GitHub releases
+- **MAJOR** (first segment): Increment for big/breaking releases
+
 ## Feature Cycle Workflow
 
 At the end of each feature cycle, follow this sequence:
 
-1. **Bump version** - Increment the patch version (last segment) in both:
+1. **Bump version** - Increment the PATCH version (third segment) in both:
    - `v1/wg-friend` (VERSION constant)
    - `v1/cli/tui.py` (VERSION constant)
 
