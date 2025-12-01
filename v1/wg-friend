@@ -22,6 +22,9 @@ import sys
 import argparse
 from pathlib import Path
 
+VERSION = "1.0.4"
+BUILD_NAME = "falcon"  # Random codename for dev builds
+
 # Add v1 to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -67,7 +70,8 @@ Examples:
 
     parser.add_argument('--db', default='wireguard.db',
                        help='Database file (default: wireguard.db)')
-    parser.add_argument('--version', action='version', version='wg-friend v1.0.4')
+    parser.add_argument('--version', action='version',
+                        version=f'wg-friend v{VERSION} ({BUILD_NAME})')
 
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 
