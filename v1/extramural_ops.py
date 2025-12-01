@@ -428,22 +428,22 @@ class ExtramuralOps:
                 cursor.execute("""
                     SELECT * FROM extramural_config
                     WHERE local_peer_id = ? AND sponsor_id = ?
-                    ORDER BY created_at
+                    ORDER BY created_at DESC
                 """, (local_peer_id, sponsor_id))
             elif local_peer_id:
                 cursor.execute("""
                     SELECT * FROM extramural_config
                     WHERE local_peer_id = ?
-                    ORDER BY created_at
+                    ORDER BY created_at DESC
                 """, (local_peer_id,))
             elif sponsor_id:
                 cursor.execute("""
                     SELECT * FROM extramural_config
                     WHERE sponsor_id = ?
-                    ORDER BY created_at
+                    ORDER BY created_at DESC
                 """, (sponsor_id,))
             else:
-                cursor.execute("SELECT * FROM extramural_config ORDER BY created_at")
+                cursor.execute("SELECT * FROM extramural_config ORDER BY created_at DESC")
 
             return [ExtramuralConfig(**dict(row)) for row in cursor.fetchall()]
 

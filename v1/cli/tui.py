@@ -582,7 +582,7 @@ def extramural_menu(db_path: str):
 
         elif choice == 1:
             # List all configs
-            extramural_list_all(ops)
+            extramural_list_all(ops, db_path)
 
         elif choice == 2:
             # View by sponsor
@@ -702,42 +702,58 @@ def extramural_generate_single(ops, db_path: str):
     input("\nPress Enter to continue...")
 
 
-def extramural_list_all(ops):
-    """List all extramural configs"""
-    configs = ops.list_extramural_configs()
+def extramural_list_all(ops, db_path: str):
+    """List all extramural configs with option to select one"""
+    while True:
+        configs = ops.list_extramural_configs()
 
-    if not configs:
-        print("\nNo extramural configs found.")
-        print("\nTo add one, use 'Import Config File' or the CLI:")
-        print("  wg-friend extramural import <config.conf> --sponsor <name> --peer <device>")
-        input("\nPress Enter to continue...")
-        return
+        if not configs:
+            print("\nNo extramural configs found.")
+            print("\nTo add one, use 'Import Config File' or the CLI:")
+            print("  wg-friend extramural import <config.conf> --sponsor <name> --peer <device>")
+            input("\nPress Enter to continue...")
+            return
 
-    print(f"\n{'=' * 70}")
-    print(f"EXTRAMURAL CONFIGS ({len(configs)})")
-    print(f"{'=' * 70}\n")
+        print(f"\n{'=' * 70}")
+        print(f"EXTRAMURAL CONFIGS ({len(configs)})")
+        print(f"{'=' * 70}\n")
 
-    for config in configs:
-        peer = ops.get_local_peer(config.local_peer_id)
-        sponsor = ops.get_sponsor(config.sponsor_id)
-        active_peer = ops.get_active_peer(config.id)
+        for i, config in enumerate(configs, 1):
+            peer = ops.get_local_peer(config.local_peer_id)
+            sponsor = ops.get_sponsor(config.sponsor_id)
+            active_peer = ops.get_active_peer(config.id)
 
-        peer_name = peer.name if peer else 'Unknown'
-        sponsor_name = sponsor.name if sponsor else 'Unknown'
-        endpoint = active_peer.endpoint if active_peer else 'N/A'
+            peer_name = peer.name if peer else 'Unknown'
+            sponsor_name = sponsor.name if sponsor else 'Unknown'
+            endpoint = active_peer.endpoint if active_peer else 'N/A'
 
-        status = ""
-        if config.pending_remote_update:
-            status = " [PENDING UPDATE]"
-        elif config.last_deployed_at:
-            status = f" (deployed {config.last_deployed_at})"
+            status = ""
+            if config.pending_remote_update:
+                status = " [PENDING UPDATE]"
+            elif config.last_deployed_at:
+                status = f" (deployed)"
 
-        print(f"  [{config.id}] {peer_name}/{sponsor_name}{status}")
-        print(f"      Interface: {config.interface_name or 'N/A'}")
-        print(f"      Endpoint: {endpoint}")
+            print(f"  {i}. {peer_name} / {sponsor_name}{status}")
+            print(f"      Interface: {config.interface_name or 'N/A'}, Endpoint: {endpoint}")
+
+        print(f"\n  b. Back")
         print()
 
-    input("Press Enter to continue...")
+        choice = input("Select config (or Enter to go back): ").strip().lower()
+
+        if choice == 'b' or not choice:
+            return
+
+        try:
+            idx = int(choice) - 1
+            if 0 <= idx < len(configs):
+                extramural_config_detail(ops, configs[idx], db_path)
+            else:
+                print("Invalid choice.")
+                input("\nPress Enter to continue...")
+        except ValueError:
+            print("Invalid choice.")
+            input("\nPress Enter to continue...")
 
 
 def extramural_by_sponsor(ops, db_path: str):
