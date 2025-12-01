@@ -3,8 +3,8 @@
 Command-line tool for managing WireGuard VPN networks with hub-and-spoke topology.
 
 > **Repository Structure:**
-> **v1/** - Current stable release (v1.0.1)
-> **v-alpha/** - Archived original version
+> **v1/** - Current stable release (v1.0.7)
+> **v-alpha/** - Archived original version (deprecated)
 
 ---
 
@@ -50,13 +50,21 @@ WireGuard Friend manages WireGuard configurations for networks using a coordinat
 - Live peer status monitoring via wg show
 - Preshared key support for post-quantum resistance
 
-### Extramural Configs (NEW in v1.0.1) 
+### Extramural Configs
 - **Manage external VPN configs** from commercial providers (Mullvad, ProtonVPN, etc.)
-- **Import sponsor-provided configs** with automatic parsing
+- **Import sponsor-provided configs** with automatic parsing (marked as deployed)
 - **Switch between server endpoints** easily
 - **Update configs** when providers send changes
 - **Complete separation** from mesh infrastructure
 - See [Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md) for details
+
+### Enhanced TUI (v1.0.5+)
+- **Rich terminal styling** with colored panels and borders
+- **Manage Peers** drill-down interface for detailed peer inspection
+- **Menu hints** showing what each option does
+- **SSH operation spinners** for visual feedback during deployment
+- **3x Enter to exit** prevents accidental program termination
+- **Working directory display** on launch for context
 
 ## Installation
 
@@ -269,8 +277,7 @@ wg-friend maintain           # Interactive TUI
 
 - **[Quick Start](v1/quick-start.md)** - Detailed walkthrough for mesh networks
 - **[Command Reference](v1/COMMAND_REFERENCE.md)** - All commands
-- **[Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md)** - NEW: External VPN management
-- **[Release Notes](RELEASE_NOTES_v1.0.1.md)** - What's new in v1.0.1
+- **[Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md)** - External VPN management
 
 ## Project Structure
 

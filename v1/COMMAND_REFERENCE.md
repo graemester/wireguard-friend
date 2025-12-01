@@ -442,45 +442,47 @@ wg-friend maintain --db custom.db
 ```
 
 **Features:**
-- Network status overview
-- List all peers
-- Add peers (interactive)
-- Remove peers (interactive)
+- Rich terminal styling with colored panels and borders
+- Network status overview with topology visualization
+- **Manage Peers** - drill-down interface for detailed peer inspection
+- Add peers (interactive wizards)
+- Remove peers (with confirmation)
 - Rotate keys (interactive)
 - View rotation history
-- Menu-driven navigation
+- Extramural config management
+- Generate and deploy configs directly from TUI
+- Menu hints showing what each option does
 
 **Menu Options:**
-1. Network Status
-2. List All Peers
-3. Add Peer
-4. Remove Peer
-5. Rotate Keys
-6. Recent Key Rotations
-7. Generate Configs (shows command to run)
-8. Deploy Configs (shows command to run)
+1. Network Status [view topology and connections]
+2. Manage Peers [view, edit, and manage all peers]
+3. Add Peer [add new device to network]
+4. Remove Peer [revoke a device's access]
+5. Rotate Keys [regenerate security keys]
+6. History [view change timeline]
+7. Extramural [manage commercial VPN configs]
+8. Generate Configs [create .conf files from database]
+9. Deploy Configs [push configs via SSH]
 q. Quit
 
-**Example:**
-```bash
-./v1/wg-friend maintain
+**Navigation:**
+- Enter number to select option
+- Press 'q' to quit immediately
+- Press Enter 3 times to exit (prevents accidental exits)
+- Empty Enter in submenus returns to previous menu
 
-# Interactive menu appears:
-#   ======================================================================
-#   WIREGUARD FRIEND - MAIN MENU
-#   ======================================================================
-#     1. Network Status
-#     2. List All Peers
-#     3. Add Peer
-#     4. Remove Peer
-#     5. Rotate Keys
-#     6. Recent Key Rotations
-#     7. Generate Configs (requires running separate command)
-#     8. Deploy Configs (requires running separate command)
-#     q. Quit
-#
-#   Choice: _
-```
+**Manage Peers Drill-Down:**
+The Manage Peers option provides entity-centered navigation:
+- View all peers grouped by type (CS, Routers, Remotes)
+- Select any peer to see full details
+- Access contextual actions per peer:
+  - Rotate Keys
+  - View Key History
+  - Generate Config
+  - Deploy Config
+  - Change Access Level (remotes)
+  - Generate QR Code (remotes)
+  - Remove Peer
 
 ---
 

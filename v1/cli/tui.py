@@ -90,7 +90,7 @@ def get_menu_choice(max_choice: int, allow_quit: bool = True, default_back: bool
                      If False with allow_quit, empty input returns None (quit)
 
     Returns:
-        Choice number, None for quit, or max_choice for back
+        Choice number, None for quit, -1 for empty input (main menu only), or max_choice for back
     """
     while True:
         choice = input("Choice: ").strip().lower()
@@ -100,7 +100,7 @@ def get_menu_choice(max_choice: int, allow_quit: bool = True, default_back: bool
             if default_back:
                 return max_choice  # Return the "Back" option
             elif allow_quit:
-                return None  # Quit
+                return -1  # Signal empty input (caller tracks consecutive count)
 
         if allow_quit and choice in ('q', 'quit', 'exit'):
             return None
@@ -114,12 +114,15 @@ def get_menu_choice(max_choice: int, allow_quit: bool = True, default_back: bool
             print(f"  Invalid choice. Enter 1-{max_choice} or 'q' to quit.")
 
 
-def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
+def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db', empty_count: int = 0) -> tuple:
     """
     Display main menu and handle user choice.
 
+    Args:
+        empty_count: Number of consecutive empty Enters so far
+
     Returns:
-        True to continue, False to exit
+        Tuple of (continue_running: bool, new_empty_count: int)
     """
     print_menu(
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
@@ -137,8 +140,22 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
     )
 
     choice = get_menu_choice(9)
+
+    # 'q' pressed - exit immediately
     if choice is None:
-        return False
+        return (False, 0)
+
+    # Empty Enter pressed - track consecutive count
+    if choice == -1:
+        empty_count += 1
+        if empty_count >= 3:
+            return (False, 0)
+        remaining = 3 - empty_count
+        print(f"  Press Enter {remaining} more time{'s' if remaining > 1 else ''} to exit, or 'q' to quit now.")
+        return (True, empty_count)
+
+    # Valid choice - reset empty count
+    empty_count = 0
 
     if choice == 1:
         # Network Status
@@ -177,7 +194,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         # Deploy Configs
         deploy_configs_menu(db, db_path)
 
-    return True
+    return (True, 0)  # Reset empty count after any action
 
 
 def peer_type_menu(db: WireGuardDBv2):
@@ -1378,10 +1395,11 @@ def run_tui(db_path: str) -> int:
 
     # Go straight to menu - no welcome screen friction
 
-    # Main loop
+    # Main loop - track consecutive empty Enters for exit
+    empty_count = 0
     while True:
         try:
-            continue_running = main_menu(db, db_path)
+            continue_running, empty_count = main_menu(db, db_path, empty_count)
             if not continue_running:
                 print("\nGoodbye!")
                 return 0
@@ -1394,6 +1412,7 @@ def run_tui(db_path: str) -> int:
             traceback.print_exc()
             print("\nReturning to main menu...")
             input("Press Enter to continue...")
+            empty_count = 0  # Reset on error
 
 
 if __name__ == '__main__':
