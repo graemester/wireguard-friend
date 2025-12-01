@@ -58,6 +58,26 @@ Detailed feature set
 
 The author is not about hype, perfection framing, or completion fetishes. Documentation should be practical and straightforward.
 
+## What Works Well (Session Notes)
+
+Things that make collaboration productive with this user:
+
+1. **Direct feedback** - User says what's wrong plainly ("that's friction", "no love"). No dancing around issues.
+
+2. **WHY over WHAT** - User explains intent ("holistic environment model", "provenance for understanding") not just surface requests. This enables better solutions.
+
+3. **Iterative refinement** - Small changes, immediate testing, quick feedback loops. Don't gold-plate.
+
+4. **Build conventions together** - Version numbering, feature cycles, documentation style emerged from discussion, not diktat.
+
+5. **Trust with course-correction** - User lets me run but redirects when needed ("absolute path is better").
+
+6. **Preserve working code** - When porting from alpha, keep backend mechanics, enhance UX. Don't rewrite for the sake of it.
+
+7. **No ceremony** - Skip welcome screens, unnecessary prompts, "press enter to continue". Respect user's time.
+
+8. **Test in the real environment** - Build the binary, install it, run it. Not just "the code looks right".
+
 ## Versioning Convention
 
 Format: `MAJOR.MINOR.PATCH` (e.g., v1.0.6)
