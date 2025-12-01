@@ -72,12 +72,7 @@ At the end of each feature cycle, follow this sequence:
    ./build-binary.sh
    ```
 
-3. **Install to system path**
+3. **Install to system path** (give user this command with absolute path)
    ```bash
-   sudo cp dist/wg-friend /usr/local/bin/
+   sudo cp /home/ged/wireguard-friend/dist/wg-friend /usr/local/bin/
    ```
-
-Or as a one-liner after committing:
-```bash
-./build-binary.sh && sudo cp dist/wg-friend /usr/local/bin/
-```
