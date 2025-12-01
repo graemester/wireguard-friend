@@ -43,7 +43,29 @@ Manual testing:
 - SSH setup wizard
 - Live status
 
-### 4. Commit Changes
+### 4. Build Binary
+
+**IMPORTANT:** Always rebuild the binary before releasing:
+
+```bash
+# Use the build script for consistent builds
+./build-binary.sh
+
+# Or manually:
+pyinstaller --clean v1/wg-friend.spec
+
+# Verify the build
+./dist/wg-friend --version
+./dist/wg-friend --help
+```
+
+The build script ensures:
+- Clean build (no stale artifacts)
+- All dependencies are checked
+- CFFI backend is properly bundled
+- Binary is tested automatically
+
+### 5. Commit Changes
 
 ```bash
 git add -A
@@ -126,10 +148,12 @@ Create `RELEASE_NOTES_vX.X.X.md` with:
 - [ ] Documentation updated
 - [ ] Tests pass (including test_config_detector.py)
 - [ ] Manual testing complete
-- [ ] Binary rebuilt: `pyinstaller v1/wg-friend.spec --distpath=./dist --workpath=./build --clean`
+- [ ] Binary rebuilt: `./build-binary.sh` (preferred) or `pyinstaller --clean v1/wg-friend.spec`
 - [ ] Binary version verified: `./dist/wg-friend --version`
+- [ ] Binary functionality tested: `./dist/wg-friend import --cs <test-config>`
+- [ ] CFFI backend included: Check build output for "[SPEC] Including CFFI backend"
 - [ ] RELEASE_NOTES created
-- [ ] Commit and push
+- [ ] Commit and push (including dist/wg-friend)
 - [ ] Tag created and pushed
 - [ ] GitHub release published
 

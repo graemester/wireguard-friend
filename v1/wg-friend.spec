@@ -1,6 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import sys
+import glob
 from pathlib import Path
 import nacl
 
@@ -11,6 +12,18 @@ repo_root = v1_dir.parent
 # Find actual location of installed packages for binary collection
 nacl_path = Path(nacl.__file__).parent.parent  # Go up to site-packages
 site_packages = str(nacl_path)
+
+# Collect CFFI backend binaries explicitly
+# PyNaCl requires _cffi_backend.so which has platform-specific naming
+# Expand glob pattern at spec-parse time for maximum reliability
+cffi_binaries = []
+cffi_files = glob.glob(f'{site_packages}/_cffi_backend*.so')
+if not cffi_files:
+    # Fallback for Windows (.pyd) or other platforms
+    cffi_files = glob.glob(f'{site_packages}/_cffi_backend*.pyd')
+for cffi_file in cffi_files:
+    cffi_binaries.append((cffi_file, '.'))
+    print(f"[SPEC] Including CFFI backend: {cffi_file}")
 
 block_cipher = None
 
@@ -42,9 +55,7 @@ v1_modules = [
 a = Analysis(
     ['wg-friend'],
     pathex=[str(repo_root)],
-    binaries=[
-        # CFFI backend (required by PyNaCl)
-        (f'{site_packages}/_cffi_backend*.so', '.'),
+    binaries=cffi_binaries + [
         # libsodium wrapper (required by PyNaCl)
         (f'{site_packages}/nacl/_sodium.abi3.so', 'nacl'),
     ],
