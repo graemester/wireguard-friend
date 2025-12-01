@@ -17,6 +17,18 @@ from v1.cli.config_generator import generate_remote_config
 from v1.state_tracker import record_add_remote, record_add_router, record_remove_peer, record_rotate_keys
 
 
+def show_error(message: str, suggestion: str = None):
+    """Display a formatted error message with optional suggestion"""
+    print(f"\n{'=' * 70}")
+    print("ERROR")
+    print(f"{'=' * 70}")
+    print(f"\n{message}")
+    if suggestion:
+        print(f"\nSuggestion: {suggestion}")
+    print(f"\n{'=' * 70}\n")
+    input("Press Enter to continue...")
+
+
 def get_next_available_ip(db: WireGuardDBv2, entity_type: str) -> Tuple[str, str]:
     """
     Find next available IP addresses for a new peer.
@@ -316,7 +328,7 @@ def add_router(db: WireGuardDBv2, hostname: Optional[str] = None) -> int:
 
 
 def list_peers(db: WireGuardDBv2):
-    """List all peers in the database"""
+    """List all peers in the database with hierarchical display"""
     print("\n" + "=" * 70)
     print("PEERS")
     print("=" * 70)
@@ -332,8 +344,10 @@ def list_peers(db: WireGuardDBv2):
         row = cursor.fetchone()
         if row:
             hostname, ipv4, pubkey = row
-            print(f"\nCoordination Server:")
-            print(f"  {hostname:30} {ipv4:20} {pubkey[:30]}...")
+            print(f"\n┏━ [COORDINATION SERVER]")
+            print(f"┃")
+            print(f"┗━━ {hostname}")
+            print(f"    IP: {ipv4:20}  Key: {pubkey[:30]}...")
 
         # Subnet Routers
         cursor.execute("""
@@ -343,9 +357,16 @@ def list_peers(db: WireGuardDBv2):
         """)
         routers = cursor.fetchall()
         if routers:
-            print(f"\nSubnet Routers ({len(routers)}):")
-            for router_id, hostname, ipv4, pubkey in routers:
-                print(f"  [{router_id:2}] {hostname:30} {ipv4:20} {pubkey[:30]}...")
+            print(f"\n┏━ [SUBNET ROUTERS] ({len(routers)})")
+            print(f"┃")
+            for i, (router_id, hostname, ipv4, pubkey) in enumerate(routers):
+                is_last = (i == len(routers) - 1)
+                connector = "┗" if is_last else "┣"
+                continuation = " " if is_last else "┃"
+                print(f"{connector}━━ [{router_id:2}] {hostname}")
+                print(f"{continuation}   IP: {ipv4:20}  Key: {pubkey[:30]}...")
+                if not is_last:
+                    print(f"┃")
 
         # Remotes
         cursor.execute("""
@@ -355,9 +376,16 @@ def list_peers(db: WireGuardDBv2):
         """)
         remotes = cursor.fetchall()
         if remotes:
-            print(f"\nRemote Clients ({len(remotes)}):")
-            for remote_id, hostname, ipv4, pubkey, access in remotes:
-                print(f"  [{remote_id:2}] {hostname:30} {ipv4:20} {access:15} {pubkey[:30]}...")
+            print(f"\n┏━ [REMOTE CLIENTS] ({len(remotes)})")
+            print(f"┃")
+            for i, (remote_id, hostname, ipv4, pubkey, access) in enumerate(remotes):
+                is_last = (i == len(remotes) - 1)
+                connector = "┗" if is_last else "┣"
+                continuation = " " if is_last else "┃"
+                print(f"{connector}━━ [{remote_id:2}] {hostname}")
+                print(f"{continuation}   IP: {ipv4:20}  Access: {access:15}  Key: {pubkey[:30]}...")
+                if not is_last:
+                    print(f"┃")
 
     print()
 
@@ -399,22 +427,35 @@ def remove_peer(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
 
         row = cursor.fetchone()
         if not row:
-            print(f"Error: {peer_type} ID {peer_id} not found")
+            show_error(
+                f"Peer not found: {peer_type} ID {peer_id}",
+                suggestion="Run 'wg-friend list' to see available peers"
+            )
             return False
 
         hostname, current_pubkey, permanent_guid = row
 
-        # Confirm
-        print(f"\nRemove {peer_type}: {hostname}")
+        # Enhanced confirmation with hostname requirement
+        print(f"\n{'=' * 70}")
+        print("DESTRUCTIVE ACTION")
+        print(f"{'=' * 70}")
+        print(f"\nYou are about to remove: {hostname}")
+        print(f"\nThis will:")
+        print(f"  - Delete peer from database")
+        print(f"  - Revoke all VPN access")
+        print(f"  - Add revocation entry to history")
+        print(f"  - Require config regeneration and deployment")
+        print(f"\nDetails:")
+        print(f"  Type: {peer_type}")
         print(f"  Public Key: {current_pubkey[:30]}...")
-        print(f"  Permanent GUID: {permanent_guid[:30]}...")
         print(f"  Reason: {reason}")
-        print()
-        print("WARNING:  This will DELETE the peer from the database.")
-        print()
+        print(f"\n{'=' * 70}")
+        print(f"\nTo confirm, type the hostname exactly: {hostname}")
+        print(f"{'=' * 70}\n")
 
-        if not prompt_yes_no("Are you sure?", default=False):
-            print("Cancelled.")
+        confirm_text = input(f"Type '{hostname}' to confirm: ").strip()
+        if confirm_text != hostname:
+            print(f"\nHostname didn't match. Removal cancelled.\n")
             return False
 
         # Log removal in key_rotation_history (as a record of deletion)

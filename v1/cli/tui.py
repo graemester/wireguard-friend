@@ -32,12 +32,23 @@ from v1.cli.status import show_network_overview, show_recent_rotations, show_sta
 
 
 def print_menu(title: str, options: List[str], include_quit: bool = True):
-    """Print a menu with Rich styling if available"""
+    """
+    Print a menu with Rich styling if available.
+
+    Options can include hints in brackets: "Option Name [hint text]"
+    The hint will be displayed in dim style after a dash.
+    """
     if RICH_AVAILABLE:
         # Build menu content
         menu_lines = []
         for i, option in enumerate(options, 1):
-            menu_lines.append(f"  [cyan]{i}.[/cyan] {option}")
+            if '[' in option and ']' in option and not option.startswith('['):
+                # Split option and hint
+                main_text = option.split('[')[0].strip()
+                hint = option.split('[')[1].split(']')[0]
+                menu_lines.append(f"  [cyan]{i}.[/cyan] {main_text:28} [dim]- {hint}[/dim]")
+            else:
+                menu_lines.append(f"  [cyan]{i}.[/cyan] {option}")
         if include_quit:
             menu_lines.append(f"  [dim]q. Quit[/dim]")
 
@@ -55,7 +66,13 @@ def print_menu(title: str, options: List[str], include_quit: bool = True):
         print(f"{title}")
         print(f"{'=' * 70}")
         for i, option in enumerate(options, 1):
-            print(f"  {i}. {option}")
+            if '[' in option and ']' in option and not option.startswith('['):
+                # Split option and hint
+                main_text = option.split('[')[0].strip()
+                hint = option.split('[')[1].split(']')[0]
+                print(f"  {i}. {main_text:28} - {hint}")
+            else:
+                print(f"  {i}. {option}")
         if include_quit:
             print(f"  q. Quit")
         print()
@@ -106,15 +123,15 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
     print_menu(
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
-            "Network Status",
-            "List All Peers",
-            "Add Peer",
-            "Remove Peer",
-            "Rotate Keys",
-            "History",
-            "Extramural (external VPNs)",
-            "Generate Configs",
-            "Deploy Configs",
+            "Network Status [view topology and connections]",
+            "List All Peers [show all devices and servers]",
+            "Add Peer [add new device to network]",
+            "Remove Peer [revoke a device's access]",
+            "Rotate Keys [regenerate security keys]",
+            "History [view change timeline]",
+            "Extramural [manage commercial VPN configs]",
+            "Generate Configs [create .conf files from database]",
+            "Deploy Configs [push configs via SSH]",
         ]
     )
 

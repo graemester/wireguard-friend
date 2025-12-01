@@ -16,6 +16,18 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from v1.schema_semantic import WireGuardDBv2
 from v1.network_utils import is_local_host
 
+# Rich imports for spinners
+try:
+    from rich.console import Console
+    from rich.live import Live
+    from rich.spinner import Spinner
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
+    RICH_AVAILABLE = True
+    console = Console()
+except ImportError:
+    RICH_AVAILABLE = False
+    console = None
+
 
 def prompt_yes_no(question: str, default: bool = False) -> bool:
     """Prompt for yes/no"""
@@ -76,6 +88,37 @@ def scp_file(local_path: Path, host: str, remote_path: str, user: str = 'root', 
     return result.returncode
 
 
+def run_with_spinner(message: str, operation, success_msg: str = None, error_msg: str = None):
+    """
+    Run an operation with a spinner for visual feedback.
+
+    Args:
+        message: Message to show while running
+        operation: Callable that returns (success, result_or_error)
+        success_msg: Message on success (optional)
+        error_msg: Message on error (optional)
+
+    Returns:
+        Result from operation
+    """
+    if RICH_AVAILABLE:
+        with Live(Spinner("dots", text=f"[cyan]{message}[/cyan]"), console=console, refresh_per_second=10) as live:
+            success, result = operation()
+            if success:
+                live.update(f"[green]✓ {success_msg or message}[/green]")
+            else:
+                live.update(f"[red]✗ {error_msg or message}[/red]")
+            return success, result
+    else:
+        print(f"  {message}...")
+        success, result = operation()
+        if success:
+            print(f"  ✓ {success_msg or 'Done'}")
+        else:
+            print(f"  ✗ {error_msg or 'Failed'}")
+        return success, result
+
+
 def backup_remote_config(host: str, remote_path: str, user: str = 'root', dry_run: bool = False) -> bool:
     """
     Backup existing config on remote host.
@@ -92,40 +135,58 @@ def backup_remote_config(host: str, remote_path: str, user: str = 'root', dry_ru
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
     backup_path = f"{remote_path}.backup.{timestamp}"
 
-    # Check if file exists
-    returncode, stdout, stderr = ssh_command(
-        host,
-        f'test -f {remote_path} && echo exists || echo notfound',
-        user=user,
-        dry_run=dry_run
-    )
-
     if dry_run:
         print(f"  [DRY RUN] Would backup {remote_path} to {backup_path}")
         return True
 
-    if returncode != 0:
-        print(f"  Error checking for existing config: {stderr}")
+    # Check if file exists
+    def check_exists():
+        returncode, stdout, stderr = ssh_command(
+            host,
+            f'test -f {remote_path} && echo exists || echo notfound',
+            user=user,
+            dry_run=False
+        )
+        if returncode != 0:
+            return False, stderr
+        return True, stdout
+
+    success, result = run_with_spinner(
+        "Checking for existing config",
+        check_exists,
+        success_msg="Config check complete"
+    )
+
+    if not success:
+        print(f"  Error checking for existing config: {result}")
         return False
 
-    if 'notfound' in stdout:
+    if 'notfound' in result:
         print(f"  No existing config to backup")
         return True
 
     # File exists, back it up
-    print(f"  Backing up existing config to {backup_path}")
-    returncode, stdout, stderr = ssh_command(
-        host,
-        f'cp {remote_path} {backup_path}',
-        user=user,
-        dry_run=dry_run
+    def do_backup():
+        returncode, stdout, stderr = ssh_command(
+            host,
+            f'cp {remote_path} {backup_path}',
+            user=user,
+            dry_run=False
+        )
+        if returncode != 0:
+            return False, stderr
+        return True, backup_path
+
+    success, result = run_with_spinner(
+        f"Backing up to {backup_path}",
+        do_backup,
+        success_msg=f"Backed up to {backup_path}"
     )
 
-    if returncode != 0:
-        print(f"  Error backing up config: {stderr}")
+    if not success:
+        print(f"  Error backing up config: {result}")
         return False
 
-    print(f"  ✓ Backed up to {backup_path}")
     return True
 
 
@@ -142,28 +203,36 @@ def restart_wireguard(host: str, interface: str = 'wg0', user: str = 'root', dry
     Returns:
         True if restart succeeded, False on error
     """
-    print(f"  Restarting WireGuard ({interface})...")
-
-    # Try wg-quick down first (may not be running)
-    ssh_command(host, f'wg-quick down {interface}', user=user, dry_run=dry_run)
-
-    # Bring it up
-    returncode, stdout, stderr = ssh_command(
-        host,
-        f'wg-quick up {interface}',
-        user=user,
-        dry_run=dry_run
-    )
-
     if dry_run:
-        print(f"  [DRY RUN] Would restart WireGuard")
+        print(f"  [DRY RUN] Would restart WireGuard ({interface})")
         return True
 
-    if returncode != 0:
-        print(f"  Error restarting WireGuard: {stderr}")
+    def do_restart():
+        # Try wg-quick down first (may not be running)
+        ssh_command(host, f'wg-quick down {interface}', user=user, dry_run=False)
+
+        # Bring it up
+        returncode, stdout, stderr = ssh_command(
+            host,
+            f'wg-quick up {interface}',
+            user=user,
+            dry_run=False
+        )
+
+        if returncode != 0:
+            return False, stderr
+        return True, None
+
+    success, result = run_with_spinner(
+        f"Restarting WireGuard ({interface})",
+        do_restart,
+        success_msg=f"WireGuard restarted ({interface})"
+    )
+
+    if not success:
+        print(f"  Error restarting WireGuard: {result}")
         return False
 
-    print(f"  ✓ WireGuard restarted")
     return True
 
 
@@ -232,12 +301,24 @@ def deploy_to_host(
             print(f"  Warning: Backup failed, continuing anyway...")
 
         # Deploy new config
-        print(f"  Deploying config...")
-        if scp_file(config_file, endpoint, remote_path, user=user, dry_run=dry_run) != 0:
-            print(f"  ✗ Deploy failed")
-            return False
+        if dry_run:
+            print(f"  [DRY RUN] Would deploy config via SCP")
+        else:
+            def do_scp():
+                result = scp_file(config_file, endpoint, remote_path, user=user, dry_run=False)
+                if result != 0:
+                    return False, "SCP failed"
+                return True, None
 
-        print(f"  ✓ Config deployed")
+            success, result = run_with_spinner(
+                "Deploying config via SCP",
+                do_scp,
+                success_msg="Config deployed"
+            )
+
+            if not success:
+                print(f"  ✗ Deploy failed")
+                return False
 
     # Restart if requested
     if restart:
@@ -297,16 +378,9 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
             config_file = output_dir / f'{hostname}.conf'
             deployments.append(('Subnet Router', hostname, config_file, endpoint))
 
-        # Remotes (rare, but some servers might have endpoints)
-        cursor.execute("""
-            SELECT hostname, endpoint
-            FROM remote
-            WHERE endpoint IS NOT NULL AND endpoint != ''
-            ORDER BY hostname
-        """)
-        for hostname, endpoint in cursor.fetchall():
-            config_file = output_dir / f'{hostname}.conf'
-            deployments.append(('Remote', hostname, config_file, endpoint))
+        # Note: Remotes (clients) don't have endpoints - they're behind NAT
+        # and initiate connections TO the coordination server, not vice versa.
+        # Deployment targets are only: coordination server and subnet routers.
 
     if not deployments:
         print("\nWARNING:  No deployable hosts found (endpoints not configured)")
@@ -324,19 +398,48 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
         print("Cancelled.")
         return 0
 
-    # Deploy
+    # Deploy with progress indicator
     failures = 0
-    for entity_type, hostname, config_file, endpoint in deployments:
-        success = deploy_to_host(
-            hostname=hostname,
-            config_file=config_file,
-            endpoint=endpoint,
-            user=user,
-            restart=restart,
-            dry_run=dry_run
-        )
-        if not success:
-            failures += 1
+
+    if RICH_AVAILABLE and len(deployments) > 1 and not dry_run:
+        # Show overall progress bar for multiple deployments
+        print()
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TextColumn("({task.completed}/{task.total})"),
+            console=console
+        ) as progress:
+            task = progress.add_task("[cyan]Deploying configs...", total=len(deployments))
+
+            for entity_type, hostname, config_file, endpoint in deployments:
+                progress.update(task, description=f"[cyan]Deploying to {hostname}...")
+                success = deploy_to_host(
+                    hostname=hostname,
+                    config_file=config_file,
+                    endpoint=endpoint,
+                    user=user,
+                    restart=restart,
+                    dry_run=dry_run
+                )
+                if not success:
+                    failures += 1
+                progress.advance(task)
+    else:
+        # No progress bar for single deployment or dry run
+        for entity_type, hostname, config_file, endpoint in deployments:
+            success = deploy_to_host(
+                hostname=hostname,
+                config_file=config_file,
+                endpoint=endpoint,
+                user=user,
+                restart=restart,
+                dry_run=dry_run
+            )
+            if not success:
+                failures += 1
 
     # Summary
     print(f"\n{'=' * 70}")
