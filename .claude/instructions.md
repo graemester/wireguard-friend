@@ -84,9 +84,9 @@ At the end of each feature cycle, follow this sequence:
    ./build-binary.sh
    ```
 
-4. **Install to system path** (give user this command with absolute path)
+4. **Install to system path**
    ```bash
-   sudo cp /home/ged/wireguard-friend/dist/wg-friend /usr/local/bin/
+   sudo /usr/bin/cp /home/ged/wireguard-friend/dist/wg-friend /usr/local/bin/
    ```
 
 5. **Remind user of build name** - Tell them the version and build name so they know what they're running (e.g., "v1.0.6 harrier")
