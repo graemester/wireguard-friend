@@ -742,44 +742,78 @@ Contributions welcome! See the GitHub repository for:
 # =============================================================================
 
 def show_topic_list():
-    """Display the list of help topics"""
+    """Display the list of help topics (in alternate screen)"""
+    term_width, term_height = get_terminal_size()
+
     lines = []
     lines.append("")
     for i, (title, _) in enumerate(TOPICS, 1):
-        lines.append(f"  [{i}] {title}")
+        lines.append(f"  \\[{i}] {title}")
     lines.append("")
     lines.append("  Enter topic number to read")
     lines.append("  Press Enter to return to main menu")
 
+    # Pad to fill screen
+    content_height = term_height - 4  # Account for panel borders
+    while len(lines) < content_height:
+        lines.append("")
+
     if RICH_AVAILABLE:
-        console.print()
+        console.clear()
         console.print(Panel(
             "\n".join(lines),
             title="[bold]DOCUMENTATION[/bold]",
             subtitle="[dim]Built-in Help System[/dim]",
             border_style="cyan",
-            padding=(0, 2)
+            padding=(0, 2),
+            height=term_height - 1
         ))
     else:
-        print("\n" + "=" * 70)
+        print("\033[2J\033[H", end="")  # Clear screen, cursor home
+        print("=" * 70)
         print("DOCUMENTATION")
         print("=" * 70)
         print("\n".join(lines))
 
 
+def enter_alternate_screen():
+    """Enter terminal alternate screen buffer"""
+    print("\033[?1049h", end="", flush=True)
+
+
+def exit_alternate_screen():
+    """Exit terminal alternate screen buffer"""
+    print("\033[?1049l", end="", flush=True)
+
+
+def get_terminal_size() -> Tuple[int, int]:
+    """Get terminal dimensions (width, height)"""
+    import shutil
+    size = shutil.get_terminal_size((80, 24))
+    return size.columns, size.lines
+
+
 def show_topic_content(topic_key: str, topic_title: str):
-    """Display the content of a specific topic"""
+    """Display the content of a specific topic (already in alternate screen)"""
     content = get_content(topic_key)
     lines = content.strip().split('\n')
 
-    # Paginate if content is long
-    page_size = 30
     total_lines = len(lines)
     current_line = 0
 
     while current_line < total_lines:
+        # Get terminal size for dynamic page sizing
+        term_width, term_height = get_terminal_size()
+        # Reserve lines for: title bar, bottom border, nav line, input prompt
+        page_size = term_height - 6
+
         # Get current page
         page_lines = lines[current_line:current_line + page_size]
+
+        # Pad to fill screen
+        while len(page_lines) < page_size:
+            page_lines.append("")
+
         page_content = '\n'.join(page_lines)
 
         # Calculate progress
@@ -790,46 +824,53 @@ def show_topic_content(topic_key: str, topic_title: str):
         has_more = end_line < total_lines
 
         if RICH_AVAILABLE:
-            console.print()
+            console.clear()
             console.print(Panel(
                 page_content,
                 title=f"[bold]{topic_title}[/bold]",
                 subtitle=f"[dim]{progress}[/dim]",
                 border_style="green",
-                padding=(0, 2)
+                padding=(0, 2),
+                height=term_height - 2
             ))
 
             if has_more:
-                nav_text = "  [dim]\\[Enter] next page  |  \\[B]ack to topics  |  \\[Q]uit docs[/dim]"
+                nav_text = "  [dim]\\[Enter] next  |  \\[B]ack to topics  |  \\[Q]uit docs[/dim]"
             else:
-                nav_text = "  [dim]\\[Enter] or \\[B]ack to topics  |  \\[Q]uit docs[/dim]"
-            console.print(nav_text)
+                nav_text = "  [dim]\\[Enter/B] back to topics  |  \\[Q]uit docs[/dim]"
+            console.print(nav_text, end="")
         else:
-            print("\n" + "=" * 70)
-            print(topic_title)
-            print(f"({progress})")
+            print("\033[2J\033[H", end="")  # Clear screen, cursor home
+            print("=" * 70)
+            print(f"{topic_title}  ({progress})")
             print("=" * 70)
             print(page_content)
             print("-" * 70)
             if has_more:
-                print("  [Enter] next page  |  [B]ack to topics  |  [Q]uit docs")
+                print("  [Enter] next  |  [B]ack to topics  |  [Q]uit docs", end="")
             else:
-                print("  [Enter] or [B]ack to topics  |  [Q]uit docs")
+                print("  [Enter/B] back to topics  |  [Q]uit docs", end="")
 
         # Get input
-        choice = input("\n: ").strip().lower()
+        choice = input("  : ").strip()
 
-        if choice in ('b', 'back'):
+        if choice.lower() in ('b', 'back'):
             return 'back'
-        elif choice in ('q', 'quit'):
+        elif choice.lower() in ('q', 'quit'):
             return 'quit'
-        elif choice == '' or choice == 'n' or choice == 'next':
+        elif choice in ('', ' ', 'n', 'N') or choice.lower() == 'next':
+            # Next page: Enter, Space, n
             if has_more:
                 current_line += page_size
             else:
                 return 'back'
+        elif choice in ('-', 'p', 'P') or choice.lower() in ('prev', 'up'):
+            # Previous page: minus, p
+            if current_line > 0:
+                current_line = max(0, current_line - page_size)
+            # else stay on first page
         else:
-            # Unknown input, continue
+            # Unknown input, go next if possible
             if has_more:
                 current_line += page_size
             else:
@@ -839,29 +880,34 @@ def show_topic_content(topic_key: str, topic_title: str):
 
 
 def documentation_menu():
-    """Main documentation menu loop"""
-    while True:
-        show_topic_list()
+    """Main documentation menu loop - runs in alternate screen"""
+    enter_alternate_screen()
 
-        choice = input("\nTopic: ").strip().lower()
+    try:
+        while True:
+            show_topic_list()
 
-        # Exit on empty or quit
-        if choice in ('', 'q', 'quit', 'back', 'b'):
-            return
+            choice = input("\nTopic: ").strip().lower()
 
-        # Try to parse as topic number
-        try:
-            topic_num = int(choice)
-            if 1 <= topic_num <= len(TOPICS):
-                title, key = TOPICS[topic_num - 1]
-                result = show_topic_content(key, title)
-                if result == 'quit':
-                    return
-                # 'back' continues the loop
-            else:
-                print(f"  Invalid topic. Enter 1-{len(TOPICS)}.")
-        except ValueError:
-            print(f"  Invalid input. Enter a topic number (1-{len(TOPICS)}).")
+            # Exit on empty or quit
+            if choice in ('', 'q', 'quit', 'back', 'b'):
+                return
+
+            # Try to parse as topic number
+            try:
+                topic_num = int(choice)
+                if 1 <= topic_num <= len(TOPICS):
+                    title, key = TOPICS[topic_num - 1]
+                    result = show_topic_content(key, title)
+                    if result == 'quit':
+                        return
+                    # 'back' continues the loop
+                else:
+                    print(f"  Invalid topic. Enter 1-{len(TOPICS)}.")
+            except ValueError:
+                print(f"  Invalid input. Enter a topic number (1-{len(TOPICS)}).")
+    finally:
+        exit_alternate_screen()
 
 
 if __name__ == '__main__':
