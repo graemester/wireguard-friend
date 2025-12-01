@@ -18,6 +18,43 @@ from v1.keygen import derive_public_key
 from v1.state_tracker import record_import
 
 
+def separate_allowed_ips(allowed_ips: List[str]) -> tuple:
+    """
+    Separate AllowedIPs into VPN IPs and advertised networks.
+
+    VPN IPs are /32 (IPv4) or /128 (IPv6) - the peer's address on the VPN.
+    Advertised networks are larger CIDRs that the peer routes (LANs).
+
+    Returns:
+        (vpn_ips, advertised_networks) - two lists
+    """
+    vpn_ips = []
+    advertised = []
+
+    for ip in allowed_ips:
+        ip = ip.strip()
+        if not ip:
+            continue
+
+        # Check prefix length
+        if '/' in ip:
+            prefix = ip.split('/')[-1]
+            try:
+                prefix_len = int(prefix)
+                # /32 for IPv4, /128 for IPv6 = VPN IP
+                if prefix_len == 32 or prefix_len == 128:
+                    vpn_ips.append(ip)
+                else:
+                    advertised.append(ip)
+            except ValueError:
+                advertised.append(ip)  # Malformed, treat as network
+        else:
+            # No prefix, treat as VPN IP
+            vpn_ips.append(ip)
+
+    return vpn_ips, advertised
+
+
 def parse_interface_section(entity, categorizer):
     """Parse [Interface] section and extract fields"""
     interface_data = {
@@ -273,21 +310,51 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
                 i
             ))
 
-    # Parse [Peer] sections
+    # Parse [Peer] sections and extract advertised networks
     peer_entities = entities[1:]
     peers = []
+
+    print(f"\n  Analyzing {len(peer_entities)} peers from CS config:")
 
     for entity in peer_entities:
         peer = parse_peer_section(entity, categorizer)
         if peer['public_key']:
+            # Separate VPN IPs from advertised networks
+            vpn_ips, advertised = separate_allowed_ips(peer['allowed_ips'])
+            peer['vpn_ips'] = vpn_ips
+            peer['advertised_networks'] = advertised
+
+            peer_name = peer.get('hostname', peer['public_key'][:20] + '...')
+            print(f"    - {peer_name}")
+            print(f"      VPN IPs: {', '.join(vpn_ips)}")
+            if advertised:
+                print(f"      Advertised LANs: {', '.join(advertised)}")
+                # This peer is likely a subnet router
+                peer['inferred_type'] = 'subnet_router'
+            else:
+                # No LANs = likely a remote client
+                peer['inferred_type'] = 'remote'
+
             peers.append(peer)
 
-    print(f"  Found {len(peers)} peers in config")
+    print(f"\n  Environment summary:")
+    print(f"    VPN Network: {network_ipv4}, {network_ipv6}")
 
-    return cs_id, peers
+    # Collect all advertised LANs
+    all_lans = []
+    for peer in peers:
+        all_lans.extend(peer.get('advertised_networks', []))
+
+    if all_lans:
+        print(f"    Advertised LANs: {', '.join(set(all_lans))}")
+    else:
+        print(f"    Advertised LANs: (none)")
+
+    return cs_id, peers, network_ipv4, network_ipv6
 
 
-def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs_pubkey: str = None):
+def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = None,
+                         cs_pubkey: str = None, cs_peers: List[Dict] = None):
     """
     Import subnet router config.
 
@@ -296,6 +363,7 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
         db: Database connection
         hostname: Friendly name for this router
         cs_pubkey: Expected CS public key (to validate peer section)
+        cs_peers: Peer data from CS config (includes advertised networks)
 
     Returns:
         router_id
@@ -344,22 +412,28 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
             raise ValueError("No coordination server found - import CS first")
         cs_id = row[0]
 
-    # Parse [Peer] section to get endpoint
+    # Parse [Peer] section to get CS endpoint
     peer_data = None
     if len(entities) > 1:
         peer_data = parse_peer_section(entities[1], categorizer)
 
     endpoint = peer_data.get('endpoint') if peer_data else None
 
-    # Try to infer LAN network from AllowedIPs or PostUp/PostDown
+    # Get advertised networks from CS peer entry (matched by public key)
+    # The CS's [Peer] section for this router contains the LANs it advertises
     lan_networks = []
-    if peer_data:
-        for ip in peer_data.get('allowed_ips', []):
-            # Skip VPN networks and default routes
-            if ip.startswith('10.') or ip.startswith('fd') or ip in ('0.0.0.0/0', '::/0'):
-                continue
-            if ip.startswith('192.168.') or ip.startswith('172.'):
-                lan_networks.append(ip)
+    if cs_peers:
+        for cs_peer in cs_peers:
+            if cs_peer['public_key'] == public_key:
+                lan_networks = cs_peer.get('advertised_networks', [])
+                if lan_networks:
+                    print(f"  Advertised LANs (from CS): {', '.join(lan_networks)}")
+                break
+        else:
+            print(f"  Warning: Router not found in CS peers (pubkey mismatch)")
+    else:
+        # Fallback: try to infer from PostUp/PostDown (legacy mode)
+        pass
 
     # Recognize patterns
     pairs, singletons, unrecognized = pattern_recognizer.recognize_pairs(
@@ -441,7 +515,8 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
     return router_id
 
 
-def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs_pubkey: str = None):
+def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
+                  cs_pubkey: str = None, known_networks: set = None):
     """
     Import remote client config.
 
@@ -450,6 +525,7 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs
         db: Database connection
         hostname: Friendly name for this remote
         cs_pubkey: Expected CS public key (to validate peer section)
+        known_networks: Set of valid network CIDRs (VPN + advertised LANs)
 
     Returns:
         remote_id
@@ -504,18 +580,42 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None, cs
 
     endpoint = peer_data.get('endpoint') if peer_data else None
     allowed_ips_list = peer_data.get('allowed_ips', []) if peer_data else []
-    allowed_ips = ', '.join(allowed_ips_list) if allowed_ips_list else None
 
-    # Store the AllowedIPs exactly as imported
-    if allowed_ips:
-        print(f"  AllowedIPs: {allowed_ips}")
+    # Validate AllowedIPs against known networks
+    if known_networks and allowed_ips_list:
+        validated = []
+        unknown = []
 
-    # Infer access level from AllowedIPs for display purposes
-    access_level = 'custom'  # Default to custom since we store actual IPs
+        for ip in allowed_ips_list:
+            ip = ip.strip()
+            # Full tunnel routes are always valid
+            if ip in ('0.0.0.0/0', '::/0'):
+                validated.append(ip)
+            elif ip in known_networks:
+                validated.append(ip)
+            else:
+                unknown.append(ip)
+
+        if validated:
+            print(f"  AllowedIPs (validated): {', '.join(validated)}")
+        if unknown:
+            print(f"  Warning: Unknown networks in AllowedIPs: {', '.join(unknown)}")
+            print(f"           These don't match VPN or advertised LANs")
+            # Still include them but flag as potentially problematic
+            validated.extend(unknown)
+
+        allowed_ips = ', '.join(validated)
+    else:
+        allowed_ips = ', '.join(allowed_ips_list) if allowed_ips_list else None
+        if allowed_ips:
+            print(f"  AllowedIPs: {allowed_ips}")
+
+    # Infer access level from AllowedIPs
+    access_level = 'custom'
     if allowed_ips_list:
         if '0.0.0.0/0' in allowed_ips_list or '::/0' in allowed_ips_list:
             access_level = 'full_access'
-        elif any('192.168' in ip or '10.' in ip for ip in allowed_ips_list):
+        elif any('192.168' in ip or '172.' in ip for ip in allowed_ips_list):
             access_level = 'lan_only'
         else:
             access_level = 'vpn_only'
@@ -603,8 +703,24 @@ def run_import(args) -> int:
         # Get hostname from args if provided (from entity review)
         cs_hostname = getattr(args, 'cs_name', None)
 
-        # Import coordination server
-        cs_id, cs_peers = import_coordination_server(cs_path, db, hostname=cs_hostname)
+        # Import coordination server - returns CS peers with advertised networks
+        cs_id, cs_peers, vpn_ipv4, vpn_ipv6 = import_coordination_server(cs_path, db, hostname=cs_hostname)
+
+        # Build environment knowledge from CS peers
+        # Map public_key -> advertised networks (for SNR matching)
+        # Collect all known networks for remote validation
+        peer_networks = {}  # pubkey -> advertised LANs
+        all_advertised_lans = set()
+
+        for peer in cs_peers:
+            pubkey = peer['public_key']
+            advertised = peer.get('advertised_networks', [])
+            peer_networks[pubkey] = advertised
+            all_advertised_lans.update(advertised)
+
+        # Known valid networks for remote AllowedIPs validation
+        known_networks = {vpn_ipv4, vpn_ipv6}
+        known_networks.update(all_advertised_lans)
 
         # Track import counts
         snr_count = 0
@@ -622,7 +738,8 @@ def run_import(args) -> int:
                 elif entity.config_type == 'subnet_router':
                     try:
                         router_id = import_subnet_router(
-                            entity.path, db, hostname=entity.friendly_name
+                            entity.path, db, hostname=entity.friendly_name,
+                            cs_peers=cs_peers
                         )
                         snr_count += 1
                     except Exception as e:
@@ -631,7 +748,8 @@ def run_import(args) -> int:
                 elif entity.config_type == 'client':
                     try:
                         remote_id = import_remote(
-                            entity.path, db, hostname=entity.friendly_name
+                            entity.path, db, hostname=entity.friendly_name,
+                            known_networks=known_networks
                         )
                         remote_count += 1
                     except Exception as e:
@@ -644,7 +762,7 @@ def run_import(args) -> int:
                     snr_file = Path(snr_path)
                     if snr_file.exists():
                         try:
-                            router_id = import_subnet_router(snr_file, db)
+                            router_id = import_subnet_router(snr_file, db, cs_peers=cs_peers)
                             snr_count += 1
                         except Exception as e:
                             print(f"\n  Error importing subnet router {snr_file.name}: {e}")
@@ -656,7 +774,7 @@ def run_import(args) -> int:
                     remote_file = Path(remote_path)
                     if remote_file.exists():
                         try:
-                            remote_id = import_remote(remote_file, db)
+                            remote_id = import_remote(remote_file, db, known_networks=known_networks)
                             remote_count += 1
                         except Exception as e:
                             print(f"\n  Error importing remote {remote_file.name}: {e}")
