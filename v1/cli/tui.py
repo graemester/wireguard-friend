@@ -257,6 +257,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
 
 def peer_type_menu(db: WireGuardDBv2):
     """Menu for adding peers"""
+    clear_screen()
     print_menu(
         "ADD PEER",
         [
@@ -296,6 +297,7 @@ def peer_type_menu(db: WireGuardDBv2):
 
 def remove_peer_menu(db: WireGuardDBv2):
     """Menu for removing peers"""
+    clear_screen()
     # List peers first
     list_peers(db)
 
@@ -336,6 +338,7 @@ def remove_peer_menu(db: WireGuardDBv2):
 
 def rotate_keys_menu(db: WireGuardDBv2):
     """Menu for rotating keys"""
+    clear_screen()
     # List peers first
     list_peers(db)
 
@@ -379,6 +382,7 @@ def rotate_keys_menu(db: WireGuardDBv2):
 
 def history_menu(db: WireGuardDBv2, db_path: str):
     """History submenu - key rotations, state timeline, peer history"""
+    clear_screen()
     print_menu(
         "HISTORY",
         [
@@ -410,6 +414,7 @@ def history_menu(db: WireGuardDBv2, db_path: str):
 
 def state_history_menu(db: WireGuardDBv2, db_path: str):
     """Menu for viewing state history timeline"""
+    clear_screen()
     # Show timeline first
     show_state_history(db_path, limit=20)
 
@@ -429,6 +434,7 @@ def state_history_menu(db: WireGuardDBv2, db_path: str):
 
 def peer_history_menu(db: WireGuardDBv2, db_path: str):
     """Menu for viewing individual peer history"""
+    clear_screen()
     # List peers first
     list_peers(db)
 
@@ -450,6 +456,7 @@ def generate_configs_menu(db: WireGuardDBv2, db_path: str):
     from pathlib import Path
     from v1.cli.config_generator import generate_configs, generate_cs_config, generate_router_config, generate_remote_config
 
+    clear_screen()
     print_menu(
         "GENERATE CONFIGS",
         [
@@ -499,6 +506,7 @@ def generate_single_entity_config(db: WireGuardDBv2, db_path: str):
     from pathlib import Path
     from v1.cli.config_generator import generate_cs_config, generate_router_config, generate_remote_config
 
+    clear_screen()
     # Build list of all entities
     entities = []
 
@@ -616,6 +624,7 @@ def deploy_configs_menu(db: WireGuardDBv2, db_path: str):
     from pathlib import Path
     from v1.cli.deploy import deploy_configs
 
+    clear_screen()
     # Check if generated directory exists
     if not Path('generated').exists():
         print("\nNo configs found in 'generated/' directory.")
@@ -686,6 +695,7 @@ def extramural_menu(db_path: str):
     ops = ExtramuralOps(Path(db_path))
 
     while True:
+        clear_screen()
         print_menu(
             "EXTRAMURAL - External VPN Configs",
             [
@@ -740,6 +750,7 @@ def extramural_generate_single(ops, db_path: str):
     from pathlib import Path
     from v1.extramural_generator import ExtramuralConfigGenerator
 
+    clear_screen()
     configs = ops.list_extramural_configs()
 
     if not configs:
@@ -831,6 +842,7 @@ def extramural_generate_single(ops, db_path: str):
 def extramural_list_all(ops, db_path: str):
     """List all extramural configs with option to select one"""
     while True:
+        clear_screen()
         configs = ops.list_extramural_configs()
 
         if not configs:
@@ -884,6 +896,7 @@ def extramural_list_all(ops, db_path: str):
 
 def extramural_by_sponsor(ops, db_path: str):
     """View configs organized by sponsor"""
+    clear_screen()
     sponsors = ops.list_sponsors()
 
     if not sponsors:
@@ -892,6 +905,7 @@ def extramural_by_sponsor(ops, db_path: str):
         return
 
     while True:
+        clear_screen()
         print(f"\n{'=' * 70}")
         print("EXTRAMURAL - BY SPONSOR")
         print(f"{'=' * 70}\n")
@@ -922,6 +936,7 @@ def extramural_by_sponsor(ops, db_path: str):
 
 def extramural_sponsor_detail(ops, sponsor, db_path: str):
     """Show configs for a specific sponsor"""
+    clear_screen()
     configs = ops.list_extramural_configs(sponsor_id=sponsor.id)
 
     print(f"\n{'=' * 70}")
@@ -969,6 +984,7 @@ def extramural_sponsor_detail(ops, sponsor, db_path: str):
 
 def extramural_by_local_peer(ops, db_path: str):
     """View configs organized by local peer"""
+    clear_screen()
     peers = ops.list_local_peers()
 
     if not peers:
@@ -977,6 +993,7 @@ def extramural_by_local_peer(ops, db_path: str):
         return
 
     while True:
+        clear_screen()
         print(f"\n{'=' * 70}")
         print("EXTRAMURAL - BY LOCAL PEER")
         print(f"{'=' * 70}\n")
@@ -1010,6 +1027,7 @@ def extramural_by_local_peer(ops, db_path: str):
 
 def extramural_local_peer_detail(ops, peer, db_path: str):
     """Show configs for a specific local peer"""
+    clear_screen()
     configs = ops.list_extramural_configs(local_peer_id=peer.id)
 
     print(f"\n{'=' * 70}")
@@ -1069,6 +1087,7 @@ def extramural_config_detail(ops, config, db_path: str):
     active_peer = ops.get_active_peer(config.id)
 
     while True:
+        clear_screen()
         print(f"\n{'=' * 70}")
         print(f"{sponsor.name.upper()} -> {peer.name.upper()}")
         print(f"{'=' * 70}\n")
@@ -1194,6 +1213,7 @@ def extramural_import_config(ops, db_path: str):
     import tempfile
     from v1.extramural_import import import_extramural_config
 
+    clear_screen()
     print(f"\n{'=' * 70}")
     print("IMPORT EXTRAMURAL CONFIG")
     print(f"{'=' * 70}\n")
@@ -1366,6 +1386,7 @@ def extramural_import_config(ops, db_path: str):
 def extramural_manage_sponsors(ops):
     """Manage sponsors"""
     while True:
+        clear_screen()
         sponsors = ops.list_sponsors()
 
         print(f"\n{'=' * 70}")
@@ -1407,6 +1428,7 @@ def extramural_manage_sponsors(ops):
 def extramural_manage_local_peers(ops):
     """Manage local peers"""
     while True:
+        clear_screen()
         peers = ops.list_local_peers()
 
         print(f"\n{'=' * 70}")

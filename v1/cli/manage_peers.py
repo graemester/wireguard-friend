@@ -29,6 +29,13 @@ except ImportError:
     console = None
 
 
+def clear_screen():
+    """Clear screen and move cursor to home"""
+    if RICH_AVAILABLE:
+        console.clear()
+    print("\033[H", end="", flush=True)
+
+
 @dataclass
 class PeerInfo:
     """Unified peer information structure"""
@@ -223,6 +230,7 @@ def show_peer_list(db: WireGuardDBv2) -> Optional[PeerInfo]:
     filter_text = ""
 
     while True:
+        clear_screen()
         # Render list
         list_content, peer_map = render_peer_list(peers, filter_text)
         total = len(peers)
@@ -292,6 +300,7 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     Returns:
         Action to perform ('rotate', 'remove', 'generate', etc.) or None
     """
+    clear_screen()
     type_labels = {
         'cs': 'Coordination Server',
         'router': 'Subnet Router',
