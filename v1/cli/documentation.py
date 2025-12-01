@@ -161,59 +161,18 @@ def generate_sysinfo() -> str:
     lines.append(f"  SQLite: {sqlite3.sqlite_version}")
     lines.append("")
 
-    # Database stats (if available)
+    # Get coordination server endpoint for connectivity test
+    cs_endpoint = None
     if db_path and os.path.exists(db_path):
         try:
             conn = sqlite3.connect(db_path)
             cursor = conn.cursor()
-
-            lines.append("DATABASE STATS")
-            lines.append("--------------")
-
-            # Count entities
-            try:
-                cursor.execute("SELECT COUNT(*) FROM coordination_server")
-                cs_count = cursor.fetchone()[0]
-                lines.append(f"  Coordination Servers: {cs_count}")
-            except:
-                pass
-
-            try:
-                cursor.execute("SELECT COUNT(*) FROM subnet_router")
-                router_count = cursor.fetchone()[0]
-                lines.append(f"  Subnet Routers: {router_count}")
-            except:
-                pass
-
-            try:
-                cursor.execute("SELECT COUNT(*) FROM remote")
-                remote_count = cursor.fetchone()[0]
-                lines.append(f"  Remote Clients: {remote_count}")
-            except:
-                pass
-
-            try:
-                cursor.execute("SELECT COUNT(*) FROM extramural_config")
-                ext_count = cursor.fetchone()[0]
-                lines.append(f"  Extramural Configs: {ext_count}")
-            except:
-                pass
-
+            cursor.execute("SELECT endpoint FROM coordination_server WHERE id = 1")
+            row = cursor.fetchone()
+            cs_endpoint = row[0] if row else None
             conn.close()
-            lines.append("")
-
-            # Get coordination server endpoint for connectivity test
-            try:
-                cursor = sqlite3.connect(db_path).cursor()
-                cursor.execute("SELECT endpoint FROM coordination_server WHERE id = 1")
-                row = cursor.fetchone()
-                cs_endpoint = row[0] if row else None
-            except:
-                cs_endpoint = None
         except:
-            cs_endpoint = None
-    else:
-        cs_endpoint = None
+            pass
 
     # Connectivity tests
     import socket
