@@ -86,6 +86,7 @@ def generate_sysinfo() -> str:
         BUILD_NAME = "unknown"
 
     lines = []
+    lines.append("")
 
     # Version
     lines.append("VERSION")
@@ -200,7 +201,7 @@ def generate_sysinfo() -> str:
     status = f"OK ({result})" if ok else f"FAILED ({result})"
     lines.append(f"  Cloudflare (1.1.1.1:443): {status}")
 
-    # Test coordination server DNS resolution (WireGuard is UDP, can't TCP test)
+    # Test coordination server with ICMP ping
     if cs_endpoint:
         # Parse endpoint (might be hostname:port or just hostname)
         if ':' in cs_endpoint:
@@ -208,15 +209,28 @@ def generate_sysinfo() -> str:
         else:
             host = cs_endpoint
 
-        # DNS resolution test
-        import time
+        # ICMP ping test
+        import subprocess
         try:
-            start = time.time()
-            ip = socket.gethostbyname(host)
-            latency = (time.time() - start) * 1000
-            lines.append(f"  Coordination Server ({host}): {ip} ({latency:.0f}ms DNS)")
-        except socket.gaierror:
-            lines.append(f"  Coordination Server ({host}): DNS FAILED")
+            result = subprocess.run(
+                ['ping', '-c', '1', '-W', '2', host],
+                capture_output=True,
+                text=True,
+                timeout=3
+            )
+            if result.returncode == 0:
+                # Parse time from output (e.g., "time=45.3 ms")
+                import re
+                match = re.search(r'time[=<](\d+\.?\d*)', result.stdout)
+                if match:
+                    latency = match.group(1)
+                    lines.append(f"  Coordination Server ({host}): OK ({latency}ms)")
+                else:
+                    lines.append(f"  Coordination Server ({host}): OK")
+            else:
+                lines.append(f"  Coordination Server ({host}): NO RESPONSE")
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            lines.append(f"  Coordination Server ({host}): TIMEOUT")
     else:
         lines.append("  Coordination Server: (not configured)")
 
@@ -249,7 +263,7 @@ TOPICS = [
     ("Deploying Configs", "deploy"),
     ("Extramural (Commercial VPNs)", "extramural"),
     ("Troubleshooting", "troubleshooting"),
-    ("System Info", "sysinfo"),
+    ("Diagnostics", "sysinfo"),
     ("About & Links", "about"),
 ]
 
