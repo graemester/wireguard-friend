@@ -264,27 +264,37 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
 def generate_configs(args) -> int:
     """Generate all configs from database"""
     db_path = Path(args.db)
+    dry_run = getattr(args, 'dry_run', False)
 
     if not db_path.exists():
-        print(f"Error: Database not found: {db_path}")
-        print("Run 'wg-friend init' first")
+        print(f"\n✗ Database not found: {db_path}")
+        print(f"\n💡 Run 'wg-friend init' to create a new network")
+        print(f"   or 'wg-friend import' to import existing configs")
         return 1
 
     output_dir = Path(args.output)
-    output_dir.mkdir(exist_ok=True, parents=True)
+
+    if dry_run:
+        print(f"[DRY RUN] Would generate configs from {db_path}")
+        print(f"[DRY RUN] Output directory: {output_dir}")
+        print()
+    else:
+        output_dir.mkdir(exist_ok=True, parents=True)
+        print(f"Generating configs from {db_path}...")
+        print()
 
     db = WireGuardDBv2(db_path)
-
-    print(f"Generating configs from {db_path}...")
-    print()
 
     # Generate CS config
     print("Coordination Server:")
     cs_config = generate_cs_config(db)
     cs_file = output_dir / "coordination.conf"
-    cs_file.write_text(cs_config)
-    cs_file.chmod(0o600)
-    print(f"  ✓ {cs_file}")
+    if dry_run:
+        print(f"  [DRY RUN] Would write: {cs_file}")
+    else:
+        cs_file.write_text(cs_config)
+        cs_file.chmod(0o600)
+        print(f"  ✓ {cs_file}")
 
     # Generate router configs
     with db._connection() as conn:
@@ -298,9 +308,12 @@ def generate_configs(args) -> int:
             for router_id, hostname in routers:
                 router_config = generate_router_config(db, router_id)
                 router_file = output_dir / f"{hostname}.conf"
-                router_file.write_text(router_config)
-                router_file.chmod(0o600)
-                print(f"  ✓ {router_file}")
+                if dry_run:
+                    print(f"  [DRY RUN] Would write: {router_file}")
+                else:
+                    router_file.write_text(router_config)
+                    router_file.chmod(0o600)
+                    print(f"  ✓ {router_file}")
 
         cursor.execute("SELECT id, hostname FROM remote")
         remotes = cursor.fetchall()
@@ -310,28 +323,36 @@ def generate_configs(args) -> int:
             for remote_id, hostname in remotes:
                 remote_config = generate_remote_config(db, remote_id)
                 remote_file = output_dir / f"{hostname}.conf"
-                remote_file.write_text(remote_config)
-                remote_file.chmod(0o600)
-                print(f"  ✓ {remote_file}")
+                if dry_run:
+                    print(f"  [DRY RUN] Would write: {remote_file}")
+                    if args.qr:
+                        print(f"  [DRY RUN] Would write: {output_dir / f'{hostname}.png'}")
+                else:
+                    remote_file.write_text(remote_config)
+                    remote_file.chmod(0o600)
+                    print(f"  ✓ {remote_file}")
 
-                # Generate QR code if requested
-                if args.qr:
-                    try:
-                        import qrcode
-                        qr = qrcode.QRCode()
-                        qr.add_data(remote_config)
-                        qr.make()
+                    # Generate QR code if requested
+                    if args.qr:
+                        try:
+                            import qrcode
+                            qr = qrcode.QRCode()
+                            qr.add_data(remote_config)
+                            qr.make()
 
-                        qr_file = output_dir / f"{hostname}.png"
-                        img = qr.make_image(fill_color="black", back_color="white")
-                        img.save(qr_file)
-                        print(f"    QR: {qr_file}")
-                    except ImportError:
-                        if args.qr:
-                            print("    (qrcode module not installed - pip install qrcode)")
+                            qr_file = output_dir / f"{hostname}.png"
+                            img = qr.make_image(fill_color="black", back_color="white")
+                            img.save(qr_file)
+                            print(f"    QR: {qr_file}")
+                        except ImportError:
+                            if args.qr:
+                                print("    (qrcode module not installed - pip install qrcode)")
 
     print()
-    print(f"✓ Generated configs in {output_dir}")
+    if dry_run:
+        print(f"[DRY RUN] No files were written")
+    else:
+        print(f"✓ Generated configs in {output_dir}")
     print()
 
     return 0

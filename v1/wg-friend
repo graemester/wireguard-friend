@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from v1.cli.init_wizard import run_init_wizard
 from v1.cli.import_configs import run_import
 from v1.schema_semantic import WireGuardDBv2
-from v1.cli.peer_manager import add_peer, add_router, add_remote, rotate_keys, revoke_peer, run_preshared_key, run_generate_qr
+from v1.cli.peer_manager import add_peer, add_router, add_remote, rotate_keys, run_preshared_key, run_generate_qr
 from v1.cli.config_generator import generate_configs
 from v1.cli.deploy import deploy_configs
 from v1.cli.status import show_status
@@ -67,86 +67,179 @@ Examples:
 
     parser.add_argument('--db', default='wireguard.db',
                        help='Database file (default: wireguard.db)')
-    parser.add_argument('--version', action='version', version='wg-friend v1.0.2')
+    parser.add_argument('--version', action='version', version='wg-friend v1.0.4')
 
     subparsers = parser.add_subparsers(dest='command', help='Command to run')
 
     # init - First-run wizard
-    init_parser = subparsers.add_parser('init', help='First-run setup wizard')
+    init_parser = subparsers.add_parser('init',
+        help='Create a new WireGuard network from scratch',
+        description='''
+Interactive wizard that creates:
+  - Coordination server (cloud VPS hub)
+  - Optional subnet routers (for LAN access)
+  - Client peers (phones, laptops)
+
+Run this on first use or to create a new network.
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
 
     # import - Import existing configs
-    import_parser = subparsers.add_parser('import', help='Import existing configs')
-    import_parser.add_argument('--cs', required=True, help='Coordination server config')
-    import_parser.add_argument('--snr', action='append', help='Subnet router config (can specify multiple)')
-    import_parser.add_argument('--remote', action='append', help='Remote client config (can specify multiple)')
+    import_parser = subparsers.add_parser('import',
+        help='Import existing WireGuard configs into database',
+        description='''
+Import existing .conf files from a working WireGuard setup.
+The tool will detect config types and preserve all settings.
+
+Examples:
+  wg-friend import --cs server.conf
+  wg-friend import --cs wg0.conf --snr home.conf --remote phone.conf
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    import_parser.add_argument('--cs', required=True, help='Coordination server config file')
+    import_parser.add_argument('--snr', action='append', help='Subnet router config (repeatable)')
+    import_parser.add_argument('--remote', action='append', help='Remote client config (repeatable)')
 
     # add - Add new entity
-    add_parser = subparsers.add_parser('add', help='Add new peer/router')
+    add_parser = subparsers.add_parser('add',
+        help='Add new peer or router to the network',
+        description='''
+Add a new device to your WireGuard network.
+
+Examples:
+  wg-friend add peer --name alice-laptop
+  wg-friend add router --name home-gateway --lan 192.168.1.0/24
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     add_subparsers = add_parser.add_subparsers(dest='add_type')
 
-    peer_parser = add_subparsers.add_parser('peer', help='Add new peer')
-    peer_parser.add_argument('--name', required=True, help='Peer name/hostname')
+    peer_parser = add_subparsers.add_parser('peer', help='Add remote client (phone, laptop)')
+    peer_parser.add_argument('--name', required=True, help='Device name (e.g., alice-laptop)')
     peer_parser.add_argument('--type', choices=['mobile', 'laptop', 'server'],
-                            default='mobile', help='Peer type')
+                            default='mobile', help='Device type (default: mobile)')
     peer_parser.add_argument('--access', choices=['full', 'vpn', 'lan', 'custom'],
-                            default='full', help='Access level')
+                            default='full', help='Access level (default: full)')
 
-    router_parser = add_subparsers.add_parser('router', help='Add subnet router')
+    router_parser = add_subparsers.add_parser('router', help='Add subnet router (LAN gateway)')
     router_parser.add_argument('--name', required=True, help='Router hostname')
-    router_parser.add_argument('--lan', required=True, help='LAN network (e.g., 192.168.1.0/24)')
+    router_parser.add_argument('--lan', required=True, help='LAN CIDR (e.g., 192.168.1.0/24)')
 
     # rotate - Rotate keys
-    rotate_parser = subparsers.add_parser('rotate', help='Rotate peer keys')
-    rotate_parser.add_argument('peer', help='Peer name or permanent_guid')
-    rotate_parser.add_argument('--reason', help='Reason for rotation')
+    rotate_parser = subparsers.add_parser('rotate',
+        help='Rotate WireGuard keys for a peer',
+        description='''
+Generate new keypair while preserving peer's identity.
 
-    # revoke - Revoke peer
-    revoke_parser = subparsers.add_parser('revoke', help='Revoke peer access')
-    revoke_parser.add_argument('peer', help='Peer name or permanent_guid')
+Recommended:
+  - Every 90 days for routine maintenance
+  - Immediately if device is lost/compromised
+
+Examples:
+  wg-friend rotate alice-laptop
+  wg-friend rotate bob-phone --reason "Device lost"
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    rotate_parser.add_argument('peer', help='Peer name or ID')
+    rotate_parser.add_argument('--reason', help='Reason for rotation (logged)')
 
     # list - List all peers
-    list_parser = subparsers.add_parser('list', help='List all peers in database')
+    list_parser = subparsers.add_parser('list',
+        help='List all peers in the network',
+        description='Display all coordination servers, subnet routers, and remote clients.')
 
-    # remove - Remove peer (alias for revoke with interactive selection)
-    remove_parser = subparsers.add_parser('remove', help='Remove a peer from the network')
-    remove_parser.add_argument('peer', nargs='?', help='Peer type:id (e.g., router:1, remote:2) or omit for interactive')
+    # remove - Remove peer
+    remove_parser = subparsers.add_parser('remove',
+        help='Remove a peer from the network',
+        description='''
+Permanently remove a peer. Their keys are revoked and they
+can no longer connect. This action is logged.
+
+Examples:
+  wg-friend remove router:1
+  wg-friend remove remote:3
+  wg-friend remove              # Interactive selection
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    remove_parser.add_argument('peer', nargs='?', help='Peer as type:id (e.g., router:1) or omit for interactive')
 
     # generate - Generate configs
-    generate_parser = subparsers.add_parser('generate', help='Generate all configs from database')
-    generate_parser.add_argument('--output', default='generated', help='Output directory')
+    generate_parser = subparsers.add_parser('generate',
+        help='Generate .conf files from database',
+        description='''
+Generate WireGuard config files for all entities.
+Configs are written to the output directory.
+
+Examples:
+  wg-friend generate
+  wg-friend generate --qr        # Include QR codes for mobile
+  wg-friend generate --dry-run   # Preview without writing
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    generate_parser.add_argument('--output', default='generated', help='Output directory (default: generated)')
     generate_parser.add_argument('--qr', action='store_true', help='Generate QR codes for mobile devices')
+    generate_parser.add_argument('--dry-run', action='store_true', help='Show what would be generated without writing')
 
     # deploy - Deploy via SSH
-    deploy_parser = subparsers.add_parser('deploy', help='Deploy configs via SSH')
-    deploy_parser.add_argument('--entity', help='Deploy specific entity (or all if not specified)')
+    deploy_parser = subparsers.add_parser('deploy',
+        help='Push configs to remote servers via SSH',
+        description='''
+Deploy generated configs to servers via SCP.
+Automatically backs up existing configs before overwriting.
+
+Examples:
+  wg-friend deploy --dry-run     # Preview deployment
+  wg-friend deploy               # Deploy to all servers
+  wg-friend deploy --restart     # Deploy and restart WireGuard
+  wg-friend deploy --entity home-gateway  # Deploy to one host
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    deploy_parser.add_argument('--entity', help='Deploy to specific host only')
     deploy_parser.add_argument('--dry-run', action='store_true', help='Show what would be deployed')
     deploy_parser.add_argument('--output', default='generated', help='Config directory (default: generated)')
     deploy_parser.add_argument('--user', default='root', help='SSH user (default: root)')
     deploy_parser.add_argument('--restart', action='store_true', help='Restart WireGuard after deploy')
 
     # status - View peer status
-    status_parser = subparsers.add_parser('status', help='View peer connection status')
-    status_parser.add_argument('--live', action='store_true', help='Show live peer status (wg show)')
-    status_parser.add_argument('--interface', default='wg0', help='WireGuard interface name (default: wg0)')
-    status_parser.add_argument('--user', default='root', help='SSH user for coordination server (default: root)')
+    status_parser = subparsers.add_parser('status',
+        help='View network and peer status',
+        description='''
+Show network overview, peer connections, and history.
+
+Examples:
+  wg-friend status               # Network overview
+  wg-friend status --live        # Live connection status (wg show)
+  wg-friend status --history     # State change timeline
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    status_parser.add_argument('--live', action='store_true', help='Show live connections (wg show)')
+    status_parser.add_argument('--interface', default='wg0', help='WireGuard interface (default: wg0)')
+    status_parser.add_argument('--user', default='root', help='SSH user (default: root)')
     status_parser.add_argument('--full', action='store_true', help='Show full details')
-    status_parser.add_argument('--history', action='store_true', help='Show state history timeline')
-    status_parser.add_argument('--state', type=int, help='Show details for specific state ID (use with --history)')
-    status_parser.add_argument('--entity', help='Show history for specific peer (hostname or ID)')
+    status_parser.add_argument('--history', action='store_true', help='Show state history')
+    status_parser.add_argument('--state', type=int, help='Show specific state ID details')
+    status_parser.add_argument('--entity', help='Show history for specific peer')
 
     # maintain - Interactive TUI
-    maintain_parser = subparsers.add_parser('maintain', help='Interactive maintenance mode')
+    maintain_parser = subparsers.add_parser('maintain',
+        help='Interactive menu-driven interface',
+        description='Launch the interactive TUI for managing your network.')
 
     # psk - Add/update preshared key
-    psk_parser = subparsers.add_parser('psk', help='Add/update preshared key for peer')
+    psk_parser = subparsers.add_parser('psk',
+        help='Add preshared key for extra security',
+        description='Add or update a preshared key for a peer (optional extra layer of security).')
 
     # qr - Generate QR code for peer
-    qr_parser = subparsers.add_parser('qr', help='Generate QR code for remote peer')
-    qr_parser.add_argument('--output', default='generated', help='Output directory for QR code')
+    qr_parser = subparsers.add_parser('qr',
+        help='Generate QR code for mobile device',
+        description='Generate a QR code that can be scanned by the WireGuard mobile app.')
+    qr_parser.add_argument('--output', default='generated', help='Output directory')
 
     # ssh-setup - SSH setup wizard
-    ssh_setup_parser = subparsers.add_parser('ssh-setup', help='SSH key setup wizard')
-    ssh_setup_parser.add_argument('--user', default='root', help='SSH user for servers (default: root)')
+    ssh_setup_parser = subparsers.add_parser('ssh-setup',
+        help='Configure SSH access to servers',
+        description='Interactive wizard to set up SSH key authentication for deployment.')
+    ssh_setup_parser.add_argument('--user', default='root', help='SSH user (default: root)')
 
     # extramural - External VPN config management
     extramural_parser = subparsers.add_parser('extramural', help='Manage external VPN configs (Mullvad, employer VPNs, etc.)')
@@ -363,8 +456,6 @@ Examples:
                 return 0
         elif args.command == 'rotate':
             return rotate_keys(args)
-        elif args.command == 'revoke':
-            return revoke_peer(args)
         elif args.command == 'list':
             db = WireGuardDBv2(args.db)
             from v1.cli.peer_manager import list_peers
