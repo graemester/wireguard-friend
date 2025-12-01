@@ -341,7 +341,8 @@ def import_extramural_config(
     import json
     comments_json = json.dumps(parsed.comments) if parsed.comments else None
 
-    # Create config
+    # Create config - mark as deployed since we're importing an existing config
+    # that the user already has on their device
     config_id = ops.add_extramural_config(
         local_peer_id=local_peer_id,
         sponsor_id=sponsor_id,
@@ -358,7 +359,8 @@ def import_extramural_config(
         config_path=str(config_path),
         notes=f"Imported from {config_path}",
         raw_config=parsed.raw_config,
-        comments=comments_json
+        comments=comments_json,
+        last_deployed_at=datetime.utcnow().isoformat()
     )
 
     logger.info(f"Created extramural config (ID: {config_id})")

@@ -369,7 +369,7 @@ class ExtramuralOps:
         valid_fields = {
             'interface_name', 'assigned_ipv4', 'assigned_ipv6', 'dns_servers',
             'listen_port', 'mtu', 'table_setting', 'config_path', 'notes',
-            'raw_config', 'comments'
+            'raw_config', 'comments', 'last_deployed_at'
         }
         optional = {k: v for k, v in kwargs.items() if k in valid_fields}
 
