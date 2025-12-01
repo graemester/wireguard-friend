@@ -10,12 +10,41 @@ from typing import List, Dict, Optional
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Rich imports for enhanced UI
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.prompt import Confirm
+    from rich import box
+    RICH_AVAILABLE = True
+    console = Console()
+except ImportError:
+    RICH_AVAILABLE = False
+    console = None
+    Confirm = None
+
 from v1.entity_parser import EntityParser
 from v1.patterns import PatternRecognizer
 from v1.comments import CommentCategorizer, CommentCategory
 from v1.schema_semantic import WireGuardDBv2
 from v1.keygen import derive_public_key
 from v1.state_tracker import record_import
+from v1.cli.validation import run_validation_checks
+
+
+def rprint(msg: str = "", style: str = None):
+    """Print with Rich if available, else plain print"""
+    if RICH_AVAILABLE:
+        if style:
+            console.print(f"[{style}]{msg}[/{style}]")
+        else:
+            console.print(msg)
+    else:
+        # Strip Rich markup for plain output
+        import re
+        plain = re.sub(r'\[/?[^\]]+\]', '', msg)
+        print(plain)
 
 
 def separate_allowed_ips(allowed_ips: List[str]) -> tuple:
@@ -203,9 +232,10 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
     public_key = derive_public_key(interface['private_key'])
     permanent_guid = public_key  # First key = permanent GUID
 
-    print(f"\nCoordination Server:")
-    print(f"  permanent_guid: {permanent_guid[:30]}...")
-    print(f"  Addresses: {interface['addresses']}")
+    rprint()
+    rprint("[bold cyan]Coordination Server[/bold cyan]")
+    rprint(f"  GUID: [dim]{permanent_guid[:30]}...[/dim]")
+    rprint(f"  Addresses: [green]{', '.join(interface['addresses'])}[/green]")
 
     # Recognize patterns
     pairs, singletons, unrecognized = pattern_recognizer.recognize_pairs(
@@ -213,7 +243,8 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
         interface['postdown']
     )
 
-    print(f"  Patterns: {len(pairs)} pairs, {len(singletons)} singletons")
+    if pairs or singletons:
+        rprint(f"  Patterns: [yellow]{len(pairs)} pairs, {len(singletons)} singletons[/yellow]")
 
     # Extract endpoint and network from addresses
     endpoint = None  # Will need to prompt or detect
@@ -314,7 +345,8 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
     peer_entities = entities[1:]
     peers = []
 
-    print(f"\n  Analyzing {len(peer_entities)} peers from CS config:")
+    rprint()
+    rprint(f"  [bold]Analyzing {len(peer_entities)} peers from CS config:[/bold]")
 
     for entity in peer_entities:
         peer = parse_peer_section(entity, categorizer)
@@ -325,30 +357,48 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
             peer['advertised_networks'] = advertised
 
             peer_name = peer.get('hostname', peer['public_key'][:20] + '...')
-            print(f"    - {peer_name}")
-            print(f"      VPN IPs: {', '.join(vpn_ips)}")
+
             if advertised:
-                print(f"      Advertised LANs: {', '.join(advertised)}")
                 # This peer is likely a subnet router
                 peer['inferred_type'] = 'subnet_router'
+                rprint(f"    [cyan]{peer_name}[/cyan] [dim](subnet router)[/dim]")
+                rprint(f"      VPN: [green]{', '.join(vpn_ips)}[/green]")
+                rprint(f"      LANs: [yellow]{', '.join(advertised)}[/yellow]")
             else:
                 # No LANs = likely a remote client
                 peer['inferred_type'] = 'remote'
+                rprint(f"    [cyan]{peer_name}[/cyan] [dim](remote)[/dim]")
+                rprint(f"      VPN: [green]{', '.join(vpn_ips)}[/green]")
 
             peers.append(peer)
-
-    print(f"\n  Environment summary:")
-    print(f"    VPN Network: {network_ipv4}, {network_ipv6}")
 
     # Collect all advertised LANs
     all_lans = []
     for peer in peers:
         all_lans.extend(peer.get('advertised_networks', []))
 
-    if all_lans:
-        print(f"    Advertised LANs: {', '.join(set(all_lans))}")
+    # Environment summary with Rich Table
+    rprint()
+    if RICH_AVAILABLE:
+        env_table = Table(title="Environment Model", box=box.ROUNDED, show_header=False)
+        env_table.add_column("Property", style="bold")
+        env_table.add_column("Value", style="green")
+
+        env_table.add_row("VPN Network (IPv4)", network_ipv4)
+        env_table.add_row("VPN Network (IPv6)", network_ipv6)
+        if all_lans:
+            env_table.add_row("Advertised LANs", ', '.join(set(all_lans)))
+        else:
+            env_table.add_row("Advertised LANs", "(none)")
+
+        console.print(env_table)
     else:
-        print(f"    Advertised LANs: (none)")
+        rprint("  [bold]Environment summary:[/bold]")
+        rprint(f"    VPN Network: {network_ipv4}, {network_ipv6}")
+        if all_lans:
+            rprint(f"    Advertised LANs: {', '.join(set(all_lans))}")
+        else:
+            rprint(f"    Advertised LANs: (none)")
 
     return cs_id, peers, network_ipv4, network_ipv6
 
@@ -399,9 +449,10 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
     if not hostname:
         hostname = config_path.stem
 
-    print(f"\nSubnet Router: {hostname}")
-    print(f"  permanent_guid: {permanent_guid[:30]}...")
-    print(f"  Addresses: {interface['addresses']}")
+    rprint()
+    rprint(f"[bold magenta]Subnet Router:[/bold magenta] [cyan]{hostname}[/cyan]")
+    rprint(f"  GUID: [dim]{permanent_guid[:30]}...[/dim]")
+    rprint(f"  Addresses: [green]{', '.join(interface['addresses'])}[/green]")
 
     # Get CS ID
     with db._connection() as conn:
@@ -427,10 +478,10 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
             if cs_peer['public_key'] == public_key:
                 lan_networks = cs_peer.get('advertised_networks', [])
                 if lan_networks:
-                    print(f"  Advertised LANs (from CS): {', '.join(lan_networks)}")
+                    rprint(f"  Advertised LANs: [yellow]{', '.join(lan_networks)}[/yellow]")
                 break
         else:
-            print(f"  Warning: Router not found in CS peers (pubkey mismatch)")
+            rprint(f"  [yellow]Warning:[/yellow] Router not found in CS peers (pubkey mismatch)")
     else:
         # Fallback: try to infer from PostUp/PostDown (legacy mode)
         pass
@@ -479,7 +530,7 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
             """, (cs_endpoint, cs_id))
 
             if cursor.rowcount > 0:
-                print(f"  ✓ Updated CS endpoint: {cs_endpoint}")
+                rprint(f"  [green]✓[/green] Updated CS endpoint: [cyan]{cs_endpoint}[/cyan]")
 
         # Insert advertised networks
         for network in lan_networks:
@@ -508,9 +559,9 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
                 i
             ))
 
-    print(f"  ✓ Imported subnet router (ID: {router_id})")
+    rprint(f"  [green]✓[/green] Imported subnet router (ID: {router_id})")
     if lan_networks:
-        print(f"  ✓ LAN networks: {', '.join(lan_networks)}")
+        rprint(f"  [green]✓[/green] LAN networks: [yellow]{', '.join(lan_networks)}[/yellow]")
 
     return router_id
 
@@ -560,9 +611,10 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
     if not hostname:
         hostname = config_path.stem
 
-    print(f"\nRemote Client: {hostname}")
-    print(f"  permanent_guid: {permanent_guid[:30]}...")
-    print(f"  Addresses: {interface['addresses']}")
+    rprint()
+    rprint(f"[bold blue]Remote Client:[/bold blue] [cyan]{hostname}[/cyan]")
+    rprint(f"  GUID: [dim]{permanent_guid[:30]}...[/dim]")
+    rprint(f"  Addresses: [green]{', '.join(interface['addresses'])}[/green]")
 
     # Get CS ID
     with db._connection() as conn:
@@ -597,10 +649,10 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
                 unknown.append(ip)
 
         if validated:
-            print(f"  AllowedIPs (validated): {', '.join(validated)}")
+            rprint(f"  AllowedIPs: [green]{', '.join(validated)}[/green] [dim](validated)[/dim]")
         if unknown:
-            print(f"  Warning: Unknown networks in AllowedIPs: {', '.join(unknown)}")
-            print(f"           These don't match VPN or advertised LANs")
+            rprint(f"  [yellow]Warning:[/yellow] Unknown networks in AllowedIPs: {', '.join(unknown)}")
+            rprint(f"           These don't match VPN or advertised LANs")
             # Still include them but flag as potentially problematic
             validated.extend(unknown)
 
@@ -608,7 +660,7 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
     else:
         allowed_ips = ', '.join(allowed_ips_list) if allowed_ips_list else None
         if allowed_ips:
-            print(f"  AllowedIPs: {allowed_ips}")
+            rprint(f"  AllowedIPs: [green]{allowed_ips}[/green]")
 
     # Infer access level from AllowedIPs
     access_level = 'custom'
@@ -620,7 +672,7 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
         else:
             access_level = 'vpn_only'
 
-    print(f"  Inferred access level: {access_level}")
+    rprint(f"  Access level: [magenta]{access_level}[/magenta]")
 
     # Insert into database
     with db._connection() as conn:
@@ -660,43 +712,56 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
             """, (cs_endpoint, cs_id))
 
             if cursor.rowcount > 0:
-                print(f"  ✓ Updated CS endpoint: {cs_endpoint}")
+                rprint(f"  [green]✓[/green] Updated CS endpoint: [cyan]{cs_endpoint}[/cyan]")
 
-    print(f"  ✓ Imported remote client (ID: {remote_id})")
-    print(f"  ✓ Access level: {access_level}")
+    rprint(f"  [green]✓[/green] Imported remote client (ID: {remote_id})")
 
     return remote_id
 
 
 def run_import(args) -> int:
     """Import existing configs into database"""
-    print("=" * 70)
-    print("IMPORT CONFIGS")
-    print("=" * 70)
-    print()
+    if RICH_AVAILABLE:
+        console.print()
+        console.print(Panel.fit(
+            "[bold cyan]Phase 2: Import WireGuard Configs[/bold cyan]\n\n"
+            "Parse configs and build environment model",
+            border_style="cyan"
+        ))
+        console.print()
+    else:
+        print("=" * 70)
+        print("PHASE 2: IMPORT CONFIGS")
+        print("=" * 70)
+        print()
 
     # Check if database exists
     db_path = Path(args.db)
     if db_path.exists():
-        print(f"WARNING:  Database already exists: {db_path}")
-        response = input("Overwrite? (y/N): ").strip().lower()
-        if response not in ('y', 'yes'):
-            print("Cancelled.")
-            return 1
+        rprint(f"[yellow]WARNING:[/yellow] Database already exists: {db_path}")
+        if RICH_AVAILABLE:
+            if not Confirm.ask("Overwrite?", default=False):
+                rprint("[dim]Cancelled.[/dim]")
+                return 1
+        else:
+            response = input("Overwrite? (y/N): ").strip().lower()
+            if response not in ('y', 'yes'):
+                rprint("Cancelled.")
+                return 1
         db_path.unlink()
 
     # Validate inputs
     if not args.cs:
-        print("Error: --cs (coordination server config) required")
+        rprint("[red]Error:[/red] --cs (coordination server config) required")
         return 1
 
     cs_path = Path(args.cs)
     if not cs_path.exists():
-        print(f"Error: File not found: {cs_path}")
+        rprint(f"[red]Error:[/red] File not found: {cs_path}")
         return 1
 
     # Create database
-    print(f"Creating database: {db_path}")
+    rprint(f"Creating database: [cyan]{db_path}[/cyan]")
     db = WireGuardDBv2(db_path)
 
     try:
@@ -743,7 +808,7 @@ def run_import(args) -> int:
                         )
                         snr_count += 1
                     except Exception as e:
-                        print(f"\n  Error importing subnet router {entity.path.name}: {e}")
+                        rprint(f"\n  [red]Error:[/red] importing subnet router {entity.path.name}: {e}")
 
                 elif entity.config_type == 'client':
                     try:
@@ -753,7 +818,7 @@ def run_import(args) -> int:
                         )
                         remote_count += 1
                     except Exception as e:
-                        print(f"\n  Error importing remote {entity.path.name}: {e}")
+                        rprint(f"\n  [red]Error:[/red] importing remote {entity.path.name}: {e}")
 
         else:
             # Legacy mode: use args.snr and args.remote if provided
@@ -765,9 +830,9 @@ def run_import(args) -> int:
                             router_id = import_subnet_router(snr_file, db, cs_peers=cs_peers)
                             snr_count += 1
                         except Exception as e:
-                            print(f"\n  Error importing subnet router {snr_file.name}: {e}")
+                            rprint(f"\n  [red]Error:[/red] importing subnet router {snr_file.name}: {e}")
                     else:
-                        print(f"\n  Warning: File not found: {snr_path}")
+                        rprint(f"\n  [yellow]Warning:[/yellow] File not found: {snr_path}")
 
             if args.remote:
                 for remote_path in args.remote:
@@ -777,44 +842,80 @@ def run_import(args) -> int:
                             remote_id = import_remote(remote_file, db, known_networks=known_networks)
                             remote_count += 1
                         except Exception as e:
-                            print(f"\n  Error importing remote {remote_file.name}: {e}")
+                            rprint(f"\n  [red]Error:[/red] importing remote {remote_file.name}: {e}")
                     else:
-                        print(f"\n  Warning: File not found: {remote_path}")
+                        rprint(f"\n  [yellow]Warning:[/yellow] File not found: {remote_path}")
 
         # Record initial state snapshot
         state_id = record_import(str(db_path), db, len(cs_peers))
 
-        print()
-        print("=" * 70)
-        print("Import done")
-        print("=" * 70)
-        print(f"✓ Database created: {db_path}")
-        print(f"✓ Coordination server imported")
-        print(f"✓ Found {len(cs_peers)} peers in CS config")
-        if snr_count > 0:
-            print(f"✓ Imported {snr_count} subnet router(s)")
-        if remote_count > 0:
-            print(f"✓ Imported {remote_count} remote client(s)")
-        print(f"✓ State snapshot recorded (State #{state_id})")
-        print()
+        # Run validation checks (Phase 5)
+        passed, failed, warnings = run_validation_checks(db, ping_endpoint=True)
+
+        # Success summary
+        if RICH_AVAILABLE:
+            console.print()
+            summary_lines = [
+                f"[green]✓[/green] Database created: [cyan]{db_path}[/cyan]",
+                f"[green]✓[/green] Coordination server imported",
+                f"[green]✓[/green] Found {len(cs_peers)} peers in CS config",
+            ]
+            if snr_count > 0:
+                summary_lines.append(f"[green]✓[/green] Imported {snr_count} subnet router(s)")
+            if remote_count > 0:
+                summary_lines.append(f"[green]✓[/green] Imported {remote_count} remote client(s)")
+            summary_lines.append(f"[green]✓[/green] State snapshot recorded (State #{state_id})")
+
+            # Add validation summary
+            if failed == 0:
+                summary_lines.append(f"[green]✓[/green] Validation: {passed} checks passed")
+            else:
+                summary_lines.append(f"[yellow]![/yellow] Validation: {passed} passed, {failed} failed")
+
+            console.print(Panel(
+                "\n".join(summary_lines),
+                title="[bold green]Import Complete[/bold green]",
+                border_style="green"
+            ))
+            console.print()
+        else:
+            print()
+            print("=" * 70)
+            print("Import done")
+            print("=" * 70)
+            print(f"✓ Database created: {db_path}")
+            print(f"✓ Coordination server imported")
+            print(f"✓ Found {len(cs_peers)} peers in CS config")
+            if snr_count > 0:
+                print(f"✓ Imported {snr_count} subnet router(s)")
+            if remote_count > 0:
+                print(f"✓ Imported {remote_count} remote client(s)")
+            print(f"✓ State snapshot recorded (State #{state_id})")
+            print(f"✓ Validation: {passed} passed, {failed} failed")
+            print()
 
         # Offer to enter maintenance mode
-        response = input("Enter maintenance mode? [Y/n]: ").strip().lower()
-        if response in ('', 'y', 'yes'):
+        if RICH_AVAILABLE:
+            enter_tui = Confirm.ask("Enter maintenance mode?", default=True)
+        else:
+            response = input("Enter maintenance mode? [Y/n]: ").strip().lower()
+            enter_tui = response in ('', 'y', 'yes')
+
+        if enter_tui:
             from v1.cli.tui import run_tui
             return run_tui(str(db_path))
         else:
-            print()
-            print("Next steps:")
-            print(f"  1. Review database: sqlite3 {db_path}")
-            print(f"  2. Add missing entities: wg-friend add peer/router")
-            print(f"  3. Generate configs: wg-friend generate")
-            print()
+            rprint()
+            rprint("[bold]Next steps:[/bold]")
+            rprint(f"  1. Review database: [cyan]sqlite3 {db_path}[/cyan]")
+            rprint(f"  2. Add missing entities: [cyan]wg-friend add peer/router[/cyan]")
+            rprint(f"  3. Generate configs: [cyan]wg-friend generate[/cyan]")
+            rprint()
 
         return 0
 
     except Exception as e:
-        print(f"\nError during import: {e}")
+        rprint(f"\n[red]Error during import:[/red] {e}")
         import traceback
         traceback.print_exc()
         return 1

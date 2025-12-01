@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # Version info (keep in sync with wg-friend)
-VERSION = "1.0.4"
-BUILD_NAME = "griffin"
+VERSION = "1.0.5"
+BUILD_NAME = "harrier"  # Rich TUI + Phased Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 

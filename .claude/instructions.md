@@ -57,3 +57,27 @@ Detailed feature set
 ## Why
 
 The author is not about hype, perfection framing, or completion fetishes. Documentation should be practical and straightforward.
+
+## Feature Cycle Workflow
+
+At the end of each feature cycle, follow this sequence:
+
+1. **Commit and push**
+   ```bash
+   git add -A && git commit -m "Description of changes" && git push
+   ```
+
+2. **Build the binary**
+   ```bash
+   ./build-binary.sh
+   ```
+
+3. **Install to system path**
+   ```bash
+   sudo cp dist/wg-friend /usr/local/bin/
+   ```
+
+Or as a one-liner after committing:
+```bash
+./build-binary.sh && sudo cp dist/wg-friend /usr/local/bin/
+```
