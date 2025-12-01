@@ -321,7 +321,9 @@ Examples:
 
         # Database exists → Maintenance mode
         if db_path.exists():
-            print(f"Using database: {db_path}\n")
+            import os
+            print(f"Using database: {db_path}")
+            print(f"Working directory: {os.getcwd()}\n")
             return run_tui(args.db)
 
         # No database → First-run experience
@@ -534,6 +536,9 @@ Examples:
         elif args.command == 'status':
             return show_status(args)
         elif args.command == 'maintain':
+            import os
+            print(f"Using database: {args.db}")
+            print(f"Working directory: {os.getcwd()}\n")
             return run_tui(args.db)
         elif args.command == 'psk':
             return run_preshared_key(args)
