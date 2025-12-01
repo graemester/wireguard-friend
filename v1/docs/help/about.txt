@@ -20,7 +20,7 @@ PROJECT LINKS
   Looking for a VPS?  I use Interserver and love it. 
   - $3/month will get you a "slice" that can be your coordination server and lots more!
   - Use this link to sign up and they'll give me some free time!
-    https://www.interserver.net/r/1029305
+    https://www.interserver.net/vps/?id=1029305
 
 
 WHAT IS WIREGUARD?
