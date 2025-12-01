@@ -1359,13 +1359,7 @@ def run_tui(db_path: str) -> int:
     """Run the interactive TUI"""
     db = WireGuardDBv2(db_path)
 
-    print("\n" + "=" * 70)
-    print("  WIREGUARD FRIEND - INTERACTIVE MODE")
-    print("=" * 70)
-    print("\n  Welcome! This interactive mode lets you manage your WireGuard network.")
-    print("  Navigate using the menu options below.")
-    print()
-    input("Press Enter to continue...")
+    # Go straight to menu - no welcome screen friction
 
     # Main loop
     while True:
