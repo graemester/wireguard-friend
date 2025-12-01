@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # Version info (keep in sync with wg-friend)
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 BUILD_NAME = "harrier"  # Rich TUI + Phased Workflow
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
@@ -29,6 +29,7 @@ except ImportError:
 from v1.schema_semantic import WireGuardDBv2
 from v1.cli.peer_manager import add_remote, add_router, list_peers, rotate_keys, remove_peer
 from v1.cli.status import show_network_overview, show_recent_rotations, show_state_history, show_entity_history
+from v1.cli.manage_peers import manage_peers_menu
 
 
 def print_menu(title: str, options: List[str], include_quit: bool = True):
@@ -124,7 +125,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
             "Network Status [view topology and connections]",
-            "List All Peers [show all devices and servers]",
+            "Manage Peers [view, edit, and manage all peers]",
             "Add Peer [add new device to network]",
             "Remove Peer [revoke a device's access]",
             "Rotate Keys [regenerate security keys]",
@@ -145,9 +146,8 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         input("\nPress Enter to continue...")
 
     elif choice == 2:
-        # List All Peers
-        list_peers(db)
-        input("\nPress Enter to continue...")
+        # Manage Peers - drill-down interface
+        manage_peers_menu(db, db_path)
 
     elif choice == 3:
         # Add Peer
