@@ -918,39 +918,35 @@ Contributions welcome! See the GitHub repository for:
 
 def show_topic_list():
     """Display the list of help topics (in alternate screen)"""
-    term_width, term_height = get_terminal_size()
-
-    lines = []
-    lines.append("")
-    for i, (title, _) in enumerate(TOPICS, 1):
-        lines.append(f"  \\[{i}] {title}")
-    lines.append("")
-    lines.append("  Press 1-8 to read topic")
-    lines.append("  Press Q or Enter to return to main menu")
-
-    # Pad to fill screen
-    content_height = term_height - 4  # Account for panel borders
-    while len(lines) < content_height:
-        lines.append("")
-
     if RICH_AVAILABLE:
+        # Build menu content matching main menu style
+        menu_lines = []
+        for i, (title, _) in enumerate(TOPICS, 1):
+            menu_lines.append(f"  [cyan]{i}.[/cyan] {title}")
+        menu_lines.append(f"  [dim]q. Back to Main Menu[/dim]")
+
         console.clear()
         print("\033[H", end="")  # Cursor to home position
+        console.print()
         console.print(Panel(
-            "\n".join(lines),
+            "\n".join(menu_lines),
             title="[bold]DOCUMENTATION[/bold]",
             title_align="left",
-            subtitle="[dim]Built-in Help System[/dim]",
             border_style="cyan",
-            padding=(0, 2),
-            height=term_height - 2
+            padding=(1, 2)
         ))
+        console.print()
+        print("  Select: ", end="", flush=True)
     else:
         print("\033[2J\033[H", end="")  # Clear screen, cursor home
         print("=" * 70)
         print("DOCUMENTATION")
         print("=" * 70)
-        print("\n".join(lines))
+        for i, (title, _) in enumerate(TOPICS, 1):
+            print(f"  {i}. {title}")
+        print(f"  q. Back to Main Menu")
+        print()
+        print("  Select: ", end="", flush=True)
 
 
 def enter_alternate_screen():
