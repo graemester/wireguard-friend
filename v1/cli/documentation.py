@@ -750,8 +750,8 @@ def show_topic_list():
     for i, (title, _) in enumerate(TOPICS, 1):
         lines.append(f"  \\[{i}] {title}")
     lines.append("")
-    lines.append("  Enter topic number to read")
-    lines.append("  Press Enter to return to main menu")
+    lines.append("  Press 1-8 to read topic")
+    lines.append("  Press Q or Enter to return to main menu")
 
     # Pad to fill screen
     content_height = term_height - 4  # Account for panel borders
@@ -760,13 +760,14 @@ def show_topic_list():
 
     if RICH_AVAILABLE:
         console.clear()
+        print("\033[H", end="")  # Cursor to home position
         console.print(Panel(
             "\n".join(lines),
             title="[bold]DOCUMENTATION[/bold]",
             subtitle="[dim]Built-in Help System[/dim]",
             border_style="cyan",
             padding=(0, 2),
-            height=term_height - 1
+            height=term_height - 2
         ))
     else:
         print("\033[2J\033[H", end="")  # Clear screen, cursor home
@@ -791,6 +792,22 @@ def get_terminal_size() -> Tuple[int, int]:
     import shutil
     size = shutil.get_terminal_size((80, 24))
     return size.columns, size.lines
+
+
+def getch() -> str:
+    """Read a single keypress without waiting for Enter"""
+    import sys
+    import tty
+    import termios
+
+    fd = sys.stdin.fileno()
+    old_settings = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+    return ch
 
 
 def show_topic_content(topic_key: str, topic_title: str):
@@ -835,10 +852,10 @@ def show_topic_content(topic_key: str, topic_title: str):
             ))
 
             if has_more:
-                nav_text = "  [dim]\\[Enter] next  |  \\[B]ack to topics  |  \\[Q]uit docs[/dim]"
+                nav_text = "  [dim]Space/Enter: next | -: prev | B: back | Q: quit[/dim]"
             else:
-                nav_text = "  [dim]\\[Enter/B] back to topics  |  \\[Q]uit docs[/dim]"
-            console.print(nav_text, end="")
+                nav_text = "  [dim]Enter/B: back to topics | Q: quit[/dim]"
+            console.print(nav_text, end="", highlight=False)
         else:
             print("\033[2J\033[H", end="")  # Clear screen, cursor home
             print("=" * 70)
@@ -847,28 +864,32 @@ def show_topic_content(topic_key: str, topic_title: str):
             print(page_content)
             print("-" * 70)
             if has_more:
-                print("  [Enter] next  |  [B]ack to topics  |  [Q]uit docs", end="")
+                print("  Space/Enter: next | -: prev | B: back | Q: quit", end="")
             else:
-                print("  [Enter/B] back to topics  |  [Q]uit docs", end="")
+                print("  Enter/B: back to topics | Q: quit", end="")
 
-        # Get input
-        choice = input("  : ").strip()
+        # Get single keypress
+        sys.stdout.flush()
+        ch = getch()
 
-        if choice.lower() in ('b', 'back'):
+        if ch.lower() == 'b':
             return 'back'
-        elif choice.lower() in ('q', 'quit'):
+        elif ch.lower() == 'q':
             return 'quit'
-        elif choice in ('', ' ', 'n', 'N') or choice.lower() == 'next':
+        elif ch in ('\r', '\n', ' ', 'n', 'N'):
             # Next page: Enter, Space, n
             if has_more:
                 current_line += page_size
             else:
                 return 'back'
-        elif choice in ('-', 'p', 'P') or choice.lower() in ('prev', 'up'):
+        elif ch in ('-', 'p', 'P'):
             # Previous page: minus, p
             if current_line > 0:
                 current_line = max(0, current_line - page_size)
             # else stay on first page
+        elif ch == '\x03':
+            # Ctrl+C
+            return 'quit'
         else:
             # Unknown input, go next if possible
             if has_more:
@@ -887,25 +908,26 @@ def documentation_menu():
         while True:
             show_topic_list()
 
-            choice = input("\nTopic: ").strip().lower()
+            # Get single keypress
+            sys.stdout.flush()
+            ch = getch()
 
-            # Exit on empty or quit
-            if choice in ('', 'q', 'quit', 'back', 'b'):
+            # Exit on q, Escape, or Ctrl+C
+            if ch.lower() in ('q', '\x1b', '\x03'):
                 return
 
-            # Try to parse as topic number
-            try:
-                topic_num = int(choice)
+            # Try to parse as topic number (1-8)
+            if ch.isdigit():
+                topic_num = int(ch)
                 if 1 <= topic_num <= len(TOPICS):
                     title, key = TOPICS[topic_num - 1]
                     result = show_topic_content(key, title)
                     if result == 'quit':
                         return
                     # 'back' continues the loop
-                else:
-                    print(f"  Invalid topic. Enter 1-{len(TOPICS)}.")
-            except ValueError:
-                print(f"  Invalid input. Enter a topic number (1-{len(TOPICS)}).")
+            # Enter goes back to main menu
+            elif ch in ('\r', '\n'):
+                return
     finally:
         exit_alternate_screen()
 
