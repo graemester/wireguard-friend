@@ -86,9 +86,6 @@ def generate_sysinfo() -> str:
         BUILD_NAME = "unknown"
 
     lines = []
-    lines.append("SYSTEM INFORMATION")
-    lines.append("==================")
-    lines.append("")
 
     # Version
     lines.append("VERSION")
@@ -203,23 +200,23 @@ def generate_sysinfo() -> str:
     status = f"OK ({result})" if ok else f"FAILED ({result})"
     lines.append(f"  Cloudflare (1.1.1.1:443): {status}")
 
-    # Test coordination server if we have one
+    # Test coordination server DNS resolution (WireGuard is UDP, can't TCP test)
     if cs_endpoint:
         # Parse endpoint (might be hostname:port or just hostname)
         if ':' in cs_endpoint:
-            host, port_str = cs_endpoint.rsplit(':', 1)
-            try:
-                port = int(port_str)
-            except ValueError:
-                host = cs_endpoint
-                port = 51820
+            host = cs_endpoint.rsplit(':', 1)[0]
         else:
             host = cs_endpoint
-            port = 51820
 
-        ok, result = test_connection(host, port)
-        status = f"OK ({result})" if ok else f"FAILED ({result})"
-        lines.append(f"  Coordination Server ({host}:{port}): {status}")
+        # DNS resolution test
+        import time
+        try:
+            start = time.time()
+            ip = socket.gethostbyname(host)
+            latency = (time.time() - start) * 1000
+            lines.append(f"  Coordination Server ({host}): {ip} ({latency:.0f}ms DNS)")
+        except socket.gaierror:
+            lines.append(f"  Coordination Server ({host}): DNS FAILED")
     else:
         lines.append("  Coordination Server: (not configured)")
 
