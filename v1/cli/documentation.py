@@ -1,11 +1,15 @@
 """
 Built-in Documentation System
 
-Provides a man-page style help system embedded in the application.
-All content is self-contained - no external files required.
+Provides a man-page style help system with content loading hierarchy:
+1. Online fetch from GitHub (always up-to-date)
+2. Local file in repo (for development/offline)
+3. Embedded fallback (binary self-contained)
 """
 
 import sys
+import urllib.request
+import urllib.error
 from pathlib import Path
 from typing import Optional, List, Tuple
 
@@ -26,7 +30,58 @@ except ImportError:
 
 
 # =============================================================================
-# DOCUMENTATION CONTENT
+# CONTENT LOADING (Online -> Local -> Embedded)
+# =============================================================================
+
+GITHUB_RAW_BASE = "https://raw.githubusercontent.com/graemester/wireguard-friend/main/v1/docs/help"
+LOCAL_HELP_DIR = Path(__file__).parent.parent / "docs" / "help"
+
+# Topics that have external files (others use embedded only)
+EXTERNAL_TOPICS = {"about"}
+
+
+def load_external_content(topic_key: str) -> Optional[str]:
+    """
+    Try to load content from external source.
+
+    Order: GitHub raw -> Local file -> None (use embedded)
+    """
+    if topic_key not in EXTERNAL_TOPICS:
+        return None
+
+    filename = f"{topic_key}.txt"
+
+    # Try GitHub first (2 second timeout)
+    try:
+        url = f"{GITHUB_RAW_BASE}/{filename}"
+        with urllib.request.urlopen(url, timeout=2) as response:
+            content = response.read().decode('utf-8')
+            if content.strip():
+                return content
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, OSError):
+        pass  # Fall through to local file
+
+    # Try local file
+    local_path = LOCAL_HELP_DIR / filename
+    if local_path.exists():
+        try:
+            return local_path.read_text()
+        except IOError:
+            pass  # Fall through to embedded
+
+    return None  # Use embedded fallback
+
+
+def get_content(topic_key: str) -> str:
+    """Get content for a topic, trying external sources first."""
+    external = load_external_content(topic_key)
+    if external:
+        return external
+    return CONTENT.get(topic_key, "Content not found.")
+
+
+# =============================================================================
+# DOCUMENTATION CONTENT (Embedded Fallbacks)
 # =============================================================================
 
 TOPICS = [
@@ -714,7 +769,7 @@ def show_topic_list():
 
 def show_topic_content(topic_key: str, topic_title: str):
     """Display the content of a specific topic"""
-    content = CONTENT.get(topic_key, "Content not found.")
+    content = get_content(topic_key)
     lines = content.strip().split('\n')
 
     # Paginate if content is long

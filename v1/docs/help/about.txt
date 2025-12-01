@@ -1,0 +1,59 @@
+ABOUT WIREGUARD FRIEND
+======================
+
+Version: See main menu banner
+License: MIT
+
+
+PROJECT LINKS
+-------------
+
+  GitHub Repository:
+    https://github.com/graemester/wireguard-friend
+
+  Issues & Bug Reports:
+    https://github.com/graemester/wireguard-friend/issues
+
+  Documentation:
+    https://github.com/graemester/wireguard-friend/tree/main/v1/docs
+
+
+WHAT IS WIREGUARD?
+------------------
+
+WireGuard is a modern VPN protocol that is:
+  - Fast and lightweight
+  - Cryptographically sound
+  - Easy to configure
+  - Cross-platform
+
+Learn more: https://www.wireguard.com/
+
+
+CREDITS
+-------
+
+WireGuard Friend is built with:
+  - Python 3.8+
+  - SQLite for data storage
+  - Rich for terminal UI
+  - PyInstaller for binary distribution
+
+
+PHILOSOPHY
+----------
+
+WireGuard Friend aims to be:
+  - Self-contained (single binary, embedded docs)
+  - Database-driven (queryable, auditable)
+  - Non-destructive (backups before changes)
+  - Transparent (show what's happening)
+
+
+CONTRIBUTING
+------------
+
+Contributions welcome! See the GitHub repository for:
+  - Development setup
+  - Code style guidelines
+  - Testing procedures
