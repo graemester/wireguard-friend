@@ -62,19 +62,23 @@ The author is not about hype, perfection framing, or completion fetishes. Docume
 
 At the end of each feature cycle, follow this sequence:
 
-1. **Commit and push**
+1. **Bump version** - Increment the patch version (last segment) in both:
+   - `v1/wg-friend` (VERSION constant)
+   - `v1/cli/tui.py` (VERSION constant)
+
+2. **Commit and push**
    ```bash
    git add -A && git commit -m "Description of changes" && git push
    ```
 
-2. **Build the binary**
+3. **Build the binary**
    ```bash
    ./build-binary.sh
    ```
 
-3. **Install to system path** (give user this command with absolute path)
+4. **Install to system path** (give user this command with absolute path)
    ```bash
    sudo cp /home/ged/wireguard-friend/dist/wg-friend /usr/local/bin/
    ```
 
-4. **Remind user of build name** - Tell them the version and build name so they know what they're running (e.g., "v1.0.5 harrier")
+5. **Remind user of build name** - Tell them the version and build name so they know what they're running (e.g., "v1.0.6 harrier")
