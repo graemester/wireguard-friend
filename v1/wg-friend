@@ -23,10 +23,21 @@ import argparse
 from pathlib import Path
 
 VERSION = "1.0.4"
-BUILD_NAME = "falcon"  # Random codename for dev builds
+BUILD_NAME = "griffin"  # Random codename for dev builds
 
 # Add v1 to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# Rich imports for enhanced UI
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.prompt import Confirm
+    RICH_AVAILABLE = True
+    console = Console()
+except ImportError:
+    RICH_AVAILABLE = False
+    console = None
 
 from v1.cli.init_wizard import run_init_wizard
 from v1.cli.import_configs import run_import
@@ -314,22 +325,36 @@ Examples:
             return run_tui(args.db)
 
         # No database → First-run experience
-        print("=" * 70)
-        print(f"  WireGuard Friend v{VERSION} ({BUILD_NAME})")
-        print("=" * 70)
-        print()
-        print("Welcome! This tool helps you manage WireGuard VPN networks.")
-        print()
-
-        # Ask what they want to do
-        print("Do you have existing WireGuard configs to import?")
-        print()
-        print("  If you already have .conf files from a working WireGuard setup,")
-        print("  we can import them. Otherwise, we'll help you create a new network.")
-        print()
-
-        response = input("Import existing configs? [y/N]: ").strip().lower()
-        has_configs = response in ('y', 'yes')
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel.fit(
+                f"[bold cyan]WireGuard Friend[/bold cyan] v{VERSION} ([dim]{BUILD_NAME}[/dim])\n\n"
+                "Manage WireGuard VPN networks with ease",
+                border_style="cyan"
+            ))
+            console.print()
+            console.print("[bold]Welcome![/bold] This tool helps you manage WireGuard VPN networks.")
+            console.print()
+            console.print("Do you have existing WireGuard configs to import?")
+            console.print()
+            console.print("  If you already have [cyan].conf[/cyan] files from a working WireGuard setup,")
+            console.print("  we can import them. Otherwise, we'll help you create a new network.")
+            console.print()
+            has_configs = Confirm.ask("Import existing configs?", default=False)
+        else:
+            print("=" * 70)
+            print(f"  WireGuard Friend v{VERSION} ({BUILD_NAME})")
+            print("=" * 70)
+            print()
+            print("Welcome! This tool helps you manage WireGuard VPN networks.")
+            print()
+            print("Do you have existing WireGuard configs to import?")
+            print()
+            print("  If you already have .conf files from a working WireGuard setup,")
+            print("  we can import them. Otherwise, we'll help you create a new network.")
+            print()
+            response = input("Import existing configs? [y/N]: ").strip().lower()
+            has_configs = response in ('y', 'yes')
 
         if has_configs:
             # Import flow

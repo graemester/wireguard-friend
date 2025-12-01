@@ -10,9 +10,21 @@ from typing import List, Dict, Optional
 
 # Version info (keep in sync with wg-friend)
 VERSION = "1.0.4"
-BUILD_NAME = "falcon"
+BUILD_NAME = "griffin"
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+# Rich imports for enhanced UI
+try:
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+    RICH_AVAILABLE = True
+    console = Console()
+except ImportError:
+    RICH_AVAILABLE = False
+    console = None
 
 from v1.schema_semantic import WireGuardDBv2
 from v1.cli.peer_manager import add_remote, add_router, list_peers, rotate_keys, remove_peer
@@ -20,15 +32,33 @@ from v1.cli.status import show_network_overview, show_recent_rotations, show_sta
 
 
 def print_menu(title: str, options: List[str], include_quit: bool = True):
-    """Print a menu"""
-    print(f"\n{'=' * 70}")
-    print(f"{title}")
-    print(f"{'=' * 70}")
-    for i, option in enumerate(options, 1):
-        print(f"  {i}. {option}")
-    if include_quit:
-        print(f"  q. Quit")
-    print()
+    """Print a menu with Rich styling if available"""
+    if RICH_AVAILABLE:
+        # Build menu content
+        menu_lines = []
+        for i, option in enumerate(options, 1):
+            menu_lines.append(f"  [cyan]{i}.[/cyan] {option}")
+        if include_quit:
+            menu_lines.append(f"  [dim]q. Quit[/dim]")
+
+        console.print()
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title=f"[bold]{title}[/bold]",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+        console.print()
+    else:
+        # Fallback to plain text
+        print(f"\n{'=' * 70}")
+        print(f"{title}")
+        print(f"{'=' * 70}")
+        for i, option in enumerate(options, 1):
+            print(f"  {i}. {option}")
+        if include_quit:
+            print(f"  q. Quit")
+        print()
 
 
 def get_menu_choice(max_choice: int, allow_quit: bool = True, default_back: bool = False) -> Optional[int]:
