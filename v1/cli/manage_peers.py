@@ -235,7 +235,7 @@ def show_peer_list(db: WireGuardDBv2) -> Optional[PeerInfo]:
             console.print(Panel(
                 list_content,
                 title=f"[bold]{title}[/bold]",
-                subtitle="[dim]Enter number to view | Type to filter | 'b' back[/dim]",
+                subtitle="[dim]Enter number to view | Type to filter | \\[B]ack[/dim]",
                 border_style="cyan",
                 padding=(0, 2)
             ))
@@ -417,12 +417,12 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
                 padding=(0, 1)
             ))
 
-        # Actions
+        # Actions - escape brackets for Rich markup using backslash
         action_lines = []
         for key, label in actions:
-            action_lines.append(f"  [{key}] {label}")
+            action_lines.append(f"  \\[{key}] {label}")
         action_lines.append("")
-        action_lines.append("  [b] Back to Peer List    [q] Main Menu")
+        action_lines.append("  \\[B]ack to Peer List    \\[M]ain Menu")
 
         console.print(Panel(
             "\n".join(action_lines),
@@ -448,14 +448,14 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
         for key, label in actions:
             print(f"  [{key}] {label}")
         print()
-        print("  [b] Back to Peer List    [q] Main Menu")
+        print("  [B]ack to Peer List    [M]ain Menu")
 
     # Get choice
     choice = input("\nAction: ").strip().lower()
 
-    if choice in ('b', 'back'):
+    if choice in ('', 'b', 'back'):
         return 'back'
-    if choice in ('q', 'quit'):
+    if choice in ('m', 'q', 'quit', 'menu'):
         return 'quit'
 
     # Map action
