@@ -206,6 +206,7 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         ]
     )
 
+    print("  Select: ", end="", flush=True)
     choice = get_keypress_choice(9)
 
     # Quit
