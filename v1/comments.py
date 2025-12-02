@@ -3,7 +3,8 @@ V2 Semantic Comment System
 
 Comments are entity attributes with semantic categories:
 
-1. HOSTNAME - Enforced human-readable unique ID (BEFORE peer)
+1. HOSTNAME - First word of first comment before [Peer] (alphanumeric+hyphens only)
+   Falls back to VPN IP if no valid hostname word found.
 2. ROLE - Function/characteristics of the entity (BEFORE peer)
 3. RATIONALE - Why command pairs exist (BEFORE commands)
 4. CUSTOM - Personal admin notes (AFTER peer)
@@ -105,13 +106,15 @@ class CommentCategorizer:
         """
         text = comment_text.strip()
 
-        # Check if it's a hostname (simple single-word or hyphenated identifier)
-        if context == "peer" and self._is_hostname(text):
-            return SemanticComment(
-                category=CommentCategory.HOSTNAME,
-                text=text,
-                display_order=1  # Always first
-            )
+        # Check if first word is a valid hostname
+        if context == "peer":
+            hostname = self._extract_hostname(text)
+            if hostname:
+                return SemanticComment(
+                    category=CommentCategory.HOSTNAME,
+                    text=hostname,  # Store just the hostname, not full comment
+                    display_order=1  # Always first
+                )
 
         # Check for permanent_guid reference (after key rotation)
         guid_ref = self._detect_permanent_guid(text)
@@ -159,24 +162,42 @@ class CommentCategorizer:
             display_order=500  # Middle
         )
 
-    def _is_hostname(self, text: str) -> bool:
+    def _extract_hostname(self, text: str) -> Optional[str]:
         """
-        Check if comment looks like a hostname.
+        Extract hostname from the first word of a comment.
 
-        Characteristics:
-        - Single word or hyphenated
-        - Short (< 30 chars)
-        - No punctuation except hyphens
-        - Alphanumeric
+        Hostname detection rule:
+        - First word (before any whitespace) of first comment before [Peer]
+        - Must be alphanumeric with hyphens only (no spaces, no special chars)
+        - Must start and end with alphanumeric (standard hostname rules)
+        - Length 1-30 characters
+        - If invalid, import falls back to VPN IP as hostname
+
+        Examples:
+            "bob-phone" -> "bob-phone"
+            "bob-phone - full access" -> "bob-phone"
+            "server-01:" -> "server-01" (trailing punctuation stripped)
+            "Bob's phone" -> None (apostrophe not allowed)
+            "10.66.0.30" -> None (dots not allowed, fallback to VPN IP)
+            "" -> None (empty)
+
+        Returns:
+            Extracted hostname or None if no valid hostname found
         """
-        # Remove common prefixes
-        cleaned = text.lower()
+        # Get first word (split on whitespace, dash-separated, or common delimiters)
+        first_word = text.split()[0] if text.split() else ""
 
-        # Hostname pattern: alphanumeric with hyphens, reasonable length
-        if re.fullmatch(r'[a-z0-9][-a-z0-9]{0,28}[a-z0-9]', cleaned):
-            return True
+        # Remove trailing punctuation
+        first_word = first_word.rstrip(':,-')
 
-        return False
+        # Check if it matches hostname pattern
+        cleaned = first_word.lower()
+        if len(cleaned) >= 2 and re.fullmatch(r'[a-z0-9][-a-z0-9]{0,28}[a-z0-9]', cleaned):
+            return first_word
+        elif len(cleaned) == 1 and cleaned.isalnum():
+            return first_word
+
+        return None
 
     def _detect_permanent_guid(self, text: str) -> Optional[str]:
         """

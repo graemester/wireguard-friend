@@ -414,27 +414,30 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     # Build actions based on type
     if peer.peer_type == 'cs':
         actions = [
-            ("1", "Rotate Keys"),
-            ("2", "View Key History"),
-            ("3", "Generate Config"),
-            ("4", "Deploy Config"),
+            ("1", "Edit Hostname"),
+            ("2", "Rotate Keys"),
+            ("3", "View Key History"),
+            ("4", "Generate Config"),
+            ("5", "Deploy Config"),
         ]
     elif peer.peer_type == 'router':
         actions = [
-            ("1", "Rotate Keys"),
-            ("2", "View Key History"),
-            ("3", "Generate Config"),
-            ("4", "Deploy Config"),
-            ("5", "Remove Peer"),
+            ("1", "Edit Hostname"),
+            ("2", "Rotate Keys"),
+            ("3", "View Key History"),
+            ("4", "Generate Config"),
+            ("5", "Deploy Config"),
+            ("6", "Remove Peer"),
         ]
     else:  # remote
         actions = [
-            ("1", "Rotate Keys"),
-            ("2", "View Key History"),
-            ("3", "Change Access Level"),
-            ("4", "Generate Config"),
-            ("5", "Generate QR Code"),
-            ("6", "Remove Peer"),
+            ("1", "Edit Hostname"),
+            ("2", "Rotate Keys"),
+            ("3", "View Key History"),
+            ("4", "Change Access Level"),
+            ("5", "Generate Config"),
+            ("6", "Generate QR Code"),
+            ("7", "Remove Peer"),
         ]
 
     # Display
@@ -526,7 +529,52 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
     print(f"Peer: {peer.hostname} ({peer.peer_type})")
     print()
 
-    if action == "Rotate Keys":
+    if action == "Edit Hostname":
+        print(f"Current hostname: {peer.hostname}")
+        new_hostname = input("New hostname: ").strip()
+
+        if not new_hostname:
+            print("Cancelled - no hostname entered.")
+            input("\nPress Enter to continue...")
+            return True
+
+        # Validate hostname (simple pattern)
+        import re
+        if not re.fullmatch(r'[a-zA-Z0-9][-a-zA-Z0-9]{0,28}[a-zA-Z0-9]', new_hostname) and len(new_hostname) > 1:
+            if len(new_hostname) == 1 and new_hostname.isalnum():
+                pass  # Single character is okay
+            else:
+                print(f"\n[WARNING] '{new_hostname}' contains unusual characters.")
+                confirm = input("Use anyway? [y/N]: ").strip().lower()
+                if confirm != 'y':
+                    print("Cancelled.")
+                    input("\nPress Enter to continue...")
+                    return True
+
+        # Update database
+        with db._connection() as conn:
+            cursor = conn.cursor()
+            if peer.peer_type == 'cs':
+                cursor.execute("""
+                    UPDATE coordination_server SET hostname = ?, updated_at = ?
+                    WHERE id = ?
+                """, (new_hostname, datetime.utcnow().isoformat(), peer.peer_id))
+            elif peer.peer_type == 'router':
+                cursor.execute("""
+                    UPDATE subnet_router SET hostname = ?, updated_at = ?
+                    WHERE id = ?
+                """, (new_hostname, datetime.utcnow().isoformat(), peer.peer_id))
+            else:
+                cursor.execute("""
+                    UPDATE remote SET hostname = ?, updated_at = ?
+                    WHERE id = ?
+                """, (new_hostname, datetime.utcnow().isoformat(), peer.peer_id))
+
+        print(f"\n[OK] Hostname changed: {peer.hostname} -> {new_hostname}")
+        input("\nPress Enter to continue...")
+        return True
+
+    elif action == "Rotate Keys":
         reason = input("Reason for rotation [Scheduled rotation]: ").strip()
         if not reason:
             reason = "Scheduled rotation"
