@@ -17,6 +17,107 @@ from v1.cli.config_generator import generate_remote_config
 from v1.state_tracker import record_add_remote, record_add_router, record_remove_peer, record_rotate_keys
 
 
+def generate_remote_preview(db: WireGuardDBv2, hostname: str, ipv4: str, ipv6: str,
+                            public_key: str, private_key: str, access_level: str,
+                            dns_servers: str = None, preshared_key: str = None) -> str:
+    """
+    Generate a preview of what the remote client config will look like.
+
+    This generates the config from pending data without requiring DB insertion.
+    """
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        # Get CS info
+        cursor.execute("SELECT * FROM coordination_server WHERE id = 1")
+        cs = dict(cursor.fetchone())
+
+        # Get all advertised networks
+        cursor.execute("SELECT DISTINCT network_cidr FROM advertised_network")
+        advertised_networks = [row['network_cidr'] for row in cursor.fetchall()]
+
+    lines = []
+
+    # [Interface]
+    lines.append("[Interface]")
+    lines.append(f"Address = {ipv4}, {ipv6}")
+    lines.append(f"PrivateKey = {private_key}")
+
+    if dns_servers:
+        lines.append(f"DNS = {dns_servers}")
+
+    lines.append("MTU = 1280")
+
+    # [Peer] - CS
+    lines.append("")
+    lines.append("[Peer]")
+    lines.append(f"# {cs.get('hostname', 'coordination-server')}")
+    lines.append(f"PublicKey = {cs['current_public_key']}")
+
+    if preshared_key:
+        lines.append(f"PresharedKey = {preshared_key}")
+
+    lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
+
+    # AllowedIPs based on access level
+    if access_level == 'full_access':
+        allowed_ips = [cs['network_ipv4'], cs['network_ipv6']] + advertised_networks
+    elif access_level == 'vpn_only':
+        allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
+    elif access_level == 'lan_only':
+        allowed_ips = advertised_networks if advertised_networks else [cs['network_ipv4'], cs['network_ipv6']]
+    else:
+        allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
+
+    lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
+    lines.append("PersistentKeepalive = 25")
+
+    return '\n'.join(lines)
+
+
+def generate_router_preview(db: WireGuardDBv2, hostname: str, ipv4: str, ipv6: str,
+                            public_key: str, private_key: str, lan_network: str,
+                            lan_interface: str, endpoint: str = None) -> str:
+    """
+    Generate a preview of what the subnet router config will look like.
+
+    This generates the config from pending data without requiring DB insertion.
+    """
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        # Get CS info
+        cursor.execute("SELECT * FROM coordination_server WHERE id = 1")
+        cs = dict(cursor.fetchone())
+
+    lines = []
+
+    # [Interface]
+    lines.append("[Interface]")
+    lines.append(f"Address = {ipv4}, {ipv6}")
+    lines.append(f"PrivateKey = {private_key}")
+    lines.append("MTU = 1280")
+    lines.append("")
+
+    # PostUp/PostDown for NAT and forwarding
+    lines.append(f"PostUp = iptables -A FORWARD -i wg0 -j ACCEPT")
+    lines.append(f"PostUp = iptables -t nat -A POSTROUTING -o {lan_interface} -j MASQUERADE")
+    lines.append(f"PostUp = sysctl -w net.ipv4.ip_forward=1")
+    lines.append(f"PostDown = iptables -D FORWARD -i wg0 -j ACCEPT")
+    lines.append(f"PostDown = iptables -t nat -D POSTROUTING -o {lan_interface} -j MASQUERADE")
+
+    # [Peer] - CS
+    lines.append("")
+    lines.append("[Peer]")
+    lines.append(f"# {cs.get('hostname', 'coordination-server')}")
+    lines.append(f"PublicKey = {cs['current_public_key']}")
+    lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
+    lines.append(f"AllowedIPs = {cs['network_ipv4']}, {cs['network_ipv6']}")
+    lines.append("PersistentKeepalive = 25")
+
+    return '\n'.join(lines)
+
+
 def show_error(message: str, suggestion: str = None):
     """Display a formatted error message with optional suggestion"""
     print(f"\n{'=' * 70}")
@@ -180,6 +281,19 @@ def add_remote(db: WireGuardDBv2, hostname: Optional[str] = None) -> int:
     print(f"  Public Key: {public_key[:30]}...")
     print()
 
+    # Offer config preview
+    if prompt_yes_no("Preview config before adding?", default=False):
+        preview = generate_remote_preview(
+            db, hostname, ipv4_address, ipv6_address,
+            public_key, private_key, access_level
+        )
+        print("\n" + "─" * 70)
+        print("CONFIG PREVIEW")
+        print("─" * 70)
+        print(preview)
+        print("─" * 70)
+        print()
+
     if not prompt_yes_no("Add this peer?", default=True):
         print("Cancelled.")
         return None
@@ -277,6 +391,19 @@ def add_router(db: WireGuardDBv2, hostname: Optional[str] = None) -> int:
     print(f"  Endpoint: {endpoint or 'Dynamic'}")
     print(f"  Public Key: {public_key[:30]}...")
     print()
+
+    # Offer config preview
+    if prompt_yes_no("Preview config before adding?", default=False):
+        preview = generate_router_preview(
+            db, hostname, ipv4_address, ipv6_address,
+            public_key, private_key, lan_network, lan_interface, endpoint
+        )
+        print("\n" + "─" * 70)
+        print("CONFIG PREVIEW")
+        print("─" * 70)
+        print(preview)
+        print("─" * 70)
+        print()
 
     if not prompt_yes_no("Add this router?", default=True):
         print("Cancelled.")

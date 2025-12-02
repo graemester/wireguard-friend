@@ -1,6 +1,6 @@
 # WireGuard Friend
 
-Command-line tool for managing WireGuard VPN networks with hub-and-spoke topology.
+Menu-driven tool for managing WireGuard VPN networks. All operations available through an interactive TUI - no commands to memorize.
 
 > **Repository Structure:**
 > **v1/** - Current stable release (v1.0.7)
@@ -11,6 +11,8 @@ Command-line tool for managing WireGuard VPN networks with hub-and-spoke topolog
 ## Overview
 
 WireGuard Friend manages WireGuard configurations for networks using a coordination server (BYO cloud VPS), subnet routers (LAN gateways), and client peers (individual devices). Configurations are stored in a SQLite database for querying and automated deployment.
+
+**Just run `wg-friend` and use the menu.** Everything described below is available through the interactive interface with built-in help and documentation.
 
 ```
                                  ┌──────────────────────────────────────────────────────┐
@@ -58,13 +60,23 @@ WireGuard Friend manages WireGuard configurations for networks using a coordinat
 - **Complete separation** from mesh infrastructure
 - See [Extramural Configs Guide](v1/docs/EXTRAMURAL_CONFIGS.md) for details
 
-### Enhanced TUI (v1.0.5+)
-- **Rich terminal styling** with colored panels and borders
-- **Manage Peers** drill-down interface for detailed peer inspection
-- **Menu hints** showing what each option does
-- **SSH operation spinners** for visual feedback during deployment
-- **3x Enter to exit** prevents accidental program termination
-- **Working directory display** on launch for context
+### Interactive TUI (Primary Interface)
+
+Run `wg-friend` with no arguments to launch the menu-driven interface:
+
+- **Single-keypress navigation** - press 1-9 to select options instantly
+- **Manage Peers** - drill-down interface to view, edit, and manage any peer
+- **Built-in documentation** - full help system accessible from the menu
+- **Diagnostics** - system info, dependency checks, connectivity tests
+- **Config preview** - see exactly what config will be generated before adding peers
+- **State history timeline** - git-log style view of all network changes
+- **Edit hostnames** - rename peers directly from the interface
+- **Key rotation** - rotate keys with audit trail
+- **QR code generation** - for mobile device onboarding
+- **SSH deployment** - push configs with progress indicators and automatic backups
+- **Extramural management** - full UI for external VPN configs
+
+All CLI commands listed below are also accessible through the TUI menus.
 
 ## Installation
 
@@ -98,100 +110,37 @@ pip install -r requirements.txt
 
 ## Usage
 
-### Import Existing Configurations
+### Interactive Mode (Recommended)
 
 ```bash
 wg-friend
-# Places configs in import/ directory
-# Auto-detects coordination server, subnet routers, and clients
-# Imports into SQLite database
 ```
 
-### Create New Network
+This launches the full menu-driven interface. From here you can:
+- Import existing configs or create a new network
+- Add, remove, and manage peers
+- Rotate keys and view history
+- Generate configs and QR codes
+- Deploy via SSH
+- Manage extramural (external VPN) configs
+- Access built-in documentation
+
+### CLI Commands (Alternative)
+
+For scripting or quick operations, direct commands are available:
 
 ```bash
-wg-friend
-# If no database exists, offers wizard mode
-# Walks through coordination server, subnet router, and peer setup
-# Generates all configurations
+wg-friend import              # Import existing configs
+wg-friend add peer            # Add new client peer
+wg-friend add router          # Add subnet router
+wg-friend rotate              # Rotate peer keys
+wg-friend generate            # Generate all configs
+wg-friend deploy              # Deploy via SSH
+wg-friend qr                  # Generate QR code
+wg-friend status --live       # Live peer status
 ```
 
-### Add Peer
-
-```bash
-wg-friend add peer
-# Auto-assigns IP addresses
-# Generates keypair
-# Creates client configuration
-# Updates coordination server configuration
-```
-
-### Rotate Keys
-
-```bash
-wg-friend rotate
-# Select peer from list
-# Generates new keypair
-# Updates both peer and coordination server configs
-# Maintains permanent GUID for tracking
-```
-
-### Deploy Configurations
-
-```bash
-wg-friend deploy
-# Backs up existing configurations
-# Uploads new configurations via SSH
-# Sets proper file permissions
-# Optionally restarts WireGuard service
-```
-
-### Live Status Monitoring
-
-```bash
-wg-friend status --live
-# Connects to coordination server
-# Runs wg show to get peer status
-# Displays online/offline status, transfer stats, last handshake
-```
-
-### Generate QR Code
-
-```bash
-wg-friend qr
-# Select peer from list
-# Generates QR code PNG
-# For scanning with WireGuard mobile app
-```
-
-### Manage External VPN Configs (Extramural)
-
-```bash
-# Import config from Mullvad, ProtonVPN, etc.
-wg-friend extramural import mullvad.conf --sponsor "Mullvad VPN" --peer "my-laptop"
-
-# List all external configs
-wg-friend extramural list
-
-# Switch between VPN server locations
-wg-friend extramural switch-peer my-laptop/Mullvad-VPN eu-central-1
-
-# Generate .conf file
-wg-friend extramural generate my-laptop/Mullvad-VPN --output /etc/wireguard/wg-mullvad.conf
-
-# See complete guide
-# v1/docs/EXTRAMURAL_CONFIGS.md
-```
-
-### SSH Setup
-
-```bash
-wg-friend ssh-setup
-# Interactive wizard for SSH key setup
-# Generates keypair if needed
-# Installs public key to servers
-# Tests authentication
-```
+See [Command Reference](v1/COMMAND_REFERENCE.md) for full CLI documentation.
 
 ## Network Components
 
@@ -252,25 +201,6 @@ Import process maintains original formatting for firewall rules.
 # Install WireGuard tools
 sudo apt install wireguard-tools  # Debian/Ubuntu
 brew install wireguard-tools      # macOS
-```
-
-## Commands
-
-```
-wg-friend                    # Smart routing (import/init/maintain)
-wg-friend init               # Create new network
-wg-friend import             # Import existing configs
-wg-friend add peer           # Add new peer
-wg-friend add router         # Add subnet router
-wg-friend rotate             # Rotate peer keys
-wg-friend psk                # Add/update preshared key
-wg-friend qr                 # Generate QR code
-wg-friend generate           # Generate all configs
-wg-friend deploy             # Deploy via SSH
-wg-friend status             # Network overview
-wg-friend status --live      # Live peer status
-wg-friend ssh-setup          # SSH key setup wizard
-wg-friend maintain           # Interactive TUI
 ```
 
 ## Documentation

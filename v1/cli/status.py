@@ -500,19 +500,40 @@ def show_state_history(db_path: str, limit: int = 20, state_id: int = None):
         print()
         return
 
-    # Show newest first (timeline already sorted DESC)
-    print(f"{'ID':<4} {'Timestamp':<20} {'Entities':<10} {'Description':<35}")
-    print("─" * 70)
-
-    for state in timeline:
+    # ASCII timeline visualization (newest first)
+    for i, state in enumerate(timeline):
+        is_first = (i == 0)
+        is_last = (i == len(timeline) - 1)
         timestamp = state.created_at.strftime('%Y-%m-%d %H:%M')
-        entities = f"{state.total_entities} ({state.total_remotes}R)"
-        desc = state.description[:35] if len(state.description) <= 35 else state.description[:32] + "..."
-        print(f"{state.state_id:<4} {timestamp:<20} {entities:<10} {desc}")
+        entities = f"{state.total_entities} entities ({state.total_remotes} remotes)"
+
+        # Truncate description if needed
+        desc = state.description[:50] if len(state.description) <= 50 else state.description[:47] + "..."
+
+        # Node marker: filled circle for current (first), empty for others
+        marker = "●" if is_first else "○"
+        current_tag = " (current)" if is_first else ""
+
+        # Print state header with timestamp right-aligned
+        header = f"  {marker} State {state.state_id}{current_tag}"
+        print(f"{header:<40} {timestamp:>28}")
+
+        # Connector line
+        connector = "│" if not is_last else " "
+
+        # Print description
+        print(f"  {connector} {desc}")
+
+        # Print entity count
+        print(f"  {connector} {entities}")
+
+        # Blank line between entries (except after last)
+        if not is_last:
+            print(f"  │")
 
     print()
-    print(f"Showing {len(timeline)} most recent states.")
-    print("Use 'wg-friend status --history --state <ID>' for details on a specific state.")
+    print(f"  Showing {len(timeline)} most recent states.")
+    print("  Enter state ID for details, or press Enter to go back.")
     print()
 
 
