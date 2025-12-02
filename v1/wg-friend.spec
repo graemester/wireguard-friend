@@ -63,6 +63,7 @@ a = Analysis(
     hiddenimports=v1_modules + [
         'sqlite3',
         'qrcode',
+        'PIL',
         'nacl',
         'nacl.bindings',
         'nacl.public',

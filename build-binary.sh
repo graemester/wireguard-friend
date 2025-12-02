@@ -53,10 +53,13 @@ echo ""
 echo "Testing binary..."
 dist/wg-friend --version
 
+# Install to system
+echo ""
+echo "Installing to /usr/local/bin/..."
+sudo /usr/bin/cp /home/ged/wireguard-friend/dist/wg-friend /usr/local/bin/
+echo "Installed: $(wg-friend --version)"
+
 echo ""
 echo "======================================================================"
-echo "Build successful! Next steps:"
-echo "  1. Test: ./dist/wg-friend --help"
-echo "  2. Commit: git add dist/wg-friend"
-echo "  3. Push: git commit -m 'Rebuild binary for vX.X.X'"
+echo "Build and install complete!"
 echo "======================================================================"

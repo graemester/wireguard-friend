@@ -566,6 +566,99 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
     return router_id
 
 
+def create_provisional_remote(db: WireGuardDBv2, cs_peer: Dict, cs_id: int) -> int:
+    """
+    Create a provisional remote from CS peer data.
+
+    Provisional remotes are peers that exist in the CS config but for which
+    we don't have the private key. They use private_key=NULL.
+
+    Args:
+        db: Database connection
+        cs_peer: Peer data from CS config (public_key, vpn_ips, hostname, comments)
+        cs_id: Coordination server ID
+
+    Returns:
+        remote_id
+    """
+    public_key = cs_peer['public_key']
+    permanent_guid = public_key  # First key = permanent GUID
+
+    # Get VPN IPs
+    vpn_ips = cs_peer.get('vpn_ips', [])
+    ipv4_addr = None
+    ipv6_addr = None
+    for ip in vpn_ips:
+        if ':' in ip:
+            ipv6_addr = ip
+        else:
+            ipv4_addr = ip
+
+    # Use hostname from CS peer comments, or default to VPN IP
+    hostname = cs_peer.get('hostname')
+    if not hostname:
+        # Default to VPN IP (without CIDR suffix)
+        if ipv4_addr:
+            hostname = ipv4_addr.split('/')[0]
+        else:
+            hostname = public_key[:12] + '...'
+
+    # Extract additional fields from CS peer
+    preshared_key = cs_peer.get('preshared_key')
+    persistent_keepalive = cs_peer.get('persistent_keepalive')
+
+    rprint()
+    rprint(f"[bold yellow]Provisional Remote:[/bold yellow] [cyan]{hostname}[/cyan]")
+    rprint(f"  GUID: [dim]{permanent_guid[:30]}...[/dim]")
+    if ipv4_addr:
+        rprint(f"  VPN IP: [green]{ipv4_addr}[/green]")
+    if preshared_key:
+        rprint(f"  [dim]Has preshared key[/dim]")
+    rprint(f"  [dim](no private key - will be generated on key rotation)[/dim]")
+
+    # Insert into database with NULL private_key
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO remote (
+                cs_id, permanent_guid, current_public_key, hostname,
+                ipv4_address, ipv6_address, private_key, preshared_key,
+                persistent_keepalive, access_level
+            ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)
+        """, (
+            cs_id,
+            permanent_guid,
+            public_key,
+            hostname,
+            ipv4_addr or '',
+            ipv6_addr or '',
+            preshared_key,
+            persistent_keepalive,
+            'unknown'  # Access level unknown for provisional peers
+        ))
+        remote_id = cursor.lastrowid
+
+        # Store comments from CS peer
+        for comment in cs_peer.get('comments', []):
+            cursor.execute("""
+                INSERT INTO comment (
+                    entity_permanent_guid, entity_type,
+                    category, text, display_order
+                ) VALUES (?, ?, ?, ?, ?)
+            """, (
+                permanent_guid,
+                'remote',
+                comment.category.value if hasattr(comment.category, 'value') else str(comment.category),
+                comment.text,
+                comment.display_order
+            ))
+
+    rprint(f"  [yellow]![/yellow] Created provisional remote (ID: {remote_id})")
+
+    return remote_id
+
+
 def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
                   cs_pubkey: str = None, known_networks: set = None):
     """
@@ -846,6 +939,37 @@ def run_import(args) -> int:
                     else:
                         rprint(f"\n  [yellow]Warning:[/yellow] File not found: {remote_path}")
 
+        # Create provisional remotes for CS peers that weren't matched
+        # These are peers in the CS config for which we don't have configs
+        provisional_count = 0
+
+        with db._connection() as conn:
+            cursor = conn.cursor()
+
+            # Get all public keys already in database (SNRs + remotes)
+            cursor.execute("SELECT current_public_key FROM subnet_router")
+            imported_keys = {row[0] for row in cursor.fetchall()}
+            cursor.execute("SELECT current_public_key FROM remote")
+            imported_keys.update(row[0] for row in cursor.fetchall())
+
+        # Find CS peers not yet imported (excluding subnet routers by advertised networks)
+        for cs_peer in cs_peers:
+            pubkey = cs_peer['public_key']
+            if pubkey in imported_keys:
+                continue  # Already imported
+
+            # Skip if this is a subnet router (has advertised networks)
+            if cs_peer.get('advertised_networks'):
+                continue
+
+            # This is an unmatched remote - create provisional entry
+            try:
+                remote_id = create_provisional_remote(db, cs_peer, cs_id)
+                provisional_count += 1
+            except Exception as e:
+                peer_name = cs_peer.get('hostname', pubkey[:20] + '...')
+                rprint(f"\n  [red]Error:[/red] creating provisional remote {peer_name}: {e}")
+
         # Record initial state snapshot
         state_id = record_import(str(db_path), db, len(cs_peers))
 
@@ -864,6 +988,8 @@ def run_import(args) -> int:
                 summary_lines.append(f"[green]✓[/green] Imported {snr_count} subnet router(s)")
             if remote_count > 0:
                 summary_lines.append(f"[green]✓[/green] Imported {remote_count} remote client(s)")
+            if provisional_count > 0:
+                summary_lines.append(f"[yellow]![/yellow] Created {provisional_count} provisional remote(s)")
             summary_lines.append(f"[green]✓[/green] State snapshot recorded (State #{state_id})")
 
             # Add validation summary
@@ -890,6 +1016,8 @@ def run_import(args) -> int:
                 print(f"✓ Imported {snr_count} subnet router(s)")
             if remote_count > 0:
                 print(f"✓ Imported {remote_count} remote client(s)")
+            if provisional_count > 0:
+                print(f"! Created {provisional_count} provisional remote(s)")
             print(f"✓ State snapshot recorded (State #{state_id})")
             print(f"✓ Validation: {passed} passed, {failed} failed")
             print()

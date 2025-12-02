@@ -121,6 +121,10 @@ def generate_cs_config(db: WireGuardDBv2) -> str:
 
         lines.append(f"PublicKey = {remote['current_public_key']}")
 
+        # PresharedKey (if configured)
+        if remote.get('preshared_key'):
+            lines.append(f"PresharedKey = {remote['preshared_key']}")
+
         # AllowedIPs
         allowed_ips = [remote['ipv4_address'], remote['ipv6_address']]
         lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
@@ -238,6 +242,11 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
     lines.append("[Peer]")
     lines.append(f"# coordination-server")
     lines.append(f"PublicKey = {cs['current_public_key']}")
+
+    # PresharedKey (symmetric - same key on both sides)
+    if remote.get('preshared_key'):
+        lines.append(f"PresharedKey = {remote['preshared_key']}")
+
     lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
 
     # Use stored AllowedIPs if available, otherwise compute from access_level
@@ -317,12 +326,23 @@ def generate_configs(args) -> int:
                     router_file.chmod(0o600)
                     print(f"  ✓ {router_file}")
 
-        cursor.execute("SELECT id, hostname FROM remote")
+        # Get remotes with private keys (skip provisional peers)
+        cursor.execute("""
+            SELECT id, hostname, private_key FROM remote
+            WHERE private_key IS NOT NULL
+        """)
         remotes = cursor.fetchall()
+
+        # Also get provisional peers for informational display
+        cursor.execute("""
+            SELECT id, hostname FROM remote
+            WHERE private_key IS NULL
+        """)
+        provisional_remotes = cursor.fetchall()
 
         if remotes:
             print("\nRemote Clients:")
-            for remote_id, hostname in remotes:
+            for remote_id, hostname, _ in remotes:
                 remote_config = generate_remote_config(db, remote_id)
                 remote_file = output_dir / f"{hostname}.conf"
                 if dry_run:
@@ -349,6 +369,12 @@ def generate_configs(args) -> int:
                         except ImportError:
                             if args.qr:
                                 print("    (qrcode module not installed - pip install qrcode)")
+
+        # Show provisional peers (in CS config but no local config generated)
+        if provisional_remotes:
+            print("\nProvisional Remotes (in CS config, no private key):")
+            for remote_id, hostname in provisional_remotes:
+                print(f"  ! {hostname} - rotate keys to generate config")
 
     print()
     if dry_run:

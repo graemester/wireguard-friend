@@ -132,10 +132,19 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
         cursor.execute("""
             SELECT id, hostname, ipv4_address, ipv6_address, current_public_key,
                    dns_servers, persistent_keepalive, access_level, allowed_ips,
-                   private_key, preshared_key, created_at, updated_at
+                   private_key, preshared_key, created_at, updated_at,
+                   permanent_guid
             FROM remote ORDER BY hostname
         """)
         for row in cursor.fetchall():
+            # Fetch comments for this peer
+            cursor.execute("""
+                SELECT category, text FROM comment
+                WHERE entity_permanent_guid = ? AND entity_type = 'remote'
+                ORDER BY display_order
+            """, (row['permanent_guid'],))
+            comments = [(r['category'], r['text']) for r in cursor.fetchall()]
+
             peers.append(PeerInfo(
                 peer_type='remote',
                 peer_id=row['id'],
@@ -152,6 +161,8 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
                     'preshared_key': row['preshared_key'],
                     'created_at': row['created_at'],
                     'updated_at': row['updated_at'],
+                    'is_provisional': row['private_key'] is None,
+                    'comments': comments,
                 }
             ))
 
@@ -203,12 +214,18 @@ def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
 
     if remotes:
         lines.append("")
-        lines.append(f"[REMOTE CLIENTS] ({len(remotes)})")
+        # Count provisional
+        provisional_count = sum(1 for r in remotes if r.extras.get('is_provisional'))
+        if provisional_count > 0:
+            lines.append(f"[REMOTE CLIENTS] ({len(remotes) - provisional_count} full, {provisional_count} provisional)")
+        else:
+            lines.append(f"[REMOTE CLIENTS] ({len(remotes)})")
         lines.append("")
         for i, p in enumerate(remotes):
             peer_map[num] = p
             access = p.extras.get('access_level', 'unknown')
-            lines.append(f"  [{num:2}] {p.hostname}")
+            status = " [provisional]" if p.extras.get('is_provisional') else ""
+            lines.append(f"  [{num:2}] {p.hostname}{status}")
             lines.append(f"       IP: {p.ipv4_address:20}  Access: {access}")
             num += 1
 
@@ -317,6 +334,8 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     general.append(f"  Hostname:       {peer.hostname}")
     if peer.peer_type != 'cs':
         general.append(f"  ID:             {peer.peer_id}")
+    if peer.extras.get('is_provisional'):
+        general.append(f"  Status:         [PROVISIONAL] - no private key")
     if peer.extras.get('endpoint'):
         general.append(f"  Endpoint:       {peer.extras['endpoint']}")
     if peer.extras.get('listen_port'):
@@ -362,7 +381,10 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     # Cryptography section
     crypto = []
     crypto.append(f"  Public Key:     {peer.public_key}")
-    crypto.append(f"  Private Key:    {'*' * 32} (hidden)")
+    if peer.extras.get('is_provisional'):
+        crypto.append(f"  Private Key:    (not available - rotate keys to generate)")
+    else:
+        crypto.append(f"  Private Key:    {'*' * 32} (hidden)")
     if peer.extras.get('preshared_key'):
         crypto.append(f"  Preshared Key:  {'*' * 32} (hidden)")
     sections.append(("CRYPTOGRAPHY", "\n".join(crypto)))
@@ -380,6 +402,14 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     meta.append(f"  Created:        {peer.extras.get('created_at') or '(unknown)'}")
     meta.append(f"  Updated:        {peer.extras.get('updated_at') or '(unknown)'}")
     sections.append(("METADATA", "\n".join(meta)))
+
+    # Comments section (if any)
+    comments = peer.extras.get('comments', [])
+    if comments:
+        comment_lines = []
+        for category, text in comments:
+            comment_lines.append(f"  [{category}] {text}")
+        sections.append(("COMMENTS", "\n".join(comment_lines)))
 
     # Build actions based on type
     if peer.peer_type == 'cs':
@@ -518,6 +548,15 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
 
     elif action == "Generate Config":
         from pathlib import Path
+
+        # Check for provisional peer
+        if peer.peer_type == 'remote' and peer.extras.get('is_provisional'):
+            print(f"\n[ERROR] {peer.hostname} is a provisional peer.")
+            print("        Rotate keys first to generate a private key.")
+            print("        Then you can generate a config.")
+            input("\nPress Enter to continue...")
+            return True
+
         output_dir = Path('generated')
         output_dir.mkdir(exist_ok=True)
 
@@ -548,6 +587,14 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
         return True
 
     elif action == "Generate QR Code":
+        # Check for provisional peer
+        if peer.extras.get('is_provisional'):
+            print(f"\n[ERROR] {peer.hostname} is a provisional peer.")
+            print("        Rotate keys first to generate a private key.")
+            print("        Then you can generate a QR code.")
+            input("\nPress Enter to continue...")
+            return True
+
         try:
             import qrcode
             from pathlib import Path

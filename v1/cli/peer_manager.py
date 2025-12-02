@@ -368,21 +368,29 @@ def list_peers(db: WireGuardDBv2):
                 if not is_last:
                     print(f"┃")
 
-        # Remotes
+        # Remotes (including provisional)
         cursor.execute("""
-            SELECT id, hostname, ipv4_address, current_public_key, access_level
+            SELECT id, hostname, ipv4_address, current_public_key, access_level, private_key
             FROM remote
             ORDER BY hostname
         """)
         remotes = cursor.fetchall()
         if remotes:
-            print(f"\n┏━ [REMOTE CLIENTS] ({len(remotes)})")
+            # Count provisional peers
+            provisional_count = sum(1 for r in remotes if r[5] is None)
+            header_suffix = f" ({len(remotes) - provisional_count} full, {provisional_count} provisional)" if provisional_count > 0 else f" ({len(remotes)})"
+            print(f"\n┏━ [REMOTE CLIENTS]{header_suffix}")
             print(f"┃")
-            for i, (remote_id, hostname, ipv4, pubkey, access) in enumerate(remotes):
+            for i, (remote_id, hostname, ipv4, pubkey, access, privkey) in enumerate(remotes):
                 is_last = (i == len(remotes) - 1)
                 connector = "┗" if is_last else "┣"
                 continuation = " " if is_last else "┃"
-                print(f"{connector}━━ [{remote_id:2}] {hostname}")
+                # Show provisional indicator
+                if privkey is None:
+                    status = " [provisional]"
+                else:
+                    status = ""
+                print(f"{connector}━━ [{remote_id:2}] {hostname}{status}")
                 print(f"{continuation}   IP: {ipv4:20}  Access: {access:15}  Key: {pubkey[:30]}...")
                 if not is_last:
                     print(f"┃")
@@ -536,11 +544,23 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
 
         hostname, old_pubkey, permanent_guid, old_privkey = row
 
-        print(f"\nRotate keys for: {hostname}")
-        print(f"  Current Public Key: {old_pubkey[:30]}...")
-        print(f"  Permanent GUID: {permanent_guid[:30]}... (unchanged)")
-        print(f"  Reason: {reason}")
-        print()
+        # Check if this is a provisional peer (no private key)
+        is_provisional = old_privkey is None
+
+        if is_provisional:
+            print(f"\nPromote provisional peer: {hostname}")
+            print(f"  Current Public Key: {old_pubkey[:30]}... (from CS config)")
+            print(f"  Permanent GUID: {permanent_guid[:30]}...")
+            print()
+            print("  This will generate a new keypair and create a client config.")
+            print("  The old public key will be replaced in the CS config.")
+            print()
+        else:
+            print(f"\nRotate keys for: {hostname}")
+            print(f"  Current Public Key: {old_pubkey[:30]}...")
+            print(f"  Permanent GUID: {permanent_guid[:30]}... (unchanged)")
+            print(f"  Reason: {reason}")
+            print()
 
         if not prompt_yes_no("Generate new keypair?", default=True):
             print("Cancelled.")
@@ -556,18 +576,32 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
             print("Cancelled.")
             return False
 
+        # For provisional remotes, prompt for access level
+        new_access_level = None
+        if is_provisional and peer_type == 'remote':
+            print("\nSet access level for this peer:")
+            print("  1. full_access - All VPN + LAN traffic")
+            print("  2. vpn_only    - VPN network only")
+            print("  3. lan_only    - LAN access only")
+            print()
+            access_choice = input("Access level [1]: ").strip()
+            access_map = {'1': 'full_access', '2': 'vpn_only', '3': 'lan_only', '': 'full_access'}
+            new_access_level = access_map.get(access_choice, 'full_access')
+
         # Log rotation
         cursor.execute("""
             INSERT INTO key_rotation_history (
-                entity_permanent_guid, old_public_key, new_public_key,
-                rotated_at, reason
-            ) VALUES (?, ?, ?, ?, ?)
+                entity_permanent_guid, entity_type, old_public_key, new_public_key,
+                rotated_at, reason, new_private_key
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             permanent_guid,
+            peer_type,
             old_pubkey,
             new_pubkey,
             datetime.utcnow().isoformat(),
-            reason
+            reason,
+            new_privkey
         ))
 
         # Update peer
@@ -583,24 +617,46 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
                 WHERE id = ?
             """, (new_pubkey, new_privkey, peer_id))
         else:
-            cursor.execute("""
-                UPDATE remote
-                SET current_public_key = ?, private_key = ?
-                WHERE id = ?
-            """, (new_pubkey, new_privkey, peer_id))
+            if new_access_level:
+                # Promoting provisional peer - also set access_level
+                cursor.execute("""
+                    UPDATE remote
+                    SET current_public_key = ?, private_key = ?, access_level = ?
+                    WHERE id = ?
+                """, (new_pubkey, new_privkey, new_access_level, peer_id))
+            else:
+                cursor.execute("""
+                    UPDATE remote
+                    SET current_public_key = ?, private_key = ?
+                    WHERE id = ?
+                """, (new_pubkey, new_privkey, peer_id))
 
     # Record state snapshot
     state_id = record_rotate_keys(str(db.db_path), db, peer_type, hostname, old_pubkey, new_pubkey)
 
-    print(f"✓ Rotated keys for: {hostname}")
-    print(f"  Old: {old_pubkey[:30]}...")
-    print(f"  New: {new_pubkey[:30]}...")
-    print(f"  GUID: {permanent_guid[:30]}... (unchanged)")
-    print(f"✓ State snapshot recorded (State #{state_id})")
-    print()
-    print("Next steps:")
-    print(f"  1. Regenerate configs: wg-friend generate")
-    print(f"  2. Deploy new configs: wg-friend deploy")
+    if is_provisional:
+        print(f"✓ Promoted provisional peer: {hostname}")
+        print(f"  Old key (from CS): {old_pubkey[:30]}...")
+        print(f"  New key: {new_pubkey[:30]}...")
+        print(f"  GUID: {permanent_guid[:30]}...")
+        print(f"✓ State snapshot recorded (State #{state_id})")
+        print()
+        print("A client config will now be generated for this peer.")
+        print()
+        print("Next steps:")
+        print(f"  1. Regenerate configs: wg-friend generate")
+        print(f"  2. Deploy CS config: wg-friend deploy")
+        print(f"  3. Send new client config or QR code to user")
+    else:
+        print(f"✓ Rotated keys for: {hostname}")
+        print(f"  Old: {old_pubkey[:30]}...")
+        print(f"  New: {new_pubkey[:30]}...")
+        print(f"  GUID: {permanent_guid[:30]}... (unchanged)")
+        print(f"✓ State snapshot recorded (State #{state_id})")
+        print()
+        print("Next steps:")
+        print(f"  1. Regenerate configs: wg-friend generate")
+        print(f"  2. Deploy new configs: wg-friend deploy")
     print()
 
     return True
@@ -710,7 +766,7 @@ def generate_qr(db: WireGuardDBv2, remote_id: int, output_dir: Path = Path('gene
 
         # Get peer details
         cursor.execute("""
-            SELECT hostname
+            SELECT hostname, private_key
             FROM remote WHERE id = ?
         """, (remote_id,))
         row = cursor.fetchone()
@@ -718,7 +774,13 @@ def generate_qr(db: WireGuardDBv2, remote_id: int, output_dir: Path = Path('gene
             print(f"Error: Remote peer ID {remote_id} not found")
             return False
 
-        hostname = row[0]
+        hostname, private_key = row
+
+        # Check if provisional
+        if private_key is None:
+            print(f"\nError: {hostname} is a provisional peer (no private key)")
+            print("Rotate keys first to generate a config: wg-friend rotate remote:{remote_id}")
+            return False
 
     print(f"\nGenerating QR code for: {hostname}")
 

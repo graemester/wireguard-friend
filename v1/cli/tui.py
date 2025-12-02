@@ -96,6 +96,39 @@ def get_keypress_choice(max_choice: int, allow_quit: bool = True) -> Optional[in
     return -1  # Invalid/ignored key
 
 
+def get_keypress_list_choice(max_choice: int, allow_letters: str = 'b') -> Optional[str]:
+    """
+    Get a single keypress for list selection.
+
+    Returns:
+        - Digit string '1'-'9' for item selection
+        - Letter from allow_letters (e.g., 'b' for back, 'a' for add)
+        - None for quit/escape
+        - '' for invalid key (caller should redraw)
+    """
+    print("  Select: ", end="", flush=True)
+    ch = getch()
+    print()  # Move to next line after keypress
+
+    # Quit keys
+    if ch == '\x03':  # Ctrl+C
+        return None
+    if ch == '\x1b':  # Escape
+        return 'b'  # Treat escape as back
+
+    # Check allowed letters
+    if ch.lower() in allow_letters.lower():
+        return ch.lower()
+
+    # Number keys (1-9 only for single keypress)
+    if ch.isdigit() and ch != '0':
+        num = int(ch)
+        if 1 <= num <= max_choice:
+            return ch
+
+    return ''  # Invalid key
+
+
 # =============================================================================
 # MENU DISPLAY
 # =============================================================================
@@ -535,87 +568,97 @@ def generate_single_entity_config(db: WireGuardDBv2, db_path: str):
         print("\nPress any key..."); getch()
         return
 
-    print(f"\n{'=' * 70}")
-    print("SELECT ENTITY")
-    print(f"{'=' * 70}\n")
-
+    # Build menu content
+    menu_lines = []
     for i, (etype, eid, hostname) in enumerate(entities, 1):
         type_label = {'cs': 'Coordination Server', 'router': 'Subnet Router', 'remote': 'Remote Client'}.get(etype, etype)
-        print(f"  {i}. [{type_label}] {hostname}")
+        menu_lines.append(f"  [cyan]{i}.[/cyan] {hostname} [dim]- {type_label}[/dim]")
+    menu_lines.append(f"  [dim]b. Back[/dim]")
 
-    print(f"\n  b. Back")
-    print()
+    if RICH_AVAILABLE:
+        console.print()
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title="[bold]SELECT ENTITY[/bold]",
+            title_align="left",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+        console.print()
+    else:
+        print(f"\n{'=' * 70}")
+        print("SELECT ENTITY")
+        print(f"{'=' * 70}\n")
+        for i, (etype, eid, hostname) in enumerate(entities, 1):
+            type_label = {'cs': 'Coordination Server', 'router': 'Subnet Router', 'remote': 'Remote Client'}.get(etype, etype)
+            print(f"  {i}. {hostname} - {type_label}")
+        print(f"\n  b. Back")
+        print()
 
-    choice = input("Select entity: ").strip().lower()
+    choice = get_keypress_list_choice(len(entities), allow_letters='b')
 
-    if choice == 'b':
+    if choice is None or choice == 'b' or choice == '':
         return
 
-    try:
-        idx = int(choice) - 1
-        if not (0 <= idx < len(entities)):
-            print("Invalid choice.")
-            print("\nPress any key..."); getch()
-            return
+    idx = int(choice) - 1
+    if not (0 <= idx < len(entities)):
+        return
 
-        etype, eid, hostname = entities[idx]
+    etype, eid, hostname = entities[idx]
 
-        # Generate config
-        if etype == 'cs':
-            config = generate_cs_config(db)
-            filename = "coordination.conf"
-        elif etype == 'router':
-            config = generate_router_config(db, eid)
-            filename = f"{hostname}.conf"
-        else:
-            config = generate_remote_config(db, eid)
-            filename = f"{hostname}.conf"
+    # Generate config
+    if etype == 'cs':
+        config = generate_cs_config(db)
+        filename = "coordination.conf"
+    elif etype == 'router':
+        config = generate_router_config(db, eid)
+        filename = f"{hostname}.conf"
+    else:
+        config = generate_remote_config(db, eid)
+        filename = f"{hostname}.conf"
 
-        # Show options
+    # Show options
+    print(f"\n{'─' * 70}")
+    print(f"Config for: {hostname}")
+    print(f"{'─' * 70}")
+    print()
+    print("  1. View config")
+    print("  2. Save to file")
+    print("  3. View and save")
+    print("  4. Generate QR code (remotes only)")
+    print()
+
+    action = input("Action [1]: ").strip()
+    if not action:
+        action = '1'
+
+    output_dir = Path('generated')
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / filename
+
+    if action in ('1', '3'):
         print(f"\n{'─' * 70}")
-        print(f"Config for: {hostname}")
+        print(config)
         print(f"{'─' * 70}")
-        print()
-        print("  1. View config")
-        print("  2. Save to file")
-        print("  3. View and save")
-        print("  4. Generate QR code (remotes only)")
-        print()
 
-        action = input("Action [1]: ").strip()
-        if not action:
-            action = '1'
+    if action in ('2', '3'):
+        output_path.write_text(config)
+        output_path.chmod(0o600)
+        print(f"\n✓ Saved to: {output_path}")
 
-        output_dir = Path('generated')
-        output_dir.mkdir(exist_ok=True)
-        output_path = output_dir / filename
+    if action == '4' and etype == 'remote':
+        try:
+            import qrcode
+            qr = qrcode.QRCode()
+            qr.add_data(config)
+            qr.make()
 
-        if action in ('1', '3'):
-            print(f"\n{'─' * 70}")
-            print(config)
-            print(f"{'─' * 70}")
-
-        if action in ('2', '3'):
-            output_path.write_text(config)
-            output_path.chmod(0o600)
-            print(f"\n✓ Saved to: {output_path}")
-
-        if action == '4' and etype == 'remote':
-            try:
-                import qrcode
-                qr = qrcode.QRCode()
-                qr.add_data(config)
-                qr.make()
-
-                qr_file = output_dir / f"{hostname}.png"
-                img = qr.make_image(fill_color="black", back_color="white")
-                img.save(qr_file)
-                print(f"\n✓ QR code saved to: {qr_file}")
-            except ImportError:
-                print("\n  (qrcode module not installed - pip install qrcode)")
-
-    except ValueError:
-        print("Invalid choice.")
+            qr_file = output_dir / f"{hostname}.png"
+            img = qr.make_image(fill_color="black", back_color="white")
+            img.save(qr_file)
+            print(f"\n✓ QR code saved to: {qr_file}")
+        except ImportError:
+            print("\n  (qrcode module not installed - pip install qrcode)")
 
     print("\nPress any key..."); getch()
 
@@ -763,10 +806,8 @@ def extramural_generate_single(ops, db_path: str):
         print("\nPress any key..."); getch()
         return
 
-    print(f"\n{'=' * 70}")
-    print("SELECT EXTRAMURAL CONFIG")
-    print(f"{'=' * 70}\n")
-
+    # Build menu content
+    menu_lines = []
     for i, config in enumerate(configs, 1):
         peer = ops.get_local_peer(config.local_peer_id)
         sponsor = ops.get_sponsor(config.sponsor_id)
@@ -776,69 +817,72 @@ def extramural_generate_single(ops, db_path: str):
         sponsor_name = sponsor.name if sponsor else 'Unknown'
         endpoint = active_peer.endpoint if active_peer else 'N/A'
 
-        print(f"  {i}. {peer_name} / {sponsor_name}")
-        print(f"      Interface: {config.interface_name or 'N/A'}, Endpoint: {endpoint}")
+        menu_lines.append(f"  [cyan]{i}.[/cyan] {peer_name} / {sponsor_name}")
+        menu_lines.append(f"      [dim]Interface: {config.interface_name or 'N/A'}, Endpoint: {endpoint}[/dim]")
+    menu_lines.append(f"  [dim]b. Back[/dim]")
 
-    print(f"\n  b. Back")
-    print()
+    if RICH_AVAILABLE:
+        console.print()
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title="[bold]SELECT EXTRAMURAL CONFIG[/bold]",
+            title_align="left",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+        console.print()
 
-    choice = input("Select config: ").strip().lower()
+    choice = get_keypress_list_choice(len(configs), allow_letters='b')
 
-    if choice == 'b' or not choice:
+    if choice is None or choice == 'b' or choice == '':
         return
 
-    try:
-        idx = int(choice) - 1
-        if not (0 <= idx < len(configs)):
-            print("Invalid choice.")
-            print("\nPress any key..."); getch()
-            return
+    idx = int(choice) - 1
+    if not (0 <= idx < len(configs)):
+        return
 
-        config = configs[idx]
-        peer = ops.get_local_peer(config.local_peer_id)
-        sponsor = ops.get_sponsor(config.sponsor_id)
+    config = configs[idx]
+    peer = ops.get_local_peer(config.local_peer_id)
+    sponsor = ops.get_sponsor(config.sponsor_id)
 
-        # Generate config
-        gen = ExtramuralConfigGenerator(db_path)
-        content = gen.generate_config(config.id)
+    # Generate config
+    gen = ExtramuralConfigGenerator(db_path)
+    content = gen.generate_config(config.id)
 
-        # Filename: [Sponsor]-[hostname]-date.conf
-        from datetime import datetime
-        sponsor_slug = sponsor.name.lower().replace(' ', '-')
-        peer_slug = peer.name.lower().replace(' ', '-')
-        date_str = datetime.now().strftime('%Y%m%d')
-        filename = f"{sponsor_slug}-{peer_slug}-{date_str}.conf"
+    # Filename: [Sponsor]-[hostname]-date.conf
+    from datetime import datetime
+    sponsor_slug = sponsor.name.lower().replace(' ', '-')
+    peer_slug = peer.name.lower().replace(' ', '-')
+    date_str = datetime.now().strftime('%Y%m%d')
+    filename = f"{sponsor_slug}-{peer_slug}-{date_str}.conf"
 
-        # Show options
+    # Show options
+    print(f"\n{'─' * 70}")
+    print(f"Config for: {peer.name} / {sponsor.name}")
+    print(f"{'─' * 70}")
+    print()
+    print("  1. View config")
+    print("  2. Save to file")
+    print("  3. View and save")
+    print()
+
+    action = input("Action [1]: ").strip()
+    if not action:
+        action = '1'
+
+    output_dir = Path('generated')
+    output_dir.mkdir(exist_ok=True)
+    output_path = output_dir / filename
+
+    if action in ('1', '3'):
         print(f"\n{'─' * 70}")
-        print(f"Config for: {peer.name} / {sponsor.name}")
+        print(content)
         print(f"{'─' * 70}")
-        print()
-        print("  1. View config")
-        print("  2. Save to file")
-        print("  3. View and save")
-        print()
 
-        action = input("Action [1]: ").strip()
-        if not action:
-            action = '1'
-
-        output_dir = Path('generated')
-        output_dir.mkdir(exist_ok=True)
-        output_path = output_dir / filename
-
-        if action in ('1', '3'):
-            print(f"\n{'─' * 70}")
-            print(content)
-            print(f"{'─' * 70}")
-
-        if action in ('2', '3'):
-            output_path.write_text(content)
-            output_path.chmod(0o600)
-            print(f"\n✓ Saved to: {output_path}")
-
-    except ValueError:
-        print("Invalid choice.")
+    if action in ('2', '3'):
+        output_path.write_text(content)
+        output_path.chmod(0o600)
+        print(f"\n✓ Saved to: {output_path}")
 
     print("\nPress any key..."); getch()
 
@@ -857,10 +901,8 @@ def extramural_list_all(ops, db_path: str):
             getch()
             return
 
-        print(f"\n{'=' * 70}")
-        print(f"EXTRAMURAL CONFIGS ({len(configs)})")
-        print(f"{'=' * 70}\n")
-
+        # Build menu content
+        menu_lines = []
         for i, config in enumerate(configs, 1):
             peer = ops.get_local_peer(config.local_peer_id)
             sponsor = ops.get_sponsor(config.sponsor_id)
@@ -872,28 +914,36 @@ def extramural_list_all(ops, db_path: str):
 
             status = ""
             if config.pending_remote_update:
-                status = " [PENDING UPDATE]"
+                status = " [yellow][PENDING UPDATE][/yellow]"
             elif config.last_deployed_at:
-                status = f" (deployed)"
+                status = " [dim](deployed)[/dim]"
 
-            print(f"  {i}. {peer_name} / {sponsor_name}{status}")
-            print(f"      Interface: {config.interface_name or 'N/A'}, Endpoint: {endpoint}")
+            menu_lines.append(f"  [cyan]{i}.[/cyan] {peer_name} / {sponsor_name}{status}")
+            menu_lines.append(f"      [dim]Interface: {config.interface_name or 'N/A'}, Endpoint: {endpoint}[/dim]")
+        menu_lines.append(f"  [dim]b. Back[/dim]")
 
-        print(f"\n  b. Back")
-        print()
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "\n".join(menu_lines),
+                title=f"[bold]EXTRAMURAL CONFIGS ({len(configs)})[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+            console.print()
 
-        choice = input("Select config (or Enter to go back): ").strip().lower()
+        choice = get_keypress_list_choice(len(configs), allow_letters='b')
 
-        if choice == 'b' or not choice:
+        if choice is None or choice == 'b':
             return
 
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(configs):
-                extramural_config_detail(ops, configs[idx], db_path)
-            # Invalid number - just loop and redraw
-        except ValueError:
-            pass  # Invalid input - just loop and redraw
+        if choice == '':
+            continue  # Invalid key, redraw
+
+        idx = int(choice) - 1
+        if 0 <= idx < len(configs):
+            extramural_config_detail(ops, configs[idx], db_path)
 
 
 def extramural_by_sponsor(ops, db_path: str):
@@ -909,30 +959,37 @@ def extramural_by_sponsor(ops, db_path: str):
 
     while True:
         clear_screen()
-        print(f"\n{'=' * 70}")
-        print("EXTRAMURAL - BY SPONSOR")
-        print(f"{'=' * 70}\n")
-
+        # Build menu content
+        menu_lines = []
         for i, sponsor in enumerate(sponsors, 1):
             configs = ops.list_extramural_configs(sponsor_id=sponsor.id)
-            print(f"  {i}. {sponsor.name} ({len(configs)} configs)")
+            menu_lines.append(f"  [cyan]{i}.[/cyan] {sponsor.name} [dim]({len(configs)} configs)[/dim]")
             if sponsor.website:
-                print(f"      {sponsor.website}")
+                menu_lines.append(f"      [dim]{sponsor.website}[/dim]")
+        menu_lines.append(f"  [dim]b. Back[/dim]")
 
-        print(f"\n  b. Back")
-        print()
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "\n".join(menu_lines),
+                title="[bold]EXTRAMURAL - BY SPONSOR[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+            console.print()
 
-        choice = input("Select sponsor (or Enter to go back): ").strip().lower()
+        choice = get_keypress_list_choice(len(sponsors), allow_letters='b')
 
-        if choice == 'b' or not choice:
+        if choice is None or choice == 'b':
             return
 
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(sponsors):
-                extramural_sponsor_detail(ops, sponsors[idx], db_path)
-        except ValueError:
-            pass  # Invalid input - just loop and redraw
+        if choice == '':
+            continue  # Invalid key, redraw
+
+        idx = int(choice) - 1
+        if 0 <= idx < len(sponsors):
+            extramural_sponsor_detail(ops, sponsors[idx], db_path)
 
 
 def extramural_sponsor_detail(ops, sponsor, db_path: str):
@@ -940,18 +997,28 @@ def extramural_sponsor_detail(ops, sponsor, db_path: str):
     clear_screen()
     configs = ops.list_extramural_configs(sponsor_id=sponsor.id)
 
-    print(f"\n{'=' * 70}")
-    print(f"{sponsor.name.upper()}")
+    # Build title with optional website
+    title_parts = [sponsor.name.upper()]
     if sponsor.website:
-        print(f"{sponsor.website}")
-    print(f"{'=' * 70}\n")
+        title_parts.append(f"[dim]{sponsor.website}[/dim]")
 
     if not configs:
-        print("No configs for this sponsor.")
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "No configs for this sponsor.",
+                title=f"[bold]{' - '.join(title_parts)}[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+        else:
+            print("No configs for this sponsor.")
         print("\nPress any key..."); getch()
         return
 
-    print("Configs:")
+    # Build menu content
+    menu_lines = []
     for i, config in enumerate(configs, 1):
         peer = ops.get_local_peer(config.local_peer_id)
         active_peer = ops.get_active_peer(config.id)
@@ -959,28 +1026,35 @@ def extramural_sponsor_detail(ops, sponsor, db_path: str):
         peer_name = peer.name if peer else 'Unknown'
         active_name = active_peer.name if active_peer else 'N/A'
 
-        status = "never deployed"
         if config.pending_remote_update:
-            status = "PENDING UPDATE"
+            status = "[yellow]PENDING UPDATE[/yellow]"
         elif config.last_deployed_at:
-            status = f"deployed {config.last_deployed_at}"
+            status = f"[dim]deployed {config.last_deployed_at}[/dim]"
+        else:
+            status = "[dim]never deployed[/dim]"
 
-        print(f"  {i}. {peer_name} [{active_name}] - {status}")
+        menu_lines.append(f"  [cyan]{i}.[/cyan] {peer_name} [dim][{active_name}][/dim] - {status}")
+    menu_lines.append(f"  [dim]b. Back[/dim]")
 
-    print(f"\n  b. Back")
-    print()
+    if RICH_AVAILABLE:
+        console.print()
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title=f"[bold]{title_parts[0]}[/bold]" + (f" - {title_parts[1]}" if len(title_parts) > 1 else ""),
+            title_align="left",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+        console.print()
 
-    choice = input("Select config (or Enter to go back): ").strip().lower()
+    choice = get_keypress_list_choice(len(configs), allow_letters='b')
 
-    if choice == 'b' or not choice:
+    if choice is None or choice == 'b' or choice == '':
         return
 
-    try:
-        idx = int(choice) - 1
-        if 0 <= idx < len(configs):
-            extramural_config_detail(ops, configs[idx], db_path)
-    except ValueError:
-        pass
+    idx = int(choice) - 1
+    if 0 <= idx < len(configs):
+        extramural_config_detail(ops, configs[idx], db_path)
 
 
 def extramural_by_local_peer(ops, db_path: str):
@@ -995,33 +1069,40 @@ def extramural_by_local_peer(ops, db_path: str):
 
     while True:
         clear_screen()
-        print(f"\n{'=' * 70}")
-        print("EXTRAMURAL - BY LOCAL PEER")
-        print(f"{'=' * 70}\n")
-
+        # Build menu content
+        menu_lines = []
         for i, peer in enumerate(peers, 1):
             configs = ops.list_extramural_configs(local_peer_id=peer.id)
             ssh_info = ""
             if peer.ssh_host_id:
                 ssh_host = ops.get_ssh_host(peer.ssh_host_id)
                 if ssh_host:
-                    ssh_info = f" - {ssh_host.ssh_user or 'root'}@{ssh_host.ssh_host}"
-            print(f"  {i}. {peer.name} ({len(configs)} configs){ssh_info}")
+                    ssh_info = f" [dim]- {ssh_host.ssh_user or 'root'}@{ssh_host.ssh_host}[/dim]"
+            menu_lines.append(f"  [cyan]{i}.[/cyan] {peer.name} [dim]({len(configs)} configs)[/dim]{ssh_info}")
+        menu_lines.append(f"  [dim]b. Back[/dim]")
 
-        print(f"\n  b. Back")
-        print()
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "\n".join(menu_lines),
+                title="[bold]EXTRAMURAL - BY LOCAL PEER[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+            console.print()
 
-        choice = input("Select local peer (or Enter to go back): ").strip().lower()
+        choice = get_keypress_list_choice(len(peers), allow_letters='b')
 
-        if choice == 'b' or not choice:
+        if choice is None or choice == 'b':
             return
 
-        try:
-            idx = int(choice) - 1
-            if 0 <= idx < len(peers):
-                extramural_local_peer_detail(ops, peers[idx], db_path)
-        except ValueError:
-            pass  # Invalid input - just loop and redraw
+        if choice == '':
+            continue  # Invalid key, redraw
+
+        idx = int(choice) - 1
+        if 0 <= idx < len(peers):
+            extramural_local_peer_detail(ops, peers[idx], db_path)
 
 
 def extramural_local_peer_detail(ops, peer, db_path: str):
@@ -1029,22 +1110,30 @@ def extramural_local_peer_detail(ops, peer, db_path: str):
     clear_screen()
     configs = ops.list_extramural_configs(local_peer_id=peer.id)
 
-    print(f"\n{'=' * 70}")
-    print(f"{peer.name.upper()}")
-
+    # Build title with optional SSH info
+    title_parts = [peer.name.upper()]
     if peer.ssh_host_id:
         ssh_host = ops.get_ssh_host(peer.ssh_host_id)
         if ssh_host:
-            print(f"SSH: {ssh_host.ssh_user or 'root'}@{ssh_host.ssh_host}:{ssh_host.ssh_port}")
-
-    print(f"{'=' * 70}\n")
+            title_parts.append(f"[dim]{ssh_host.ssh_user or 'root'}@{ssh_host.ssh_host}:{ssh_host.ssh_port}[/dim]")
 
     if not configs:
-        print("No configs for this peer.")
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "No configs for this peer.",
+                title=f"[bold]{' - '.join(title_parts)}[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+        else:
+            print("No configs for this peer.")
         print("\nPress any key..."); getch()
         return
 
-    print("Configs:")
+    # Build menu content
+    menu_lines = []
     for i, config in enumerate(configs, 1):
         sponsor = ops.get_sponsor(config.sponsor_id)
         active_peer = ops.get_active_peer(config.id)
@@ -1052,28 +1141,35 @@ def extramural_local_peer_detail(ops, peer, db_path: str):
         sponsor_name = sponsor.name if sponsor else 'Unknown'
         active_name = active_peer.name if active_peer else 'N/A'
 
-        status = "never deployed"
         if config.pending_remote_update:
-            status = "PENDING UPDATE"
+            status = "[yellow]PENDING UPDATE[/yellow]"
         elif config.last_deployed_at:
-            status = f"deployed {config.last_deployed_at}"
+            status = f"[dim]deployed {config.last_deployed_at}[/dim]"
+        else:
+            status = "[dim]never deployed[/dim]"
 
-        print(f"  {i}. {sponsor_name} [{active_name}] - {status}")
+        menu_lines.append(f"  [cyan]{i}.[/cyan] {sponsor_name} [dim][{active_name}][/dim] - {status}")
+    menu_lines.append(f"  [dim]b. Back[/dim]")
 
-    print(f"\n  b. Back")
-    print()
+    if RICH_AVAILABLE:
+        console.print()
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title=f"[bold]{title_parts[0]}[/bold]" + (f" - {title_parts[1]}" if len(title_parts) > 1 else ""),
+            title_align="left",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+        console.print()
 
-    choice = input("Select config (or Enter to go back): ").strip().lower()
+    choice = get_keypress_list_choice(len(configs), allow_letters='b')
 
-    if choice == 'b' or not choice:
+    if choice is None or choice == 'b' or choice == '':
         return
 
-    try:
-        idx = int(choice) - 1
-        if 0 <= idx < len(configs):
-            extramural_config_detail(ops, configs[idx], db_path)
-    except ValueError:
-        pass
+    idx = int(choice) - 1
+    if 0 <= idx < len(configs):
+        extramural_config_detail(ops, configs[idx], db_path)
 
 
 def extramural_config_detail(ops, config, db_path: str):
@@ -1087,28 +1183,39 @@ def extramural_config_detail(ops, config, db_path: str):
 
     while True:
         clear_screen()
-        print(f"\n{'=' * 70}")
-        print(f"{sponsor.name.upper()} -> {peer.name.upper()}")
-        print(f"{'=' * 70}\n")
+        # Build config detail content
+        detail_lines = []
 
         if config.pending_remote_update:
-            print("  !! PENDING REMOTE UPDATE !!")
-            print(f"  Your new public key: {config.local_public_key}")
-            print("  Update this at your sponsor's portal.\n")
+            detail_lines.append("[yellow bold]!! PENDING REMOTE UPDATE !![/yellow bold]")
+            detail_lines.append(f"Your new public key: {config.local_public_key}")
+            detail_lines.append("Update this at your sponsor's portal.")
+            detail_lines.append("")
 
-        print(f"  Interface: {config.interface_name or 'N/A'}")
-        print(f"  Your Public Key: {config.local_public_key[:32]}...")
-        print(f"  Assigned IP: {config.assigned_ipv4 or ''} {config.assigned_ipv6 or ''}")
+        detail_lines.append(f"Interface: {config.interface_name or 'N/A'}")
+        detail_lines.append(f"Your Public Key: {config.local_public_key[:32]}...")
+        detail_lines.append(f"Assigned IP: {config.assigned_ipv4 or ''} {config.assigned_ipv6 or ''}")
 
         if config.last_deployed_at:
-            print(f"  Last Deployed: {config.last_deployed_at}")
+            detail_lines.append(f"Last Deployed: {config.last_deployed_at}")
         else:
-            print(f"  Last Deployed: Never")
+            detail_lines.append(f"Last Deployed: [dim]Never[/dim]")
 
-        print(f"\n  Available Endpoints:")
+        detail_lines.append("")
+        detail_lines.append("[bold]Available Endpoints:[/bold]")
         for p in ext_peers:
-            marker = "*" if p.is_active else " "
-            print(f"    {marker} {p.name or 'unnamed'}: {p.endpoint or 'N/A'}")
+            marker = "[cyan]*[/cyan]" if p.is_active else " "
+            detail_lines.append(f"  {marker} {p.name or 'unnamed'}: {p.endpoint or 'N/A'}")
+
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "\n".join(detail_lines),
+                title=f"[bold]{sponsor.name.upper()} -> {peer.name.upper()}[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
 
         print_menu(
             "",
@@ -1216,15 +1323,24 @@ def extramural_import_config(ops, db_path: str):
     from v1.extramural_import import import_extramural_config
 
     clear_screen()
-    print(f"\n{'=' * 70}")
-    print("IMPORT EXTRAMURAL CONFIG")
-    print(f"{'=' * 70}\n")
+    # Build import menu content
+    menu_lines = [
+        "  [cyan]1.[/cyan] Import from file path",
+        "  [cyan]2.[/cyan] Paste config content"
+    ]
 
-    print("  1. Import from file path")
-    print("  2. Paste config content")
-    print()
+    if RICH_AVAILABLE:
+        console.print()
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title="[bold]IMPORT EXTRAMURAL CONFIG[/bold]",
+            title_align="left",
+            border_style="cyan",
+            padding=(1, 2)
+        ))
+        console.print()
 
-    method = input("Choice [1]: ").strip()
+    method = input("  Select [1]: ").strip()
 
     config_file = None
     temp_file = None
@@ -1391,28 +1507,39 @@ def extramural_manage_sponsors(ops):
         clear_screen()
         sponsors = ops.list_sponsors()
 
-        print(f"\n{'=' * 70}")
-        print("MANAGE SPONSORS")
-        print(f"{'=' * 70}\n")
-
+        # Build menu content
+        menu_lines = []
         if sponsors:
             for i, sponsor in enumerate(sponsors, 1):
-                print(f"  {i}. {sponsor.name}")
+                menu_lines.append(f"  [cyan]{i}.[/cyan] {sponsor.name}")
                 if sponsor.website:
-                    print(f"      {sponsor.website}")
+                    menu_lines.append(f"      [dim]{sponsor.website}[/dim]")
         else:
-            print("  No sponsors yet.")
+            menu_lines.append("  [dim]No sponsors yet.[/dim]")
+        menu_lines.append("")
+        menu_lines.append("  [cyan]a.[/cyan] Add Sponsor")
+        menu_lines.append("  [dim]b. Back[/dim]")
 
-        print(f"\n  a. Add Sponsor")
-        print(f"  b. Back")
-        print()
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "\n".join(menu_lines),
+                title="[bold]MANAGE SPONSORS[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+            console.print()
 
-        choice = input("Choice: ").strip().lower()
+        choice = get_keypress_list_choice(len(sponsors) if sponsors else 0, allow_letters='ab')
 
-        if choice == 'b':
+        if choice is None or choice == 'b':
             return
 
-        elif choice == 'a':
+        if choice == '':
+            continue  # Invalid key, redraw
+
+        if choice == 'a':
             name = input("\nSponsor name: ").strip()
             if name:
                 website = input("Website (optional): ").strip() or None
@@ -1433,31 +1560,42 @@ def extramural_manage_local_peers(ops):
         clear_screen()
         peers = ops.list_local_peers()
 
-        print(f"\n{'=' * 70}")
-        print("MANAGE LOCAL PEERS")
-        print(f"{'=' * 70}\n")
-
+        # Build menu content
+        menu_lines = []
         if peers:
             for i, peer in enumerate(peers, 1):
-                ssh_info = "[no SSH]"
+                ssh_info = "[dim][no SSH][/dim]"
                 if peer.ssh_host_id:
                     ssh_host = ops.get_ssh_host(peer.ssh_host_id)
                     if ssh_host:
-                        ssh_info = f"{ssh_host.ssh_user or 'root'}@{ssh_host.ssh_host}"
-                print(f"  {i}. {peer.name} - {ssh_info}")
+                        ssh_info = f"[dim]{ssh_host.ssh_user or 'root'}@{ssh_host.ssh_host}[/dim]"
+                menu_lines.append(f"  [cyan]{i}.[/cyan] {peer.name} - {ssh_info}")
         else:
-            print("  No local peers yet.")
+            menu_lines.append("  [dim]No local peers yet.[/dim]")
+        menu_lines.append("")
+        menu_lines.append("  [cyan]a.[/cyan] Add Local Peer")
+        menu_lines.append("  [dim]b. Back[/dim]")
 
-        print(f"\n  a. Add Local Peer")
-        print(f"  b. Back")
-        print()
+        if RICH_AVAILABLE:
+            console.print()
+            console.print(Panel(
+                "\n".join(menu_lines),
+                title="[bold]MANAGE LOCAL PEERS[/bold]",
+                title_align="left",
+                border_style="cyan",
+                padding=(1, 2)
+            ))
+            console.print()
 
-        choice = input("Choice: ").strip().lower()
+        choice = get_keypress_list_choice(len(peers) if peers else 0, allow_letters='ab')
 
-        if choice == 'b':
+        if choice is None or choice == 'b':
             return
 
-        elif choice == 'a':
+        if choice == '':
+            continue  # Invalid key, redraw
+
+        if choice == 'a':
             name = input("\nLocal peer name (e.g., 'my-laptop'): ").strip()
             if name:
                 notes = input("Notes (optional): ").strip() or None

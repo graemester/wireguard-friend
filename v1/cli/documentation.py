@@ -153,7 +153,10 @@ def generate_sysinfo() -> str:
             version = getattr(mod, '__version__', 'installed')
             lines.append(f"  {description}: {version}")
         except ImportError:
-            lines.append(f"  {description}: (not installed)")
+            if module_name == "qrcode":
+                lines.append(f"  {description}: [yellow]apt install python3-qrcode python3-pil[/yellow]")
+            else:
+                lines.append(f"  {description}: (not installed)")
 
     # SQLite version
     lines.append(f"  SQLite: {sqlite3.sqlite_version}")
@@ -985,7 +988,7 @@ def getch() -> str:
 def show_topic_content(topic_key: str, topic_title: str):
     """Display the content of a specific topic (already in alternate screen)"""
     content = get_content(topic_key)
-    lines = content.strip().split('\n')
+    lines = content.rstrip().split('\n')  # rstrip only - preserve leading blank lines
 
     total_lines = len(lines)
     current_line = 0

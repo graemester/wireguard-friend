@@ -131,8 +131,8 @@ class WireGuardDBv2:
                     dns_servers TEXT,
                     persistent_keepalive INTEGER,
 
-                    -- Keys
-                    private_key TEXT NOT NULL,
+                    -- Keys (NULL private_key = provisional peer from CS config)
+                    private_key TEXT,
                     preshared_key TEXT,
 
                     -- Access control
