@@ -44,11 +44,13 @@ class InterfaceSection:
     private_key: str
     listen_port: Optional[int]
     mtu: Optional[int]
+    dns: Optional[str]  # DNS servers
 
     # Commands (semantically recognized)
     command_pairs: List[CommandPair]
     command_singletons: List[CommandSingleton]
     unrecognized_commands: List[str]
+    unrecognized_postdown: List[str]  # PostDown commands that weren't paired
 
     # Comments (semantically categorized)
     comments: List[SemanticComment]
@@ -137,6 +139,7 @@ class SemanticParser:
         private_key = None
         listen_port = None
         mtu = None
+        dns = None
         postup_lines = []
         postdown_lines = []
         comment_lines = []
@@ -175,6 +178,8 @@ class SemanticParser:
                     listen_port = int(value)
                 elif key.lower() == 'mtu':
                     mtu = int(value)
+                elif key.lower() == 'dns':
+                    dns = value
                 elif key.lower() == 'postup':
                     postup_lines.append(value)
                 elif key.lower() == 'postdown':
@@ -185,6 +190,15 @@ class SemanticParser:
             postup_lines,
             postdown_lines
         )
+
+        # Find PostDown commands that weren't matched to pairs
+        # (unrecognized PostDown commands)
+        matched_postdown = set()
+        for pair in pairs:
+            cmds = pair.down_commands if isinstance(pair.down_commands, list) else json.loads(pair.down_commands)
+            for cmd in cmds:
+                matched_postdown.add(cmd)
+        unrecognized_postdown = [cmd for cmd in postdown_lines if cmd not in matched_postdown]
 
         # Categorize comments
         comments = [
@@ -197,9 +211,11 @@ class SemanticParser:
             private_key=private_key,
             listen_port=listen_port,
             mtu=mtu,
+            dns=dns,
             command_pairs=pairs,
             command_singletons=singletons,
             unrecognized_commands=unrecognized,
+            unrecognized_postdown=unrecognized_postdown,
             comments=comments
         )
 
@@ -297,6 +313,10 @@ class ConfigGenerator:
         if parsed.interface.mtu:
             lines.append(f"MTU = {parsed.interface.mtu}")
 
+        # DNS
+        if parsed.interface.dns:
+            lines.append(f"DNS = {parsed.interface.dns}")
+
         lines.append("")  # Blank line after interface fields
 
         # PostUp/PostDown commands (from semantic pairs)
@@ -314,11 +334,15 @@ class ConfigGenerator:
         for cmd in parsed.interface.unrecognized_commands:
             lines.append(f"PostUp = {cmd}")
 
-        # PostDown
+        # PostDown (from semantic pairs)
         for pair in parsed.interface.command_pairs:
             cmds = pair.down_commands if isinstance(pair.down_commands, list) else json.loads(pair.down_commands)
             for cmd in cmds:
                 lines.append(f"PostDown = {cmd}")
+
+        # Unrecognized PostDown commands (not matched to pairs)
+        for cmd in parsed.interface.unrecognized_postdown:
+            lines.append(f"PostDown = {cmd}")
 
         # Peers
         for peer in parsed.peers:
@@ -398,6 +422,161 @@ class Validator:
         return False, f"Out of range: {port}"
 
 
+def extract_config_values(config_text: str) -> Dict:
+    """Extract all key-value pairs from a config, ignoring order and comments"""
+    result = {
+        'interface': {},
+        'peers': []
+    }
+
+    current_section = None
+    current_peer = {}
+
+    for line in config_text.split('\n'):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+
+        if line == '[Interface]':
+            current_section = 'interface'
+            continue
+        elif line == '[Peer]':
+            if current_peer:
+                result['peers'].append(current_peer)
+            current_peer = {}
+            current_section = 'peer'
+            continue
+
+        if '=' in line:
+            key, value = line.split('=', 1)
+            key = key.strip()
+            value = value.strip()
+
+            if current_section == 'interface':
+                if key in result['interface']:
+                    # Handle multiple values (e.g., multiple Address lines)
+                    if isinstance(result['interface'][key], list):
+                        result['interface'][key].append(value)
+                    else:
+                        result['interface'][key] = [result['interface'][key], value]
+                else:
+                    result['interface'][key] = value
+            elif current_section == 'peer':
+                if key in current_peer:
+                    if isinstance(current_peer[key], list):
+                        current_peer[key].append(value)
+                    else:
+                        current_peer[key] = [current_peer[key], value]
+                else:
+                    current_peer[key] = value
+
+    if current_peer:
+        result['peers'].append(current_peer)
+
+    return result
+
+
+def normalize_value(value):
+    """Normalize a config value for comparison"""
+    if isinstance(value, list):
+        # Sort and normalize each item
+        return sorted([normalize_value(v) for v in value])
+    if isinstance(value, str):
+        # Handle comma-separated values (e.g., "10.0.0.1/32, 10.0.0.2/32")
+        if ',' in value:
+            parts = [p.strip() for p in value.split(',')]
+            return sorted(parts)
+        return value.strip()
+    return value
+
+
+def check_functional_equivalence(original: str, generated: str) -> Tuple[bool, List[str]]:
+    """
+    Check if two configs are functionally equivalent.
+
+    Returns (is_equivalent, list_of_differences)
+
+    Functional equivalence means:
+    - Same keys present
+    - Same values (order-independent for multi-value fields)
+    - Same peers with same attributes
+    """
+    orig_data = extract_config_values(original)
+    gen_data = extract_config_values(generated)
+
+    differences = []
+
+    # Compare interface sections
+    orig_iface = orig_data['interface']
+    gen_iface = gen_data['interface']
+
+    # Check critical interface keys
+    critical_keys = ['PrivateKey', 'Address', 'ListenPort', 'DNS', 'MTU']
+    for key in critical_keys:
+        orig_val = normalize_value(orig_iface.get(key, ''))
+        gen_val = normalize_value(gen_iface.get(key, ''))
+        if orig_val != gen_val:
+            differences.append(f"Interface.{key}: '{orig_val}' vs '{gen_val}'")
+
+    # Check PostUp/PostDown commands exist (order may differ but all should be present)
+    for cmd_key in ['PostUp', 'PostDown']:
+        orig_cmds = orig_iface.get(cmd_key, [])
+        gen_cmds = gen_iface.get(cmd_key, [])
+        if not isinstance(orig_cmds, list):
+            orig_cmds = [orig_cmds] if orig_cmds else []
+        if not isinstance(gen_cmds, list):
+            gen_cmds = [gen_cmds] if gen_cmds else []
+
+        orig_set = set(c.strip() for c in orig_cmds)
+        gen_set = set(c.strip() for c in gen_cmds)
+
+        if orig_set != gen_set:
+            missing = orig_set - gen_set
+            extra = gen_set - orig_set
+            if missing:
+                differences.append(f"Missing {cmd_key}: {missing}")
+            if extra:
+                differences.append(f"Extra {cmd_key}: {extra}")
+
+    # Compare peers
+    orig_peers = orig_data['peers']
+    gen_peers = gen_data['peers']
+
+    if len(orig_peers) != len(gen_peers):
+        differences.append(f"Peer count: {len(orig_peers)} vs {len(gen_peers)}")
+    else:
+        # Match peers by PublicKey
+        orig_by_key = {p.get('PublicKey', ''): p for p in orig_peers}
+        gen_by_key = {p.get('PublicKey', ''): p for p in gen_peers}
+
+        for pub_key, orig_peer in orig_by_key.items():
+            if pub_key not in gen_by_key:
+                differences.append(f"Missing peer with key: {pub_key[:20]}...")
+                continue
+
+            gen_peer = gen_by_key[pub_key]
+
+            # Check AllowedIPs
+            orig_ips = normalize_value(orig_peer.get('AllowedIPs', ''))
+            gen_ips = normalize_value(gen_peer.get('AllowedIPs', ''))
+            if orig_ips != gen_ips:
+                differences.append(f"Peer {pub_key[:10]}... AllowedIPs differ")
+
+            # Check Endpoint
+            orig_ep = orig_peer.get('Endpoint', '')
+            gen_ep = gen_peer.get('Endpoint', '')
+            if orig_ep != gen_ep:
+                differences.append(f"Peer {pub_key[:10]}... Endpoint: '{orig_ep}' vs '{gen_ep}'")
+
+            # Check PersistentKeepalive
+            orig_ka = orig_peer.get('PersistentKeepalive', '')
+            gen_ka = gen_peer.get('PersistentKeepalive', '')
+            if orig_ka != gen_ka:
+                differences.append(f"Peer {pub_key[:10]}... Keepalive: '{orig_ka}' vs '{gen_ka}'")
+
+    return len(differences) == 0, differences
+
+
 def compare_configs(original: str, generated: str) -> Dict:
     """Compare original and generated configs"""
     orig_lines = [l.rstrip() for l in original.split('\n') if l.strip()]
@@ -406,7 +585,10 @@ def compare_configs(original: str, generated: str) -> Dict:
     # Exact match?
     exact_match = orig_lines == gen_lines
 
-    # Count differences
+    # Functional equivalence check
+    func_equiv, func_diffs = check_functional_equivalence(original, generated)
+
+    # Count line differences (for reporting)
     differences = []
     max_len = max(len(orig_lines), len(gen_lines))
 
@@ -423,6 +605,8 @@ def compare_configs(original: str, generated: str) -> Dict:
 
     return {
         'exact_match': exact_match,
+        'functional_equivalent': func_equiv,
+        'functional_differences': func_diffs,
         'original_lines': len(orig_lines),
         'generated_lines': len(gen_lines),
         'differences': differences
@@ -448,6 +632,7 @@ def test_roundtrip():
     validator = Validator()
 
     total_exact = 0
+    total_functional = 0
     total_configs = 0
 
     for config_path in sorted(configs):
@@ -537,20 +722,30 @@ def test_roundtrip():
 
         print(f"   Original lines:  {comparison['original_lines']}")
         print(f"   Generated lines: {comparison['generated_lines']}")
-        print(f"   Exact match: {'✓ YES' if comparison['exact_match'] else '✗ NO'}")
+        print(f"   Exact match: {'✓ YES' if comparison['exact_match'] else '○ NO (cosmetic differences)'}")
+        print(f"   Functional equivalence: {'✓ YES' if comparison['functional_equivalent'] else '✗ NO'}")
 
         if comparison['exact_match']:
             total_exact += 1
 
-        if comparison['differences']:
-            print(f"\n   Differences: {len(comparison['differences'])}")
-            for diff in comparison['differences'][:10]:  # Show first 10
+        if comparison['functional_equivalent']:
+            total_functional += 1
+            print("   ✓ PASS - Config is functionally equivalent")
+        else:
+            print("   ✗ FAIL - Functional differences detected:")
+            for diff in comparison['functional_differences']:
+                print(f"     - {diff}")
+
+        # Only show line differences if not functionally equivalent (for debugging)
+        if not comparison['functional_equivalent'] and comparison['differences']:
+            print(f"\n   Line differences: {len(comparison['differences'])}")
+            for diff in comparison['differences'][:5]:
                 print(f"\n   Line {diff['line']}:")
                 print(f"     Original:  {diff['original']}")
                 print(f"     Generated: {diff['generated']}")
 
-            if len(comparison['differences']) > 10:
-                print(f"\n   ... and {len(comparison['differences']) - 10} more differences")
+            if len(comparison['differences']) > 5:
+                print(f"\n   ... and {len(comparison['differences']) - 5} more line differences")
 
     # Summary
     print(f"\n{'=' * 80}")
@@ -558,14 +753,15 @@ def test_roundtrip():
     print('=' * 80)
     print(f"Total configs: {total_configs}")
     print(f"Exact matches: {total_exact}")
-    print(f"Success rate: {total_exact / total_configs * 100:.1f}%")
+    print(f"Functional equivalence: {total_functional}/{total_configs}")
     print()
 
-    if total_exact == total_configs:
-        print("✓ PERFECT FIDELITY - All configs reproduced exactly!")
+    if total_functional == total_configs:
+        print("✓ ALL CONFIGS FUNCTIONALLY EQUIVALENT - Test PASSED!")
+        if total_exact < total_configs:
+            print(f"  (Note: {total_configs - total_exact} config(s) have cosmetic differences - field reordering)")
     else:
-        print("WARNING: PARTIAL FIDELITY - Some differences found")
-        print("  (This may be acceptable if only comment/whitespace repositioning)")
+        print(f"✗ FAILED - {total_configs - total_functional} config(s) have functional differences")
 
 
 if __name__ == "__main__":

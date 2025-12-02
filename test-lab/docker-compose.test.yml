@@ -1,0 +1,125 @@
+# WireGuard Friend Test Lab
+# Network topology for integration testing
+#
+# Topology:
+#   CS (172.20.0.10) - Coordination Server
+#   SNR (172.20.0.20) - Subnet Router (advertises 192.168.100.0/24)
+#   Remote1 (172.20.0.30) - Remote client
+#   Remote2 (172.20.0.31) - Remote client
+#
+# VPN Network: 10.99.0.0/24 (test-only, avoids conflict with real 10.66.x networks)
+
+version: '3.8'
+
+networks:
+  wgtest:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+  # Simulated LAN behind SNR
+  lan:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.100.0/24
+
+services:
+  cs:
+    build:
+      context: .
+      dockerfile: Dockerfile.wg-test
+    container_name: wgf-cs
+    hostname: cs
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    volumes:
+      - ./configs/cs:/etc/wireguard:rw
+    networks:
+      wgtest:
+        ipv4_address: 172.20.0.10
+    privileged: true
+
+  snr:
+    build:
+      context: .
+      dockerfile: Dockerfile.wg-test
+    container_name: wgf-snr
+    hostname: snr
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    volumes:
+      - ./configs/snr:/etc/wireguard:rw
+    networks:
+      wgtest:
+        ipv4_address: 172.20.0.20
+      lan:
+        ipv4_address: 192.168.100.2
+    privileged: true
+    depends_on:
+      - cs
+
+  remote1:
+    build:
+      context: .
+      dockerfile: Dockerfile.wg-test
+    container_name: wgf-remote1
+    hostname: remote1
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+    volumes:
+      - ./configs/remote1:/etc/wireguard:rw
+    networks:
+      wgtest:
+        ipv4_address: 172.20.0.30
+    privileged: true
+    depends_on:
+      - cs
+
+  remote2:
+    build:
+      context: .
+      dockerfile: Dockerfile.wg-test
+    container_name: wgf-remote2
+    hostname: remote2
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+    volumes:
+      - ./configs/remote2:/etc/wireguard:rw
+    networks:
+      wgtest:
+        ipv4_address: 172.20.0.31
+    privileged: true
+    depends_on:
+      - cs
+
+  # Simulated LAN device behind SNR
+  lan-device:
+    build:
+      context: .
+      dockerfile: Dockerfile.wg-test
+    container_name: wgf-lan-device
+    hostname: lan-device
+    cap_add:
+      - NET_ADMIN
+    networks:
+      lan:
+        ipv4_address: 192.168.100.10
+    # No WireGuard - just a regular LAN device
+    command: ["sh", "-c", "ip route add 10.99.0.0/24 via 192.168.100.2 && tail -f /dev/null"]
+    depends_on:
+      - snr
