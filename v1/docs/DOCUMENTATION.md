@@ -68,6 +68,32 @@ Internal design and implementation.
 
 ---
 
+## Features
+
+### [EXIT_NODES.md](EXIT_NODES.md) - Exit Node Guide
+
+Configure internet egress servers for privacy and geo-location.
+
+- Exit node concepts (split tunnel vs full tunnel)
+- Adding and managing exit nodes
+- Assigning exit nodes to remotes
+- exit_only access level
+- Config generation examples
+- Security considerations
+
+---
+
+### [EXTRAMURAL_CONFIGS.md](EXTRAMURAL_CONFIGS.md) - Commercial VPN Integration
+
+Manage configurations from commercial VPN providers.
+
+- Extramural schema
+- Import provider configs
+- Switch endpoints
+- Local peer management
+
+---
+
 ## Guides
 
 ### Backup and Restore

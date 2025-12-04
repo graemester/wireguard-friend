@@ -39,7 +39,7 @@ def clear_screen():
 @dataclass
 class PeerInfo:
     """Unified peer information structure"""
-    peer_type: str  # 'cs', 'router', 'remote'
+    peer_type: str  # 'cs', 'router', 'remote', 'exit_node'
     peer_id: int
     hostname: str
     ipv4_address: str
@@ -133,7 +133,7 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
             SELECT id, hostname, ipv4_address, ipv6_address, current_public_key,
                    dns_servers, persistent_keepalive, access_level, allowed_ips,
                    private_key, preshared_key, created_at, updated_at,
-                   permanent_guid
+                   permanent_guid, exit_node_id
             FROM remote ORDER BY hostname
         """)
         for row in cursor.fetchall():
@@ -144,6 +144,19 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
                 ORDER BY display_order
             """, (row['permanent_guid'],))
             comments = [(r['category'], r['text']) for r in cursor.fetchall()]
+
+            # Get exit node info if assigned
+            exit_node_info = None
+            if row.get('exit_node_id'):
+                cursor.execute("""
+                    SELECT hostname, endpoint FROM exit_node WHERE id = ?
+                """, (row['exit_node_id'],))
+                exit_row = cursor.fetchone()
+                if exit_row:
+                    exit_node_info = {
+                        'hostname': exit_row['hostname'],
+                        'endpoint': exit_row['endpoint']
+                    }
 
             peers.append(PeerInfo(
                 peer_type='remote',
@@ -163,6 +176,44 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
                     'updated_at': row['updated_at'],
                     'is_provisional': row['private_key'] is None,
                     'comments': comments,
+                    'exit_node_id': row.get('exit_node_id'),
+                    'exit_node_info': exit_node_info,
+                }
+            ))
+
+        # Exit Nodes
+        cursor.execute("""
+            SELECT id, hostname, ipv4_address, ipv6_address, current_public_key,
+                   endpoint, listen_port, wan_interface,
+                   ssh_host, ssh_user, ssh_port, private_key,
+                   created_at, updated_at, permanent_guid
+            FROM exit_node ORDER BY hostname
+        """)
+        for row in cursor.fetchall():
+            # Count remotes using this exit node
+            cursor.execute("""
+                SELECT COUNT(*) as cnt FROM remote WHERE exit_node_id = ?
+            """, (row['id'],))
+            remote_count = cursor.fetchone()['cnt']
+
+            peers.append(PeerInfo(
+                peer_type='exit_node',
+                peer_id=row['id'],
+                hostname=row['hostname'] or f"exit-{row['id']}",
+                ipv4_address=row['ipv4_address'],
+                ipv6_address=row['ipv6_address'] or '',
+                public_key=row['current_public_key'],
+                extras={
+                    'endpoint': row['endpoint'],
+                    'listen_port': row['listen_port'],
+                    'wan_interface': row['wan_interface'],
+                    'ssh_host': row['ssh_host'],
+                    'ssh_user': row['ssh_user'],
+                    'ssh_port': row['ssh_port'],
+                    'private_key': row['private_key'],
+                    'created_at': row['created_at'],
+                    'updated_at': row['updated_at'],
+                    'remote_count': remote_count,
                 }
             ))
 
@@ -182,6 +233,7 @@ def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
     cs_peers = [p for p in filtered if p.peer_type == 'cs']
     routers = [p for p in filtered if p.peer_type == 'router']
     remotes = [p for p in filtered if p.peer_type == 'remote']
+    exit_nodes = [p for p in filtered if p.peer_type == 'exit_node']
 
     # Build display with sequential numbering
     lines = []
@@ -225,8 +277,23 @@ def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
             peer_map[num] = p
             access = p.extras.get('access_level', 'unknown')
             status = " [provisional]" if p.extras.get('is_provisional') else ""
-            lines.append(f"  [{num:2}] {p.hostname}{status}")
+            exit_info = ""
+            if p.extras.get('exit_node_info'):
+                exit_info = f" -> {p.extras['exit_node_info']['hostname']}"
+            lines.append(f"  [{num:2}] {p.hostname}{status}{exit_info}")
             lines.append(f"       IP: {p.ipv4_address:20}  Access: {access}")
+            num += 1
+
+    if exit_nodes:
+        lines.append("")
+        lines.append(f"[EXIT NODES] ({len(exit_nodes)})")
+        lines.append("")
+        for i, p in enumerate(exit_nodes):
+            peer_map[num] = p
+            remote_count = p.extras.get('remote_count', 0)
+            client_str = f"{remote_count} clients" if remote_count != 1 else "1 client"
+            lines.append(f"  [{num:2}] {p.hostname}")
+            lines.append(f"       Endpoint: {p.extras.get('endpoint', 'unknown')}:{p.extras.get('listen_port', 51820)}  ({client_str})")
             num += 1
 
     if not filtered:
@@ -321,7 +388,8 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     type_labels = {
         'cs': 'Coordination Server',
         'router': 'Subnet Router',
-        'remote': 'Remote Client'
+        'remote': 'Remote Client',
+        'exit_node': 'Exit Node'
     }
     type_label = type_labels.get(peer.peer_type, peer.peer_type)
 
@@ -346,6 +414,16 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
         general.append(f"  Keepalive:      {peer.extras['persistent_keepalive']}s")
     if peer.extras.get('access_level'):
         general.append(f"  Access Level:   {peer.extras['access_level']}")
+    if peer.extras.get('wan_interface'):
+        general.append(f"  WAN Interface:  {peer.extras['wan_interface']}")
+    if peer.extras.get('remote_count') is not None:
+        general.append(f"  Clients Using:  {peer.extras['remote_count']}")
+    # Exit node info for remotes
+    if peer.extras.get('exit_node_info'):
+        exit_info = peer.extras['exit_node_info']
+        general.append(f"  Exit Node:      {exit_info['hostname']} ({exit_info['endpoint']})")
+    elif peer.peer_type == 'remote':
+        general.append(f"  Exit Node:      (none - split tunnel)")
     sections.append(("GENERAL", "\n".join(general)))
 
     # Network section
@@ -390,7 +468,7 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
     sections.append(("CRYPTOGRAPHY", "\n".join(crypto)))
 
     # SSH section (if applicable)
-    if peer.extras.get('ssh_host') or peer.peer_type in ('cs', 'router'):
+    if peer.extras.get('ssh_host') or peer.peer_type in ('cs', 'router', 'exit_node'):
         ssh = []
         ssh.append(f"  SSH Host:       {peer.extras.get('ssh_host') or '(not set)'}")
         ssh.append(f"  SSH User:       {peer.extras.get('ssh_user') or 'root'}")
@@ -429,16 +507,42 @@ def show_peer_detail(db: WireGuardDBv2, peer: PeerInfo) -> Optional[str]:
             ("5", "Deploy Config"),
             ("6", "Remove Peer"),
         ]
-    else:  # remote
+    elif peer.peer_type == 'exit_node':
         actions = [
             ("1", "Edit Hostname"),
             ("2", "Rotate Keys"),
             ("3", "View Key History"),
-            ("4", "Change Access Level"),
-            ("5", "Generate Config"),
-            ("6", "Generate QR Code"),
-            ("7", "Remove Peer"),
+            ("4", "Edit Endpoint"),
+            ("5", "Edit WAN Interface"),
+            ("6", "Generate Config"),
+            ("7", "Deploy Config"),
+            ("8", "Remove Exit Node"),
         ]
+    else:  # remote
+        # Check if exit node is assigned
+        has_exit = peer.extras.get('exit_node_id') is not None
+        if has_exit:
+            actions = [
+                ("1", "Edit Hostname"),
+                ("2", "Rotate Keys"),
+                ("3", "View Key History"),
+                ("4", "Change Access Level"),
+                ("5", "Clear Exit Node"),
+                ("6", "Generate Config"),
+                ("7", "Generate QR Code"),
+                ("8", "Remove Peer"),
+            ]
+        else:
+            actions = [
+                ("1", "Edit Hostname"),
+                ("2", "Rotate Keys"),
+                ("3", "View Key History"),
+                ("4", "Change Access Level"),
+                ("5", "Assign Exit Node"),
+                ("6", "Generate Config"),
+                ("7", "Generate QR Code"),
+                ("8", "Remove Peer"),
+            ]
 
     # Display
     breadcrumb = f"[Peers] > [{type_label}] > {peer.hostname}"
@@ -564,6 +668,11 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
                     UPDATE subnet_router SET hostname = ?, updated_at = ?
                     WHERE id = ?
                 """, (new_hostname, datetime.utcnow().isoformat(), peer.peer_id))
+            elif peer.peer_type == 'exit_node':
+                cursor.execute("""
+                    UPDATE exit_node SET hostname = ?, updated_at = ?
+                    WHERE id = ?
+                """, (new_hostname, datetime.utcnow().isoformat(), peer.peer_id))
             else:
                 cursor.execute("""
                     UPDATE remote SET hostname = ?, updated_at = ?
@@ -596,6 +705,7 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
 
     elif action == "Generate Config":
         from pathlib import Path
+        from v1.cli.config_generator import generate_exit_node_config
 
         # Check for provisional peer
         if peer.peer_type == 'remote' and peer.extras.get('is_provisional'):
@@ -613,6 +723,9 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
             filename = "coordination.conf"
         elif peer.peer_type == 'router':
             config = generate_router_config(db, peer.peer_id)
+            filename = f"{peer.hostname}.conf"
+        elif peer.peer_type == 'exit_node':
+            config = generate_exit_node_config(db, peer.peer_id)
             filename = f"{peer.hostname}.conf"
         else:
             config = generate_remote_config(db, peer.peer_id)
@@ -773,6 +886,140 @@ def execute_peer_action(db: WireGuardDBv2, peer: PeerInfo, action: str, db_path:
             print("\n[OK] Peer removed.")
             return False  # Go back to list
 
+        input("\nPress Enter to continue...")
+        return True
+
+    elif action == "Edit Endpoint":
+        # Exit node only
+        print(f"Current endpoint: {peer.extras.get('endpoint', '(not set)')}")
+        new_endpoint = input("New endpoint: ").strip()
+
+        if not new_endpoint:
+            print("Cancelled - no endpoint entered.")
+            input("\nPress Enter to continue...")
+            return True
+
+        with db._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE exit_node SET endpoint = ?, updated_at = ?
+                WHERE id = ?
+            """, (new_endpoint, datetime.utcnow().isoformat(), peer.peer_id))
+
+        print(f"\n[OK] Endpoint changed to: {new_endpoint}")
+        input("\nPress Enter to continue...")
+        return True
+
+    elif action == "Edit WAN Interface":
+        # Exit node only
+        print(f"Current WAN interface: {peer.extras.get('wan_interface', 'eth0')}")
+        new_wan = input("New WAN interface: ").strip()
+
+        if not new_wan:
+            print("Cancelled - no interface entered.")
+            input("\nPress Enter to continue...")
+            return True
+
+        with db._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE exit_node SET wan_interface = ?, updated_at = ?
+                WHERE id = ?
+            """, (new_wan, datetime.utcnow().isoformat(), peer.peer_id))
+
+        print(f"\n[OK] WAN interface changed to: {new_wan}")
+        print("     Regenerate config to apply changes.")
+        input("\nPress Enter to continue...")
+        return True
+
+    elif action == "Remove Exit Node":
+        from v1.exit_node_ops import ExitNodeOps
+
+        ops = ExitNodeOps(db)
+        remotes_using = ops.list_remotes_using_exit_node(peer.peer_id)
+
+        if remotes_using:
+            print(f"\n[WARNING] {len(remotes_using)} remote(s) use this exit node:")
+            for r in remotes_using[:5]:
+                print(f"  - {r['hostname']}")
+            if len(remotes_using) > 5:
+                print(f"  ... and {len(remotes_using) - 5} more")
+            print("\nThese remotes will revert to split tunnel (no default route).")
+
+        confirm = input(f"\nRemove exit node '{peer.hostname}'? [y/N]: ").strip().lower()
+        if confirm != 'y':
+            print("Cancelled.")
+            input("\nPress Enter to continue...")
+            return True
+
+        hostname, affected = ops.remove_exit_node(peer.peer_id)
+        print(f"\n[OK] Exit node '{hostname}' removed.")
+        if affected > 0:
+            print(f"     {affected} remote(s) reverted to split tunnel.")
+        return False  # Go back to list
+
+    elif action == "Assign Exit Node":
+        from v1.exit_node_ops import ExitNodeOps
+
+        ops = ExitNodeOps(db)
+        exit_nodes = ops.list_exit_nodes()
+
+        if not exit_nodes:
+            print("\n[ERROR] No exit nodes configured.")
+            print("        Add an exit node first via the Exit Nodes menu.")
+            input("\nPress Enter to continue...")
+            return True
+
+        print("\nAvailable Exit Nodes:")
+        for en in exit_nodes:
+            print(f"  [{en.id:2}] {en.hostname} ({en.endpoint})")
+
+        try:
+            exit_id = int(input("\nExit Node ID: ").strip())
+        except ValueError:
+            print("Invalid ID.")
+            input("\nPress Enter to continue...")
+            return True
+
+        exit_node = ops.get_exit_node(exit_id)
+        if not exit_node:
+            print("Exit node not found.")
+            input("\nPress Enter to continue...")
+            return True
+
+        ops.assign_exit_to_remote(peer.peer_id, exit_id)
+        print(f"\n[OK] Assigned exit node '{exit_node.hostname}' to {peer.hostname}")
+        print("     Remote will now route internet traffic through this exit node.")
+        print("     Regenerate config to apply changes.")
+        input("\nPress Enter to continue...")
+        return True
+
+    elif action == "Clear Exit Node":
+        from v1.exit_node_ops import ExitNodeOps
+
+        ops = ExitNodeOps(db)
+
+        # Check if exit_only
+        if peer.extras.get('access_level') == 'exit_only':
+            print("\n[ERROR] Cannot clear exit node from exit_only remote.")
+            print("        Change access level first, or assign a different exit node.")
+            input("\nPress Enter to continue...")
+            return True
+
+        exit_info = peer.extras.get('exit_node_info')
+        if exit_info:
+            print(f"Current exit node: {exit_info['hostname']}")
+
+        confirm = input("Clear exit node assignment? [y/N]: ").strip().lower()
+        if confirm != 'y':
+            print("Cancelled.")
+            input("\nPress Enter to continue...")
+            return True
+
+        ops.clear_exit_from_remote(peer.peer_id)
+        print(f"\n[OK] Cleared exit node from {peer.hostname}")
+        print("     Remote will now use split tunnel (no default route).")
+        print("     Regenerate config to apply changes.")
         input("\nPress Enter to continue...")
         return True
 

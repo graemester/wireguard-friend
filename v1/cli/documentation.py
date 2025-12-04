@@ -264,6 +264,7 @@ TOPICS = [
     ("Adding & Managing Peers", "peers"),
     ("Key Rotation & Security", "security"),
     ("Deploying Configs", "deploy"),
+    ("Exit Nodes", "exitnodes"),
     ("Extramural (Commercial VPNs)", "extramural"),
     ("Troubleshooting", "troubleshooting"),
     ("Diagnostics", "sysinfo"),
@@ -688,6 +689,92 @@ If SSH deployment isn't suitable, manually copy configs:
 
   # For mobile devices
   # Show QR code or transfer .conf file
+""",
+
+    "exitnodes": """
+EXIT NODES
+==========
+
+Exit nodes provide internet egress for your VPN clients.
+Unlike the coordination server which manages the mesh, exit
+nodes only route internet traffic.
+
+
+CONCEPTS
+--------
+
+Split Tunnel (Default):
+  VPN traffic goes through coordination server.
+  Internet traffic uses device's normal connection.
+
+Exit Node Routing:
+  All internet traffic (0.0.0.0/0) routes through exit node.
+  Exit node performs NAT and forwards to internet.
+
+
+ACCESS LEVELS WITH EXIT NODES
+-----------------------------
+
+  full_access  - VPN + LAN + internet via exit (if assigned)
+  vpn_only     - VPN only + internet via exit (if assigned)
+  lan_only     - VPN + LAN + internet via exit (if assigned)
+  exit_only    - Internet via exit ONLY (no VPN mesh access)
+
+The 'exit_only' level is special - the remote has NO
+coordination server peer and only connects to the exit node.
+
+
+MANAGING EXIT NODES
+-------------------
+
+Via Main Menu:
+  Option 6: Exit Nodes menu
+
+  1. List Exit Nodes - View all exit nodes and their clients
+  2. Add Exit Node   - Create new exit node
+  3. Assign to Remote - Route remote's internet through exit
+  4. Clear from Remote - Revert to split tunnel
+  5. Remove Exit Node - Delete (remotes revert to split tunnel)
+
+Via Manage Peers:
+  Exit nodes appear in their own section.
+  Select one to view details and actions:
+
+  - Edit Hostname
+  - Rotate Keys
+  - View Key History
+  - Edit Endpoint
+  - Edit WAN Interface
+  - Generate Config
+  - Deploy Config
+  - Remove Exit Node
+
+
+DEPLOYMENT
+----------
+
+  # Generate all configs
+  wg-friend generate
+
+  # Deploy to all (includes exit nodes)
+  wg-friend deploy
+
+  # Deploy to specific exit node
+  wg-friend deploy --entity exit-us-west
+
+
+IP ALLOCATION
+-------------
+
+Exit nodes use VPN IPs in the 100-119 range:
+
+  .1        Coordination Server
+  .20-.29   Subnet Routers
+  .30-.99   Remote Clients
+  .100-.119 Exit Nodes
+
+
+See also: docs/EXIT_NODES.md for detailed documentation.
 """,
 
     "extramural": """

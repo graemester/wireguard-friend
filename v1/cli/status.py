@@ -594,6 +594,18 @@ def show_entity_history(db: WireGuardDBv2, db_path: str, entity_name: str):
             if row:
                 entity_info = dict(row)
 
+        # Check exit nodes
+        if not entity_info:
+            cursor.execute("""
+                SELECT 'exit_node' as type, id, hostname,
+                       current_public_key, permanent_guid, ipv4_address
+                FROM exit_node
+                WHERE hostname LIKE ? OR CAST(id AS TEXT) = ?
+            """, (f'%{entity_name}%', entity_name))
+            row = cursor.fetchone()
+            if row:
+                entity_info = dict(row)
+
         if not entity_info:
             print(f"\nEntity '{entity_name}' not found.")
             print("Try searching by hostname or ID number.")

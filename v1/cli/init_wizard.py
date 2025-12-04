@@ -177,6 +177,60 @@ def setup_remote(cs_config: Dict, remote_num: int) -> Dict:
     }
 
 
+def setup_exit_node(cs_config: Dict, exit_num: int) -> Dict:
+    """Set up an exit node (internet egress server)"""
+    print("\n" + "-" * 70)
+    print(f"EXIT NODE #{exit_num + 1} (Internet Egress Server)")
+    print("-" * 70)
+    print("Exit nodes route internet traffic for remotes that want to")
+    print("hide their IP or appear in a different geographic location.")
+    print()
+
+    hostname = prompt(f"Hostname (e.g., 'exit-us-west', 'exit-eu-central')")
+    endpoint = prompt("Public IP/domain (e.g., 'us-west.example.com')")
+
+    listen_port = prompt_int("Listen port", default=51820, min_val=1, max_val=65535)
+    wan_interface = prompt("WAN interface for NAT", default="eth0")
+
+    # Auto-assign VPN IP in 100-119 range
+    base_ip = cs_config['network_ipv4'].split('/')[0].rsplit('.', 1)[0]
+    exit_ip = f"{base_ip}.{100 + exit_num}/32"
+
+    ipv6_base = cs_config['network_ipv6'].split('/')[0].rstrip(':')
+    exit_ipv6 = f"{ipv6_base}::{100 + exit_num:x}/128"
+
+    print(f"\nAssigned VPN addresses:")
+    print(f"  IPv4: {exit_ip}")
+    print(f"  IPv6: {exit_ipv6}")
+
+    # SSH deployment info
+    ssh_host = None
+    ssh_user = None
+    ssh_port = 22
+    if prompt_yes_no("Configure SSH for deployment?", default=False):
+        ssh_host = prompt("SSH host")
+        ssh_user = prompt("SSH user", default="root")
+        ssh_port = prompt_int("SSH port", default=22, min_val=1, max_val=65535)
+
+    print("\nGenerating keypair...")
+    private_key, public_key = generate_keypair()
+
+    return {
+        'hostname': hostname,
+        'endpoint': endpoint,
+        'listen_port': listen_port,
+        'wan_interface': wan_interface,
+        'ipv4_address': exit_ip,
+        'ipv6_address': exit_ipv6,
+        'ssh_host': ssh_host,
+        'ssh_user': ssh_user,
+        'ssh_port': ssh_port,
+        'private_key': private_key,
+        'public_key': public_key,
+        'permanent_guid': public_key,
+    }
+
+
 def run_init_wizard(db_path: str) -> int:
     """Run the interactive first-run wizard"""
     print_header()
@@ -201,10 +255,23 @@ def run_init_wizard(db_path: str) -> int:
             router = setup_subnet_router(cs_config, i)
             routers.append(router)
 
-    # 3. Remote Clients
-    print("\n" + "─" * 70)
+    # 3. Exit Nodes (optional)
+    exit_nodes = []
+    print("\n" + "-" * 70)
+    print("EXIT NODES (Optional)")
+    print("-" * 70)
+    print("Exit nodes route internet traffic through a dedicated server")
+    print("for privacy or geo-location purposes.")
+    if prompt_yes_no("\nDo you want to add exit nodes?", default=False):
+        num_exits = prompt_int("How many exit nodes?", default=1, max_val=20)
+        for i in range(num_exits):
+            exit_node = setup_exit_node(cs_config, i)
+            exit_nodes.append(exit_node)
+
+    # 4. Remote Clients
+    print("\n" + "-" * 70)
     print("REMOTE CLIENTS (Phones, Laptops, etc.)")
-    print("─" * 70)
+    print("-" * 70)
     num_remotes = prompt_int("How many initial clients?", default=3, max_val=50)
 
     remotes = []
@@ -222,6 +289,10 @@ def run_init_wizard(db_path: str) -> int:
     print(f"\nSubnet Routers: {len(routers)}")
     for router in routers:
         print(f"  - {router['hostname']}: {router['lan_network']}")
+    if exit_nodes:
+        print(f"\nExit Nodes: {len(exit_nodes)}")
+        for exit_node in exit_nodes:
+            print(f"  - {exit_node['hostname']}: {exit_node['endpoint']}")
     print(f"\nRemote Clients: {len(remotes)}")
     for remote in remotes:
         print(f"  - {remote['hostname']} ({remote['device_type']})")
@@ -286,6 +357,30 @@ def run_init_wizard(db_path: str) -> int:
                 VALUES (?, ?)
             """, (router_id, router['lan_network']))
 
+        # Insert exit nodes
+        for exit_node in exit_nodes:
+            cursor.execute("""
+                INSERT INTO exit_node (
+                    cs_id, permanent_guid, current_public_key, hostname,
+                    endpoint, listen_port, ipv4_address, ipv6_address,
+                    private_key, wan_interface, ssh_host, ssh_user, ssh_port
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                cs_id,
+                exit_node['permanent_guid'],
+                exit_node['public_key'],
+                exit_node['hostname'],
+                exit_node['endpoint'],
+                exit_node['listen_port'],
+                exit_node['ipv4_address'],
+                exit_node['ipv6_address'],
+                exit_node['private_key'],
+                exit_node['wan_interface'],
+                exit_node.get('ssh_host'),
+                exit_node.get('ssh_user'),
+                exit_node.get('ssh_port', 22)
+            ))
+
         # Insert remotes
         for remote in remotes:
             cursor.execute("""
@@ -304,8 +399,9 @@ def run_init_wizard(db_path: str) -> int:
                 remote['access_level']
             ))
 
-    print(f"✓ Database created: {db_path}")
-    print(f"✓ Stored {1 + len(routers) + len(remotes)} entities")
+    total_entities = 1 + len(routers) + len(exit_nodes) + len(remotes)
+    print(f"  Database created: {db_path}")
+    print(f"  Stored {total_entities} entities")
     print()
     print("Next steps:")
     print(f"  1. Generate configs:  wg-friend generate --qr")

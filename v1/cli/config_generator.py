@@ -1,7 +1,13 @@
 """
-Config Generator - Database → WireGuard Configs
+Config Generator - Database -> WireGuard Configs
 
 Generates configs from v2 database using template patterns from v1.
+
+Supports:
+- Coordination server configs
+- Subnet router configs
+- Remote client configs (with optional exit node routing)
+- Exit node configs (internet egress servers)
 """
 
 import sys
@@ -35,6 +41,10 @@ def generate_cs_config(db: WireGuardDBv2) -> str:
         # Get all remotes
         cursor.execute("SELECT * FROM remote")
         remotes = [dict(row) for row in cursor.fetchall()]
+
+        # Get all exit nodes
+        cursor.execute("SELECT * FROM exit_node")
+        exit_nodes = [dict(row) for row in cursor.fetchall()]
 
         # Get command pairs
         cursor.execute("""
@@ -135,6 +145,20 @@ def generate_cs_config(db: WireGuardDBv2) -> str:
         if remote.get('persistent_keepalive'):
             lines.append(f"PersistentKeepalive = {remote['persistent_keepalive']}")
 
+    # Peers - Exit Nodes
+    for exit_node in exit_nodes:
+        lines.append("")
+        lines.append("[Peer]")
+        lines.append(f"# exit-node: {exit_node['hostname']}")
+        lines.append(f"PublicKey = {exit_node['current_public_key']}")
+
+        # AllowedIPs = just the exit node's VPN address
+        allowed_ips = [exit_node['ipv4_address'], exit_node['ipv6_address']]
+        lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
+
+        lines.append(f"Endpoint = {exit_node['endpoint']}:{exit_node['listen_port']}")
+        lines.append("PersistentKeepalive = 25")
+
     return '\n'.join(lines) + '\n'
 
 
@@ -207,7 +231,15 @@ def generate_router_config(db: WireGuardDBv2, router_id: int) -> str:
 
 
 def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
-    """Generate remote client config"""
+    """
+    Generate remote client config.
+
+    If the remote has an exit node assigned:
+    - For exit_only: Only the exit node peer (no CS)
+    - For other access levels: CS peer for VPN traffic + exit node peer for internet
+
+    If no exit node assigned: Standard split tunnel (only CS peer, no default route)
+    """
     with db._connection() as conn:
         cursor = conn.cursor()
 
@@ -225,7 +257,19 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
         """)
         advertised_networks = [row['network_cidr'] for row in cursor.fetchall()]
 
+        # Get exit node if assigned
+        exit_node = None
+        if remote.get('exit_node_id'):
+            cursor.execute("""
+                SELECT * FROM exit_node WHERE id = ?
+            """, (remote['exit_node_id'],))
+            exit_row = cursor.fetchone()
+            if exit_row:
+                exit_node = dict(exit_row)
+
     lines = []
+    access_level = remote.get('access_level', 'full_access')
+    is_exit_only = access_level == 'exit_only'
 
     # [Interface]
     lines.append("[Interface]")
@@ -234,40 +278,118 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
 
     if remote.get('dns_servers'):
         lines.append(f"DNS = {remote['dns_servers']}")
+    elif exit_node:
+        # Use public DNS when routing through exit node
+        lines.append("DNS = 1.1.1.1, 8.8.8.8")
 
     lines.append("MTU = 1280")
 
-    # [Peer] - CS
-    lines.append("")
-    lines.append("[Peer]")
-    lines.append(f"# coordination-server")
-    lines.append(f"PublicKey = {cs['current_public_key']}")
+    # [Peer] - CS (skip for exit_only)
+    if not is_exit_only:
+        lines.append("")
+        lines.append("[Peer]")
+        lines.append(f"# coordination-server")
+        lines.append(f"PublicKey = {cs['current_public_key']}")
 
-    # PresharedKey (symmetric - same key on both sides)
-    if remote.get('preshared_key'):
-        lines.append(f"PresharedKey = {remote['preshared_key']}")
+        # PresharedKey (symmetric - same key on both sides)
+        if remote.get('preshared_key'):
+            lines.append(f"PresharedKey = {remote['preshared_key']}")
 
-    lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
+        lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
 
-    # Use stored AllowedIPs if available, otherwise compute from access_level
-    stored_allowed_ips = remote.get('allowed_ips')
-    if stored_allowed_ips:
-        # Use exactly what was imported
-        lines.append(f"AllowedIPs = {stored_allowed_ips}")
-    else:
-        # Fallback: compute from access_level (legacy/new peers)
-        access = remote.get('access_level', 'full_access')
-        if access == 'full_access':
-            allowed_ips = [cs['network_ipv4'], cs['network_ipv6']] + advertised_networks
-        elif access == 'vpn_only':
-            allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
-        elif access == 'lan_only':
-            allowed_ips = advertised_networks if advertised_networks else [cs['network_ipv4'], cs['network_ipv6']]
+        # AllowedIPs for CS - VPN traffic only (not default route if using exit)
+        stored_allowed_ips = remote.get('allowed_ips')
+        if stored_allowed_ips and not exit_node:
+            # Use exactly what was imported (only if not using exit)
+            lines.append(f"AllowedIPs = {stored_allowed_ips}")
         else:
-            allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
+            # Compute from access_level
+            if access_level == 'full_access':
+                allowed_ips = [cs['network_ipv4'], cs['network_ipv6']] + advertised_networks
+            elif access_level == 'vpn_only':
+                allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
+            elif access_level == 'lan_only':
+                allowed_ips = advertised_networks if advertised_networks else [cs['network_ipv4'], cs['network_ipv6']]
+            else:
+                allowed_ips = [cs['network_ipv4'], cs['network_ipv6']]
 
-        lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
-    lines.append(f"PersistentKeepalive = 25")
+            lines.append(f"AllowedIPs = {', '.join(allowed_ips)}")
+        lines.append(f"PersistentKeepalive = 25")
+
+    # [Peer] - Exit Node (if assigned)
+    if exit_node:
+        lines.append("")
+        lines.append("[Peer]")
+        lines.append(f"# exit-node: {exit_node['hostname']}")
+        lines.append(f"PublicKey = {exit_node['current_public_key']}")
+        lines.append(f"Endpoint = {exit_node['endpoint']}:{exit_node['listen_port']}")
+
+        # Exit node gets default route (all internet traffic)
+        lines.append("AllowedIPs = 0.0.0.0/0, ::/0")
+        lines.append("PersistentKeepalive = 25")
+
+    return '\n'.join(lines) + '\n'
+
+
+def generate_exit_node_config(db: WireGuardDBv2, exit_node_id: int) -> str:
+    """
+    Generate exit node config.
+
+    Exit node config includes:
+    - Interface with NAT/masquerading for internet egress
+    - Peer entries for all remotes using this exit node
+    """
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        # Get this exit node
+        cursor.execute("SELECT * FROM exit_node WHERE id = ?", (exit_node_id,))
+        exit_node = dict(cursor.fetchone())
+
+        # Get all remotes using this exit node
+        cursor.execute("""
+            SELECT id, hostname, ipv4_address, ipv6_address, current_public_key, preshared_key
+            FROM remote
+            WHERE exit_node_id = ?
+            ORDER BY hostname
+        """, (exit_node_id,))
+        remotes = [dict(row) for row in cursor.fetchall()]
+
+    lines = []
+
+    # [Interface]
+    lines.append("[Interface]")
+    lines.append(f"Address = {exit_node['ipv4_address']}, {exit_node['ipv6_address']}")
+    lines.append(f"PrivateKey = {exit_node['private_key']}")
+    lines.append(f"ListenPort = {exit_node['listen_port']}")
+
+    # PostUp/PostDown for NAT and IP forwarding
+    wan = exit_node.get('wan_interface', 'eth0')
+    lines.append("")
+    lines.append("# Enable IP forwarding and NAT for internet egress")
+    lines.append(f"PostUp = sysctl -w net.ipv4.ip_forward=1")
+    lines.append(f"PostUp = sysctl -w net.ipv6.conf.all.forwarding=1")
+    lines.append(f"PostUp = iptables -A FORWARD -i %i -j ACCEPT")
+    lines.append(f"PostUp = iptables -t nat -A POSTROUTING -o {wan} -j MASQUERADE")
+    lines.append(f"PostUp = ip6tables -A FORWARD -i %i -j ACCEPT")
+    lines.append(f"PostUp = ip6tables -t nat -A POSTROUTING -o {wan} -j MASQUERADE")
+    lines.append(f"PostDown = iptables -D FORWARD -i %i -j ACCEPT")
+    lines.append(f"PostDown = iptables -t nat -D POSTROUTING -o {wan} -j MASQUERADE")
+    lines.append(f"PostDown = ip6tables -D FORWARD -i %i -j ACCEPT")
+    lines.append(f"PostDown = ip6tables -t nat -D POSTROUTING -o {wan} -j MASQUERADE")
+
+    # [Peer] entries for each remote using this exit
+    for remote in remotes:
+        lines.append("")
+        lines.append("[Peer]")
+        lines.append(f"# {remote['hostname']}")
+        lines.append(f"PublicKey = {remote['current_public_key']}")
+
+        if remote.get('preshared_key'):
+            lines.append(f"PresharedKey = {remote['preshared_key']}")
+
+        # AllowedIPs = just this remote's VPN addresses
+        lines.append(f"AllowedIPs = {remote['ipv4_address']}, {remote['ipv6_address']}")
 
     return '\n'.join(lines) + '\n'
 
@@ -375,6 +497,27 @@ def generate_configs(args) -> int:
             print("\nProvisional Remotes (in CS config, no private key):")
             for remote_id, hostname in provisional_remotes:
                 print(f"  ! {hostname} - rotate keys to generate config")
+
+        # Generate exit node configs
+        cursor.execute("SELECT id, hostname FROM exit_node")
+        exit_nodes = cursor.fetchall()
+
+        if exit_nodes:
+            print("\nExit Nodes:")
+            for exit_id, hostname in exit_nodes:
+                exit_config = generate_exit_node_config(db, exit_id)
+                exit_file = output_dir / f"{hostname}.conf"
+                if dry_run:
+                    print(f"  [DRY RUN] Would write: {exit_file}")
+                else:
+                    exit_file.write_text(exit_config)
+                    exit_file.chmod(0o600)
+                    # Count remotes using this exit
+                    cursor.execute("""
+                        SELECT COUNT(*) FROM remote WHERE exit_node_id = ?
+                    """, (exit_id,))
+                    remote_count = cursor.fetchone()[0]
+                    print(f"  ✓ {exit_file} ({remote_count} clients)")
 
     print()
     if dry_run:

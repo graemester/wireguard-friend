@@ -115,6 +115,44 @@ class WireGuardDBv2:
                 )
             """)
 
+            # ===== EXIT NODES =====
+            # Dedicated servers for internet egress (separate from coordination server)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS exit_node (
+                    id INTEGER PRIMARY KEY,
+                    cs_id INTEGER NOT NULL,
+
+                    -- Identity (triple-purpose public key)
+                    permanent_guid TEXT NOT NULL UNIQUE,  -- First public key ever seen (immutable)
+                    current_public_key TEXT NOT NULL,     -- Active key (changes on rotation)
+                    hostname TEXT NOT NULL,               -- e.g., 'exit-us-west', 'exit-eu-central'
+
+                    -- Network config
+                    endpoint TEXT NOT NULL,               -- Public IP/domain (e.g., 'us-west.example.com')
+                    listen_port INTEGER DEFAULT 51820,
+                    ipv4_address TEXT NOT NULL,           -- VPN address (e.g., 10.66.0.100/32)
+                    ipv6_address TEXT NOT NULL,           -- VPN address (e.g., fd66::100/128)
+
+                    -- Keys
+                    private_key TEXT NOT NULL,
+
+                    -- WAN interface for NAT (e.g., 'eth0')
+                    wan_interface TEXT DEFAULT 'eth0',
+
+                    -- SSH deployment
+                    ssh_host TEXT,
+                    ssh_user TEXT,
+                    ssh_port INTEGER DEFAULT 22,
+
+                    -- Metadata
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                    FOREIGN KEY (cs_id) REFERENCES coordination_server(id) ON DELETE CASCADE
+                )
+            """)
+
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS remote (
                     id INTEGER PRIMARY KEY,
@@ -136,14 +174,18 @@ class WireGuardDBv2:
                     preshared_key TEXT,
 
                     -- Access control
-                    access_level TEXT NOT NULL,  -- 'full_access', 'vpn_only', 'lan_only', 'custom'
+                    access_level TEXT NOT NULL,  -- 'full_access', 'vpn_only', 'lan_only', 'custom', 'exit_only'
                     allowed_ips TEXT,            -- Stored AllowedIPs from config (e.g., "10.66.0.0/24, 192.168.1.0/24")
+
+                    -- Exit node routing (optional - NULL means split tunnel/no exit)
+                    exit_node_id INTEGER,        -- Foreign key to exit_node table
 
                     -- Metadata
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 
-                    FOREIGN KEY (cs_id) REFERENCES coordination_server(id) ON DELETE CASCADE
+                    FOREIGN KEY (cs_id) REFERENCES coordination_server(id) ON DELETE CASCADE,
+                    FOREIGN KEY (exit_node_id) REFERENCES exit_node(id) ON DELETE SET NULL
                 )
             """)
 
@@ -313,6 +355,8 @@ class WireGuardDBv2:
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cs_permanent_guid ON coordination_server(permanent_guid)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_router_permanent_guid ON subnet_router(permanent_guid)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_remote_permanent_guid ON remote(permanent_guid)")
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_exit_node_permanent_guid ON exit_node(permanent_guid)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remote_exit_node ON remote(exit_node_id)")
 
             logger.info(f"V2 semantic schema initialized at {self.db_path}")
 
@@ -458,6 +502,15 @@ class WireGuardDBv2:
                     ADD COLUMN allowed_ips TEXT
                 """)
                 logger.info("Added allowed_ips to remote table")
+
+            # Migration: Add exit_node_id to remote table
+            if 'exit_node_id' not in columns:
+                cursor.execute("""
+                    ALTER TABLE remote
+                    ADD COLUMN exit_node_id INTEGER
+                    REFERENCES exit_node(id) ON DELETE SET NULL
+                """)
+                logger.info("Added exit_node_id to remote table")
 
         # EXTRAMURAL STATE TRACKING
         cursor.execute("""

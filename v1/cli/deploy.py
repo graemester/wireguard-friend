@@ -363,7 +363,13 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
             hostname, endpoint = row
             config_file = output_dir / 'coordination.conf'
             if endpoint and endpoint != 'UNKNOWN':
-                deployments.append(('Coordination Server', hostname, config_file, endpoint))
+                deployments.append({
+                    'entity_type': 'Coordination Server',
+                    'hostname': hostname,
+                    'config_file': config_file,
+                    'endpoint': endpoint,
+                    'user': user  # Use command-line user
+                })
             else:
                 print(f"\nWARNING:  Skipping {hostname}: No endpoint configured")
 
@@ -376,11 +382,36 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
         """)
         for hostname, endpoint in cursor.fetchall():
             config_file = output_dir / f'{hostname}.conf'
-            deployments.append(('Subnet Router', hostname, config_file, endpoint))
+            deployments.append({
+                'entity_type': 'Subnet Router',
+                'hostname': hostname,
+                'config_file': config_file,
+                'endpoint': endpoint,
+                'user': user  # Use command-line user
+            })
+
+        # Exit Nodes
+        cursor.execute("""
+            SELECT hostname, ssh_host, ssh_user, ssh_port
+            FROM exit_node
+            WHERE ssh_host IS NOT NULL AND ssh_host != ''
+            ORDER BY hostname
+        """)
+        for hostname, ssh_host, ssh_user, ssh_port in cursor.fetchall():
+            config_file = output_dir / f'{hostname}.conf'
+            # Use ssh_host:ssh_port as the endpoint for SSH
+            ssh_endpoint = f"{ssh_host}:{ssh_port}" if ssh_port and ssh_port != 22 else ssh_host
+            deployments.append({
+                'entity_type': 'Exit Node',
+                'hostname': hostname,
+                'config_file': config_file,
+                'endpoint': ssh_endpoint,
+                'user': ssh_user or 'root'  # Use DB-stored user
+            })
 
         # Note: Remotes (clients) don't have endpoints - they're behind NAT
         # and initiate connections TO the coordination server, not vice versa.
-        # Deployment targets are only: coordination server and subnet routers.
+        # Deployment targets are: coordination server, subnet routers, exit nodes.
 
     if not deployments:
         print("\nWARNING:  No deployable hosts found (endpoints not configured)")
@@ -388,8 +419,8 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
 
     # Summary
     print(f"\nFound {len(deployments)} deployable host(s):")
-    for entity_type, hostname, config_file, endpoint in deployments:
-        print(f"  - {hostname:30} ({entity_type:20}) → {endpoint}")
+    for d in deployments:
+        print(f"  - {d['hostname']:30} ({d['entity_type']:20}) → {d['endpoint']}")
 
     print()
     if dry_run:
@@ -414,13 +445,13 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
         ) as progress:
             task = progress.add_task("[cyan]Deploying configs...", total=len(deployments))
 
-            for entity_type, hostname, config_file, endpoint in deployments:
-                progress.update(task, description=f"[cyan]Deploying to {hostname}...")
+            for d in deployments:
+                progress.update(task, description=f"[cyan]Deploying to {d['hostname']}...")
                 success = deploy_to_host(
-                    hostname=hostname,
-                    config_file=config_file,
-                    endpoint=endpoint,
-                    user=user,
+                    hostname=d['hostname'],
+                    config_file=d['config_file'],
+                    endpoint=d['endpoint'],
+                    user=d['user'],
                     restart=restart,
                     dry_run=dry_run
                 )
@@ -429,12 +460,12 @@ def deploy_all(db: WireGuardDBv2, output_dir: Path, user: str = 'root', restart:
                 progress.advance(task)
     else:
         # No progress bar for single deployment or dry run
-        for entity_type, hostname, config_file, endpoint in deployments:
+        for d in deployments:
             success = deploy_to_host(
-                hostname=hostname,
-                config_file=config_file,
-                endpoint=endpoint,
-                user=user,
+                hostname=d['hostname'],
+                config_file=d['config_file'],
+                endpoint=d['endpoint'],
+                user=d['user'],
                 restart=restart,
                 dry_run=dry_run
             )
@@ -545,6 +576,34 @@ def deploy_single(
                 config_file=config_file,
                 endpoint=endpoint,
                 user=user,
+                restart=restart,
+                dry_run=dry_run
+            )
+            return 0 if success else 1
+
+        # Try exit node
+        cursor.execute("""
+            SELECT hostname, ssh_host, ssh_user, ssh_port
+            FROM exit_node
+            WHERE hostname = ?
+        """, (target,))
+        row = cursor.fetchone()
+        if row:
+            hostname, ssh_host, ssh_user, ssh_port = row
+            config_file = output_dir / f'{hostname}.conf'
+            if not ssh_host:
+                print(f"Error: {hostname} has no SSH host configured")
+                return 1
+
+            # Use ssh_host:ssh_port as endpoint for SSH
+            ssh_endpoint = f"{ssh_host}:{ssh_port}" if ssh_port and ssh_port != 22 else ssh_host
+            exit_user = ssh_user or 'root'
+
+            success = deploy_to_host(
+                hostname=hostname,
+                config_file=config_file,
+                endpoint=ssh_endpoint,
+                user=exit_user,
                 restart=restart,
                 dry_run=dry_run
             )

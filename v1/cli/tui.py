@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # Version info (keep in sync with wg-friend)
-VERSION = "1.0.7"
-BUILD_NAME = "kestrel"  # Alternate Screen + Keypress Navigation
+VERSION = "1.1.0"
+BUILD_NAME = "merlin"  # Exit Node Support
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -31,6 +31,7 @@ from v1.cli.peer_manager import add_remote, add_router, list_peers, rotate_keys,
 from v1.cli.documentation import documentation_menu
 from v1.cli.status import show_network_overview, show_recent_rotations, show_state_history, show_entity_history
 from v1.cli.manage_peers import manage_peers_menu
+from v1.exit_node_ops import ExitNodeOps, record_add_exit_node, record_remove_exit_node, record_assign_exit_node, record_clear_exit_node
 
 
 # =============================================================================
@@ -224,6 +225,12 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         True to continue, False to exit
     """
     clear_screen()
+
+    # Check for exit nodes to show in menu
+    ops = ExitNodeOps(db)
+    exit_nodes = ops.list_exit_nodes()
+    exit_hint = f"manage {len(exit_nodes)} exit nodes" if exit_nodes else "add internet egress"
+
     print_menu(
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
@@ -232,10 +239,10 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
             "Remove Peer [revoke a device's access]",
             "Rotate Keys [regenerate security keys]",
             "History [view change timeline]",
+            f"Exit Nodes [{exit_hint}]",
             "Extramural [manage commercial VPN configs]",
             "Generate Configs [create .conf files from database]",
             "Deploy Configs [push configs via SSH]",
-            "Documentation [built-in help]",
         ]
     )
 
@@ -271,20 +278,20 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
         history_menu(db, db_path)
 
     elif choice == 6:
+        # Exit Nodes
+        exit_nodes_menu(db, db_path)
+
+    elif choice == 7:
         # Extramural configs
         extramural_menu(db_path)
 
-    elif choice == 7:
+    elif choice == 8:
         # Generate Configs
         generate_configs_menu(db, db_path)
 
-    elif choice == 8:
+    elif choice == 9:
         # Deploy Configs
         deploy_configs_menu(db, db_path)
-
-    elif choice == 9:
-        # Documentation
-        documentation_menu()
 
     return True
 
@@ -297,20 +304,21 @@ def peer_type_menu(db: WireGuardDBv2):
         [
             "Add Remote Client (phone, laptop, etc.)",
             "Add Subnet Router (LAN gateway)",
+            "Add Exit Node (internet egress)",
             "Back to Main Menu",
         ],
         include_quit=False
     )
 
-    choice = get_keypress_choice(3, allow_quit=False)
-    if choice is None or choice == 3 or choice == -1:
+    choice = get_keypress_choice(4, allow_quit=False)
+    if choice is None or choice == 4 or choice == -1:
         return
 
     if choice == 1:
         # Add remote
         try:
             add_remote(db)
-            print("\n✓ Remote added")
+            print("\n  Remote added")
             print("  Run 'wg-friend generate' to create updated configs.")
             print("\nPress any key..."); getch()
         except Exception as e:
@@ -321,12 +329,16 @@ def peer_type_menu(db: WireGuardDBv2):
         # Add router
         try:
             add_router(db)
-            print("\n✓ Router added")
+            print("\n  Router added")
             print("  Run 'wg-friend generate' to create updated configs.")
             print("\nPress any key..."); getch()
         except Exception as e:
             print(f"\nError adding router: {e}")
             print("\nPress any key..."); getch()
+
+    elif choice == 3:
+        # Add exit node - redirect to exit node menu
+        exit_node_add(ExitNodeOps(db), db, 'wireguard.db')
 
 
 def remove_peer_menu(db: WireGuardDBv2):
@@ -376,15 +388,24 @@ def rotate_keys_menu(db: WireGuardDBv2):
     # List peers first
     list_peers(db)
 
+    # Also show exit nodes
+    from v1.exit_node_ops import ExitNodeOps
+    exit_ops = ExitNodeOps(db)
+    exit_nodes = exit_ops.list_exit_nodes()
+    if exit_nodes:
+        print("\n[EXIT NODES]")
+        for en in exit_nodes:
+            print(f"  [{en.id:2}] {en.hostname} ({en.endpoint})")
+
     print("\n" + "─" * 70)
     print("ROTATE KEYS")
     print("─" * 70)
 
-    peer_type = input("Peer type [cs/router/remote] (or 'q' to cancel): ").strip().lower()
+    peer_type = input("Peer type [cs/router/remote/exit_node] (or 'q' to cancel): ").strip().lower()
     if peer_type in ('q', 'quit', 'cancel', ''):
         return
 
-    if peer_type not in ('cs', 'router', 'remote'):
+    if peer_type not in ('cs', 'router', 'remote', 'exit_node'):
         print("Invalid peer type.")
         print("\nPress any key..."); getch()
         return
@@ -482,6 +503,477 @@ def peer_history_menu(db: WireGuardDBv2, db_path: str):
         return
 
     show_entity_history(db, db_path, peer_name)
+    print("\nPress any key..."); getch()
+
+
+# =============================================================================
+# EXIT NODE MANAGEMENT
+# =============================================================================
+
+def exit_nodes_menu(db: WireGuardDBv2, db_path: str):
+    """Exit nodes menu - manage internet egress servers"""
+    ops = ExitNodeOps(db)
+
+    while True:
+        clear_screen()
+        exit_nodes = ops.list_exit_nodes()
+
+        print_menu(
+            "EXIT NODES - Internet Egress Servers",
+            [
+                f"List Exit Nodes [{len(exit_nodes)} configured]",
+                "Add Exit Node",
+                "Assign Exit to Remote",
+                "Clear Exit from Remote",
+                "Remove Exit Node",
+                "Back to Main Menu",
+            ],
+            include_quit=False
+        )
+
+        choice = get_keypress_choice(6, allow_quit=False)
+
+        if choice is None or choice == 6:
+            return
+
+        if choice == -1:
+            continue  # Invalid key, redraw
+
+        if choice == 1:
+            # List exit nodes
+            exit_nodes_list(ops, db)
+
+        elif choice == 2:
+            # Add exit node
+            exit_node_add(ops, db, db_path)
+
+        elif choice == 3:
+            # Assign exit to remote
+            exit_node_assign(ops, db, db_path)
+
+        elif choice == 4:
+            # Clear exit from remote
+            exit_node_clear(ops, db, db_path)
+
+        elif choice == 5:
+            # Remove exit node
+            exit_node_remove(ops, db, db_path)
+
+
+def exit_nodes_list(ops: ExitNodeOps, db: WireGuardDBv2):
+    """List all exit nodes with details"""
+    clear_screen()
+    exit_nodes = ops.list_exit_nodes()
+
+    if not exit_nodes:
+        print("\n  No exit nodes configured.")
+        print("\n  Exit nodes allow remotes to route internet traffic")
+        print("  through a dedicated VPS/server for privacy or geo-location.")
+        print("\n  Use 'Add Exit Node' to configure one.")
+        print("\nPress any key..."); getch()
+        return
+
+    # Build display
+    if RICH_AVAILABLE:
+        from rich.table import Table
+
+        table = Table(title="Exit Nodes", box=box.ROUNDED)
+        table.add_column("ID", style="cyan", width=4)
+        table.add_column("Hostname", style="bold")
+        table.add_column("Endpoint")
+        table.add_column("VPN IP")
+        table.add_column("Clients", justify="right")
+
+        for exit_node in exit_nodes:
+            remotes = ops.list_remotes_using_exit_node(exit_node.id)
+            table.add_row(
+                str(exit_node.id),
+                exit_node.hostname,
+                f"{exit_node.endpoint}:{exit_node.listen_port}",
+                exit_node.ipv4_address.split('/')[0],
+                str(len(remotes))
+            )
+
+        console.print()
+        console.print(table)
+        console.print()
+    else:
+        print("\n" + "=" * 70)
+        print("EXIT NODES")
+        print("=" * 70)
+        for exit_node in exit_nodes:
+            remotes = ops.list_remotes_using_exit_node(exit_node.id)
+            print(f"\n  [{exit_node.id}] {exit_node.hostname}")
+            print(f"      Endpoint: {exit_node.endpoint}:{exit_node.listen_port}")
+            print(f"      VPN IP: {exit_node.ipv4_address}")
+            print(f"      Clients: {len(remotes)}")
+        print()
+
+    # Show remotes using exit nodes
+    print("─" * 70)
+    print("REMOTES USING EXIT NODES:")
+    print("─" * 70)
+
+    any_using_exit = False
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.hostname, r.access_level, e.hostname as exit_hostname
+            FROM remote r
+            JOIN exit_node e ON r.exit_node_id = e.id
+            ORDER BY e.hostname, r.hostname
+        """)
+        rows = cursor.fetchall()
+
+        if rows:
+            any_using_exit = True
+            for remote_hostname, access, exit_hostname in rows:
+                access_indicator = "[exit_only]" if access == 'exit_only' else ""
+                print(f"  {remote_hostname:30} -> {exit_hostname} {access_indicator}")
+        else:
+            print("  (none)")
+
+    print("\nPress any key..."); getch()
+
+
+def exit_node_add(ops: ExitNodeOps, db: WireGuardDBv2, db_path: str):
+    """Add a new exit node"""
+    clear_screen()
+    print("\n" + "─" * 70)
+    print("ADD EXIT NODE")
+    print("─" * 70)
+    print()
+    print("Exit nodes route internet traffic for remotes that want to")
+    print("hide their IP or appear in a different geographic location.")
+    print()
+
+    # Get details
+    hostname = input("Hostname (e.g., 'exit-us-west'): ").strip()
+    if not hostname:
+        print("Cancelled.")
+        print("\nPress any key..."); getch()
+        return
+
+    endpoint = input("Public IP/domain (e.g., 'us-west.example.com'): ").strip()
+    if not endpoint:
+        print("Endpoint required.")
+        print("\nPress any key..."); getch()
+        return
+
+    listen_port_str = input("Listen port [51820]: ").strip()
+    listen_port = int(listen_port_str) if listen_port_str else 51820
+
+    wan_interface = input("WAN interface for NAT [eth0]: ").strip() or 'eth0'
+
+    # Auto-assign VPN IP
+    try:
+        ipv4_address, ipv6_address = ops.get_next_exit_node_ip()
+        print(f"\nAssigned VPN addresses:")
+        print(f"  IPv4: {ipv4_address}")
+        print(f"  IPv6: {ipv6_address}")
+    except ValueError as e:
+        print(f"\nError: {e}")
+        print("\nPress any key..."); getch()
+        return
+
+    # SSH deployment info
+    print()
+    ssh_host = input("SSH host for deployment (optional, Enter to skip): ").strip() or None
+    ssh_user = None
+    ssh_port = 22
+    if ssh_host:
+        ssh_user = input("SSH user [root]: ").strip() or 'root'
+        ssh_port_str = input("SSH port [22]: ").strip()
+        ssh_port = int(ssh_port_str) if ssh_port_str else 22
+
+    # Confirm
+    print()
+    print("─" * 70)
+    print("Summary:")
+    print(f"  Hostname: {hostname}")
+    print(f"  Endpoint: {endpoint}:{listen_port}")
+    print(f"  VPN IP: {ipv4_address}")
+    print(f"  WAN Interface: {wan_interface}")
+    if ssh_host:
+        print(f"  SSH: {ssh_user}@{ssh_host}:{ssh_port}")
+    print("─" * 70)
+    print()
+
+    confirm = input("Add this exit node? [Y/n]: ").strip().lower()
+    if confirm in ('n', 'no'):
+        print("Cancelled.")
+        print("\nPress any key..."); getch()
+        return
+
+    try:
+        exit_id = ops.add_exit_node(
+            hostname=hostname,
+            endpoint=endpoint,
+            ipv4_address=ipv4_address,
+            ipv6_address=ipv6_address,
+            listen_port=listen_port,
+            wan_interface=wan_interface,
+            ssh_host=ssh_host,
+            ssh_user=ssh_user,
+            ssh_port=ssh_port
+        )
+
+        # Get the exit node for state recording
+        exit_node = ops.get_exit_node(exit_id)
+        state_id = record_add_exit_node(db_path, db, hostname, exit_node.current_public_key)
+
+        # Add to peer order (unified sequence across all peer types)
+        with db._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM coordination_server LIMIT 1")
+            cs_row = cursor.fetchone()
+            if cs_row:
+                cs_id = cs_row[0]
+                cursor.execute("""
+                    SELECT COALESCE(MAX(display_order), 0) + 1
+                    FROM cs_peer_order WHERE cs_id = ?
+                """, (cs_id,))
+                next_order = cursor.fetchone()[0]
+                cursor.execute("""
+                    INSERT INTO cs_peer_order (cs_id, entity_type, entity_id, display_order)
+                    VALUES (?, 'exit_node', ?, ?)
+                """, (cs_id, exit_id, next_order))
+
+        print(f"\n✓ Added exit node: {hostname} (ID: {exit_id})")
+        print(f"✓ State snapshot recorded (State #{state_id})")
+        print()
+        print("Next steps:")
+        print("  1. Assign remotes to use this exit: option 3 in Exit Nodes menu")
+        print("  2. Generate configs: wg-friend generate")
+        print("  3. Deploy to exit node: wg-friend deploy")
+
+    except Exception as e:
+        print(f"\nError: {e}")
+
+    print("\nPress any key..."); getch()
+
+
+def exit_node_assign(ops: ExitNodeOps, db: WireGuardDBv2, db_path: str):
+    """Assign an exit node to a remote"""
+    clear_screen()
+
+    exit_nodes = ops.list_exit_nodes()
+    if not exit_nodes:
+        print("\n  No exit nodes configured. Add one first.")
+        print("\nPress any key..."); getch()
+        return
+
+    # List remotes
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.id, r.hostname, r.access_level, e.hostname as current_exit
+            FROM remote r
+            LEFT JOIN exit_node e ON r.exit_node_id = e.id
+            ORDER BY r.hostname
+        """)
+        remotes = cursor.fetchall()
+
+    if not remotes:
+        print("\n  No remotes found. Add remotes first.")
+        print("\nPress any key..."); getch()
+        return
+
+    print("\n" + "─" * 70)
+    print("ASSIGN EXIT NODE TO REMOTE")
+    print("─" * 70)
+    print("\nRemotes:")
+    for remote_id, hostname, access, current_exit in remotes:
+        exit_info = f"-> {current_exit}" if current_exit else "(split tunnel)"
+        print(f"  [{remote_id:2}] {hostname:30} {exit_info}")
+
+    print("\nExit Nodes:")
+    for exit_node in exit_nodes:
+        print(f"  [{exit_node.id:2}] {exit_node.hostname}")
+
+    print()
+    try:
+        remote_id = int(input("Remote ID: ").strip())
+        exit_id = int(input("Exit Node ID: ").strip())
+    except ValueError:
+        print("Invalid input.")
+        print("\nPress any key..."); getch()
+        return
+
+    # Get hostnames for state recording
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT hostname FROM remote WHERE id = ?", (remote_id,))
+        row = cursor.fetchone()
+        remote_hostname = row[0] if row else f"remote-{remote_id}"
+
+    exit_node = ops.get_exit_node(exit_id)
+    if not exit_node:
+        print(f"Exit node ID {exit_id} not found.")
+        print("\nPress any key..."); getch()
+        return
+
+    try:
+        ops.assign_exit_to_remote(remote_id, exit_id)
+        state_id = record_assign_exit_node(db_path, db, remote_hostname, exit_node.hostname)
+
+        print(f"\n✓ Assigned {exit_node.hostname} to {remote_hostname}")
+        print(f"✓ State snapshot recorded (State #{state_id})")
+        print()
+        print("Next steps:")
+        print("  1. Generate configs: wg-friend generate")
+        print("  2. Deploy: wg-friend deploy")
+
+    except Exception as e:
+        print(f"\nError: {e}")
+
+    print("\nPress any key..."); getch()
+
+
+def exit_node_clear(ops: ExitNodeOps, db: WireGuardDBv2, db_path: str):
+    """Clear exit node from a remote (revert to split tunnel)"""
+    clear_screen()
+
+    # List remotes using exit nodes
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.id, r.hostname, r.access_level, e.hostname as exit_hostname
+            FROM remote r
+            JOIN exit_node e ON r.exit_node_id = e.id
+            ORDER BY r.hostname
+        """)
+        remotes = cursor.fetchall()
+
+    if not remotes:
+        print("\n  No remotes are using exit nodes.")
+        print("\nPress any key..."); getch()
+        return
+
+    print("\n" + "─" * 70)
+    print("CLEAR EXIT NODE FROM REMOTE")
+    print("─" * 70)
+    print("\nRemotes using exit nodes:")
+    for remote_id, hostname, access, exit_hostname in remotes:
+        access_warning = " [exit_only - must change access level first]" if access == 'exit_only' else ""
+        print(f"  [{remote_id:2}] {hostname:30} -> {exit_hostname}{access_warning}")
+
+    print()
+    try:
+        remote_id = int(input("Remote ID to clear: ").strip())
+    except ValueError:
+        print("Invalid input.")
+        print("\nPress any key..."); getch()
+        return
+
+    # Find the remote in our list
+    remote_info = None
+    for r in remotes:
+        if r[0] == remote_id:
+            remote_info = r
+            break
+
+    if not remote_info:
+        print(f"Remote ID {remote_id} is not using an exit node.")
+        print("\nPress any key..."); getch()
+        return
+
+    _, remote_hostname, access_level, exit_hostname = remote_info
+
+    if access_level == 'exit_only':
+        print(f"\n✗ Cannot clear exit node from exit_only remote.")
+        print("  Change access level first using Manage Peers.")
+        print("\nPress any key..."); getch()
+        return
+
+    try:
+        ops.clear_exit_from_remote(remote_id)
+        state_id = record_clear_exit_node(db_path, db, remote_hostname, exit_hostname)
+
+        print(f"\n✓ Cleared exit node from {remote_hostname}")
+        print(f"  (was using {exit_hostname}, now split tunnel)")
+        print(f"✓ State snapshot recorded (State #{state_id})")
+        print()
+        print("Next steps:")
+        print("  1. Generate configs: wg-friend generate")
+        print("  2. Deploy: wg-friend deploy")
+
+    except Exception as e:
+        print(f"\nError: {e}")
+
+    print("\nPress any key..."); getch()
+
+
+def exit_node_remove(ops: ExitNodeOps, db: WireGuardDBv2, db_path: str):
+    """Remove an exit node"""
+    clear_screen()
+
+    exit_nodes = ops.list_exit_nodes()
+    if not exit_nodes:
+        print("\n  No exit nodes configured.")
+        print("\nPress any key..."); getch()
+        return
+
+    print("\n" + "─" * 70)
+    print("REMOVE EXIT NODE")
+    print("─" * 70)
+    print("\nExit Nodes:")
+    for exit_node in exit_nodes:
+        remotes = ops.list_remotes_using_exit_node(exit_node.id)
+        client_info = f" ({len(remotes)} clients will revert to split tunnel)" if remotes else ""
+        print(f"  [{exit_node.id:2}] {exit_node.hostname}{client_info}")
+
+    print()
+    try:
+        exit_id = int(input("Exit Node ID to remove: ").strip())
+    except ValueError:
+        print("Invalid input.")
+        print("\nPress any key..."); getch()
+        return
+
+    exit_node = ops.get_exit_node(exit_id)
+    if not exit_node:
+        print(f"Exit node ID {exit_id} not found.")
+        print("\nPress any key..."); getch()
+        return
+
+    remotes = ops.list_remotes_using_exit_node(exit_id)
+
+    print()
+    print("─" * 70)
+    print(f"Remove exit node: {exit_node.hostname}")
+    if remotes:
+        print(f"\nWARNING: {len(remotes)} remotes will revert to split tunnel:")
+        for r in remotes:
+            print(f"  - {r['hostname']}")
+    print("─" * 70)
+    print()
+
+    # Require typing hostname to confirm
+    print(f"To confirm, type the hostname: {exit_node.hostname}")
+    confirm = input("Hostname: ").strip()
+
+    if confirm != exit_node.hostname:
+        print("\nHostname didn't match. Removal cancelled.")
+        print("\nPress any key..."); getch()
+        return
+
+    try:
+        hostname, affected_count = ops.remove_exit_node(exit_id)
+        state_id = record_remove_exit_node(db_path, db, hostname, exit_node.current_public_key, affected_count)
+
+        print(f"\n✓ Removed exit node: {hostname}")
+        if affected_count > 0:
+            print(f"  {affected_count} remotes reverted to split tunnel")
+        print(f"✓ State snapshot recorded (State #{state_id})")
+        print()
+        print("Next steps:")
+        print("  1. Generate configs: wg-friend generate")
+        print("  2. Deploy: wg-friend deploy")
+
+    except Exception as e:
+        print(f"\nError: {e}")
+
     print("\nPress any key..."); getch()
 
 

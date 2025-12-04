@@ -812,6 +812,159 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
     return remote_id
 
 
+def import_exit_node(config_path: Path, db: WireGuardDBv2, hostname: str = None):
+    """
+    Import exit node config.
+
+    Exit nodes are servers that provide internet egress for VPN clients.
+    They have NAT/masquerade rules but peers only have VPN IPs (no LANs).
+
+    Args:
+        config_path: Path to exit node .conf file
+        db: Database connection
+        hostname: Friendly name for this exit node
+
+    Returns:
+        exit_node_id
+    """
+    parser = EntityParser()
+    entities = parser.parse_file(config_path)
+
+    valid, msg = parser.validate_structure(entities)
+    if not valid:
+        raise ValueError(f"Invalid config structure: {msg}")
+
+    categorizer = CommentCategorizer()
+    pattern_recognizer = PatternRecognizer()
+
+    # Parse [Interface]
+    interface = parse_interface_section(entities[0], categorizer)
+
+    if not interface['private_key']:
+        raise ValueError("No PrivateKey found in [Interface]")
+
+    public_key = derive_public_key(interface['private_key'])
+    permanent_guid = public_key
+
+    # Parse addresses
+    ipv4_addr = None
+    ipv6_addr = None
+    for addr in interface['addresses']:
+        if ':' in addr:
+            ipv6_addr = addr
+        else:
+            ipv4_addr = addr
+
+    if not hostname:
+        hostname = config_path.stem
+
+    listen_port = interface.get('listen_port', 51820)
+
+    rprint()
+    rprint(f"[bold magenta]Exit Node:[/bold magenta] [cyan]{hostname}[/cyan]")
+    rprint(f"  GUID: [dim]{permanent_guid[:30]}...[/dim]")
+    rprint(f"  Addresses: [green]{', '.join(interface['addresses'])}[/green]")
+    if listen_port:
+        rprint(f"  Listen Port: [yellow]{listen_port}[/yellow]")
+
+    # Detect WAN interface from PostUp rules
+    wan_interface = 'eth0'  # Default
+    for rule in interface.get('postup', []):
+        if 'MASQUERADE' in rule and '-o ' in rule:
+            # Extract interface name from "-o <iface>"
+            import re
+            match = re.search(r'-o\s+(\S+)', rule)
+            if match:
+                wan_interface = match.group(1)
+                break
+
+    rprint(f"  WAN Interface: [yellow]{wan_interface}[/yellow]")
+
+    # Recognize patterns
+    pairs, singletons, unrecognized = pattern_recognizer.recognize_pairs(
+        interface['postup'],
+        interface['postdown']
+    )
+
+    if pairs or singletons:
+        rprint(f"  Patterns: [yellow]{len(pairs)} pairs, {len(singletons)} singletons[/yellow]")
+
+    # Get CS ID
+    with db._connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM coordination_server LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            raise ValueError("No coordination server found - import CS first")
+        cs_id = row[0]
+
+    # Need endpoint - prompt user or get from args
+    rprint(f"  [yellow]Note:[/yellow] Exit node requires a public endpoint")
+    endpoint = input(f"  Enter endpoint (IP/domain) for {hostname}: ").strip()
+    if not endpoint:
+        endpoint = hostname  # Use hostname as fallback
+
+    # Insert into database
+    with db._connection() as conn:
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT INTO exit_node (
+                cs_id, permanent_guid, current_public_key, hostname,
+                endpoint, listen_port, ipv4_address, ipv6_address,
+                private_key, wan_interface
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            cs_id,
+            permanent_guid,
+            public_key,
+            hostname,
+            endpoint,
+            listen_port,
+            ipv4_addr or '10.66.0.100/32',
+            ipv6_addr or '',
+            interface['private_key'],
+            wan_interface
+        ))
+        exit_node_id = cursor.lastrowid
+
+        # Add to peer order (unified sequence across all peer types)
+        cursor.execute("""
+            SELECT COALESCE(MAX(display_order), 0) + 1
+            FROM cs_peer_order WHERE cs_id = ?
+        """, (cs_id,))
+        next_order = cursor.fetchone()[0]
+
+        cursor.execute("""
+            INSERT INTO cs_peer_order (cs_id, entity_type, entity_id, display_order)
+            VALUES (?, 'exit_node', ?, ?)
+        """, (cs_id, exit_node_id, next_order))
+
+        # Store command pairs
+        import json
+        for i, pair in enumerate(pairs):
+            cursor.execute("""
+                INSERT INTO command_pair (
+                    entity_type, entity_id,
+                    pattern_name, rationale, scope,
+                    up_commands, down_commands,
+                    execution_order
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                'exit_node', exit_node_id,
+                pair.pattern_name,
+                pair.rationale,
+                pair.scope.value,
+                json.dumps(pair.up_commands if isinstance(pair.up_commands, list) else [pair.up_commands]),
+                json.dumps(pair.down_commands if isinstance(pair.down_commands, list) else [pair.down_commands]),
+                i
+            ))
+
+    rprint(f"  [green]✓[/green] Imported exit node (ID: {exit_node_id})")
+
+    return exit_node_id
+
+
 def run_import(args) -> int:
     """Import existing configs into database"""
     if RICH_AVAILABLE:
@@ -883,6 +1036,7 @@ def run_import(args) -> int:
         # Track import counts
         snr_count = 0
         remote_count = 0
+        exit_count = 0
 
         # Check if we have confirmed entities from entity review
         confirmed_entities = getattr(args, 'entities', None)
@@ -902,6 +1056,15 @@ def run_import(args) -> int:
                         snr_count += 1
                     except Exception as e:
                         rprint(f"\n  [red]Error:[/red] importing subnet router {entity.path.name}: {e}")
+
+                elif entity.config_type == 'exit_node':
+                    try:
+                        exit_id = import_exit_node(
+                            entity.path, db, hostname=entity.friendly_name
+                        )
+                        exit_count += 1
+                    except Exception as e:
+                        rprint(f"\n  [red]Error:[/red] importing exit node {entity.path.name}: {e}")
 
                 elif entity.config_type == 'client':
                     try:
@@ -986,6 +1149,8 @@ def run_import(args) -> int:
             ]
             if snr_count > 0:
                 summary_lines.append(f"[green]✓[/green] Imported {snr_count} subnet router(s)")
+            if exit_count > 0:
+                summary_lines.append(f"[green]✓[/green] Imported {exit_count} exit node(s)")
             if remote_count > 0:
                 summary_lines.append(f"[green]✓[/green] Imported {remote_count} remote client(s)")
             if provisional_count > 0:
@@ -1013,9 +1178,11 @@ def run_import(args) -> int:
             print(f"✓ Coordination server imported")
             print(f"✓ Found {len(cs_peers)} peers in CS config")
             if snr_count > 0:
-                print(f"✓ Imported {snr_count} subnet router(s)")
+                print(f"  Imported {snr_count} subnet router(s)")
+            if exit_count > 0:
+                print(f"  Imported {exit_count} exit node(s)")
             if remote_count > 0:
-                print(f"✓ Imported {remote_count} remote client(s)")
+                print(f"  Imported {remote_count} remote client(s)")
             if provisional_count > 0:
                 print(f"! Created {provisional_count} provisional remote(s)")
             print(f"✓ State snapshot recorded (State #{state_id})")

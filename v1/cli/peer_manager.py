@@ -522,6 +522,25 @@ def list_peers(db: WireGuardDBv2):
                 if not is_last:
                     print(f"┃")
 
+        # Exit Nodes
+        cursor.execute("""
+            SELECT id, hostname, ipv4_address, endpoint, current_public_key
+            FROM exit_node
+            ORDER BY hostname
+        """)
+        exit_nodes = cursor.fetchall()
+        if exit_nodes:
+            print(f"\n┏━ [EXIT NODES] ({len(exit_nodes)})")
+            print(f"┃")
+            for i, (exit_id, hostname, ipv4, endpoint, pubkey) in enumerate(exit_nodes):
+                is_last = (i == len(exit_nodes) - 1)
+                connector = "┗" if is_last else "┣"
+                continuation = " " if is_last else "┃"
+                print(f"{connector}━━ [{exit_id:2}] {hostname}")
+                print(f"{continuation}   IP: {ipv4:20}  Endpoint: {endpoint or 'N/A':15}  Key: {pubkey[:30]}...")
+                if not is_last:
+                    print(f"┃")
+
     print()
 
 
@@ -635,7 +654,7 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
 
     Args:
         db: Database connection
-        peer_type: 'router', 'remote', or 'cs'
+        peer_type: 'router', 'remote', 'cs', or 'exit_node'
         peer_id: ID of peer (ignored for cs)
         reason: Reason for rotation
 
@@ -660,6 +679,11 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
             cursor.execute("""
                 SELECT hostname, current_public_key, permanent_guid, private_key
                 FROM remote WHERE id = ?
+            """, (peer_id,))
+        elif peer_type == 'exit_node':
+            cursor.execute("""
+                SELECT hostname, current_public_key, permanent_guid, private_key
+                FROM exit_node WHERE id = ?
             """, (peer_id,))
         else:
             raise ValueError(f"Invalid peer_type: {peer_type}")
@@ -741,6 +765,12 @@ def rotate_keys(db: WireGuardDBv2, peer_type: str, peer_id: int, reason: str = "
             cursor.execute("""
                 UPDATE subnet_router
                 SET current_public_key = ?, private_key = ?
+                WHERE id = ?
+            """, (new_pubkey, new_privkey, peer_id))
+        elif peer_type == 'exit_node':
+            cursor.execute("""
+                UPDATE exit_node
+                SET current_public_key = ?, private_key = ?, updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
             """, (new_pubkey, new_privkey, peer_id))
         else:
