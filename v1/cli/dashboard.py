@@ -319,7 +319,7 @@ def render_topology_tree(db_path: str) -> str:
     try:
         # Get coordination server
         cs = conn.execute("""
-            SELECT hostname, vpn_ip, endpoint FROM coordination_server LIMIT 1
+            SELECT hostname, ipv4_address, endpoint FROM coordination_server LIMIT 1
         """).fetchone()
 
         if not cs:
@@ -336,51 +336,35 @@ def render_topology_tree(db_path: str) -> str:
 
         # Add subnet routers
         routers = conn.execute("""
-            SELECT id, hostname, vpn_ip, endpoint FROM subnet_router ORDER BY hostname
+            SELECT id, hostname, ipv4_address, endpoint FROM subnet_router ORDER BY hostname
         """).fetchall()
 
         for router in routers:
             router_node = tree.add(
-                f"[green]{router['hostname']}[/green] [dim]{router['vpn_ip']}[/dim]"
+                f"[green]{router['hostname']}[/green] [dim]{router['ipv4_address']}[/dim]"
             )
 
-            # Get remotes for this router
-            remotes = conn.execute("""
-                SELECT hostname, vpn_ip, access_level, exit_node_id
-                FROM remote
-                WHERE sponsor_type = 'sr' AND sponsor_id = ?
-                ORDER BY hostname
-            """, (router['id'],)).fetchall()
-
-            for remote in remotes:
-                access_icon = _get_access_icon(remote['access_level'])
-                exit_indicator = " [yellow]->[/yellow]exit" if remote['exit_node_id'] else ""
-                router_node.add(
-                    f"{access_icon} {remote['hostname']} [dim]{remote['vpn_ip']}{exit_indicator}[/dim]"
-                )
-
-            # Get advertised networks
+            # Get advertised networks for this router
             networks = conn.execute("""
-                SELECT network FROM advertised_network WHERE sr_id = ?
+                SELECT network_cidr FROM advertised_network WHERE subnet_router_id = ?
             """, (router['id'],)).fetchall()
 
             if networks:
                 for net in networks:
-                    router_node.add(f"[dim]LAN: {net['network']}[/dim]")
+                    router_node.add(f"[dim]LAN: {net['network_cidr']}[/dim]")
 
-        # Add remotes directly under CS
-        cs_remotes = conn.execute("""
-            SELECT hostname, vpn_ip, access_level, exit_node_id
+        # Add all remotes under CS
+        remotes = conn.execute("""
+            SELECT hostname, ipv4_address, access_level, exit_node_id
             FROM remote
-            WHERE sponsor_type = 'cs'
             ORDER BY hostname
         """).fetchall()
 
-        for remote in cs_remotes:
+        for remote in remotes:
             access_icon = _get_access_icon(remote['access_level'])
             exit_indicator = " [yellow]->[/yellow]exit" if remote['exit_node_id'] else ""
             tree.add(
-                f"{access_icon} {remote['hostname']} [dim]{remote['vpn_ip']}{exit_indicator}[/dim]"
+                f"{access_icon} {remote['hostname']} [dim]{remote['ipv4_address']}{exit_indicator}[/dim]"
             )
 
         # Add exit nodes
@@ -428,24 +412,23 @@ def _render_topology_plain(conn, cs) -> str:
     lines.append("|")
 
     routers = conn.execute("""
-        SELECT id, hostname, vpn_ip FROM subnet_router ORDER BY hostname
+        SELECT id, hostname, ipv4_address FROM subnet_router ORDER BY hostname
     """).fetchall()
 
     for i, router in enumerate(routers):
         is_last_router = (i == len(routers) - 1)
         prefix = "\\--" if is_last_router else "+--"
-        lines.append(f"{prefix} {router['hostname']} ({router['vpn_ip']})")
+        lines.append(f"{prefix} {router['hostname']} ({router['ipv4_address']})")
 
-        remotes = conn.execute("""
-            SELECT hostname, vpn_ip FROM remote
-            WHERE sponsor_type = 'sr' AND sponsor_id = ?
-        """, (router['id'],)).fetchall()
+    # Add all remotes
+    remotes = conn.execute("""
+        SELECT hostname, ipv4_address FROM remote ORDER BY hostname
+    """).fetchall()
 
-        for j, remote in enumerate(remotes):
-            child_prefix = "   " if is_last_router else "|  "
-            is_last = (j == len(remotes) - 1)
-            remote_prefix = "\\--" if is_last else "+--"
-            lines.append(f"{child_prefix}{remote_prefix} {remote['hostname']} ({remote['vpn_ip']})")
+    for j, remote in enumerate(remotes):
+        is_last = (j == len(remotes) - 1)
+        prefix = "\\--" if is_last else "+--"
+        lines.append(f"{prefix} {remote['hostname']} ({remote['ipv4_address']})")
 
     return "\n".join(lines)
 
