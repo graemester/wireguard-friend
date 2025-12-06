@@ -171,7 +171,7 @@ class ComplianceReporter:
                         r.ipv4_address as vpn_ip,
                         r.created_at,
                         (SELECT MAX(rotated_at) FROM key_rotation_history
-                         WHERE entity_type = 'remote' AND entity_id = r.id) as last_rotation
+                         WHERE entity_type = 'remote' AND entity_permanent_guid = r.permanent_guid) as last_rotation
                     FROM remote r
                     ORDER BY r.access_level, r.hostname
                 """).fetchall()
@@ -235,9 +235,10 @@ class ComplianceReporter:
                         SELECT
                             t.id,
                             t.hostname,
+                            t.permanent_guid,
                             t.created_at,
                             (SELECT MAX(rotated_at) FROM key_rotation_history
-                             WHERE entity_type = ? AND entity_id = t.id) as last_rotation
+                             WHERE entity_type = ? AND entity_permanent_guid = t.permanent_guid) as last_rotation
                         FROM {table} t
                         ORDER BY t.hostname
                     """, (entity_type,)).fetchall()
@@ -504,7 +505,7 @@ class ComplianceReporter:
                         SELECT t.hostname,
                                COALESCE(
                                    (SELECT MAX(rotated_at) FROM key_rotation_history
-                                    WHERE entity_type = ? AND entity_id = t.id),
+                                    WHERE entity_type = ? AND entity_permanent_guid = t.permanent_guid),
                                    t.created_at
                                ) as last_rotation
                         FROM {table} t

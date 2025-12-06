@@ -195,15 +195,19 @@ class AlertManager:
             thirty_days_ago = (datetime.now() - timedelta(days=30)).isoformat()
 
             # Check remotes without recent rotation
-            rows = conn.execute("""
-                SELECT r.hostname, r.id,
-                       COALESCE(MAX(krh.rotated_at), r.created_at) as last_rotation
-                FROM remote r
-                LEFT JOIN key_rotation_history krh
-                    ON krh.entity_type = 'remote' AND krh.entity_id = r.id
-                GROUP BY r.id
-                HAVING last_rotation < ?
-            """, (thirty_days_ago,)).fetchall()
+            try:
+                rows = conn.execute("""
+                    SELECT r.hostname, r.id,
+                           COALESCE(MAX(krh.rotated_at), r.created_at) as last_rotation
+                    FROM remote r
+                    LEFT JOIN key_rotation_history krh
+                        ON krh.entity_type = 'remote' AND krh.entity_permanent_guid = r.permanent_guid
+                    GROUP BY r.id
+                    HAVING last_rotation < ?
+                """, (thirty_days_ago,)).fetchall()
+            except sqlite3.OperationalError:
+                # key_rotation_history table may not exist
+                rows = []
 
             for row in rows:
                 alerts.append(Alert(

@@ -471,7 +471,7 @@ class AlertManager:
                     SELECT t.id, t.hostname,
                            COALESCE(
                                (SELECT MAX(rotated_at) FROM key_rotation_history
-                                WHERE entity_type = ? AND entity_id = t.id),
+                                WHERE entity_type = ? AND entity_permanent_guid = t.permanent_guid),
                                t.created_at
                            ) as last_rotation
                     FROM {table} t

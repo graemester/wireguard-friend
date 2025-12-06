@@ -352,11 +352,19 @@ class WireGuardDBv2:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_comment_guid ON comment(entity_permanent_guid)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_comment_category ON comment(category)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_key_rotation_guid ON key_rotation_history(entity_permanent_guid)")
+            # Composite index for queries that filter by entity_type AND entity_permanent_guid
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_key_rotation_type_guid ON key_rotation_history(entity_type, entity_permanent_guid)")
+            # Index for MAX(rotated_at) queries
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_key_rotation_time ON key_rotation_history(rotated_at DESC)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_cs_permanent_guid ON coordination_server(permanent_guid)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_router_permanent_guid ON subnet_router(permanent_guid)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_remote_permanent_guid ON remote(permanent_guid)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_exit_node_permanent_guid ON exit_node(permanent_guid)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_remote_exit_node ON remote(exit_node_id)")
+            # Index for hostname lookups (common in UI)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_remote_hostname ON remote(hostname)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_router_hostname ON subnet_router(hostname)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_exit_node_hostname ON exit_node(hostname)")
 
             logger.info(f"V2 semantic schema initialized at {self.db_path}")
 

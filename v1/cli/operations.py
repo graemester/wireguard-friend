@@ -63,6 +63,8 @@ def get_keypress_choice(max_choice: int, allow_quit: bool = True) -> Optional[in
         return None
     if ch == '\x1b':  # Escape
         return None
+    if ch in ('\r', '\n'):  # Enter/Return key - go back
+        return None
 
     if ch.isdigit() and ch != '0':
         num = int(ch)
@@ -194,7 +196,7 @@ def show_encryption_menu(db_path: str):
     clear_screen()
     try:
         mgr = EncryptionManager(db_path)
-        is_encrypted = mgr.is_encryption_enabled()
+        is_encrypted = mgr.is_encrypted
 
         if RICH_AVAILABLE:
             status = "[green]ENABLED[/green]" if is_encrypted else "[yellow]DISABLED[/yellow]"
@@ -286,50 +288,56 @@ def show_psk_menu(db_path: str):
     clear_screen()
     try:
         mgr = PSKManager(db_path)
-        stats = mgr.get_psk_statistics()
+        stats = mgr.get_psk_stats()
 
         if RICH_AVAILABLE:
             table = Table(title="PSK Status", box=box.ROUNDED)
             table.add_column("Metric")
             table.add_column("Value", justify="right")
 
-            table.add_row("Total Peer Pairs", str(stats.get('total_pairs', 0)))
-            table.add_row("With PSK", str(stats.get('with_psk', 0)))
-            table.add_row("Without PSK", str(stats.get('without_psk', 0)))
-            table.add_row("PSK Coverage", f"{stats.get('coverage_percent', 0):.1f}%")
+            table.add_row("Total PSKs", str(stats.get('total_psks', 0)))
+            table.add_row("Fully Distributed", str(stats.get('fully_distributed', 0)))
+            table.add_row("Expiring Soon", str(stats.get('expiring_soon', 0)))
+            table.add_row("Total Rotations", str(stats.get('total_rotations', 0)))
 
             console.print()
             console.print(table)
             console.print()
         else:
             print("\nPSK Statistics:")
-            print(f"  Total peer pairs: {stats.get('total_pairs', 0)}")
-            print(f"  With PSK: {stats.get('with_psk', 0)}")
-            print(f"  Coverage: {stats.get('coverage_percent', 0):.1f}%")
+            print(f"  Total PSKs: {stats.get('total_psks', 0)}")
+            print(f"  Fully Distributed: {stats.get('fully_distributed', 0)}")
+            print(f"  Expiring Soon: {stats.get('expiring_soon', 0)}")
             print()
 
-        print("  1. Generate PSKs for all peers without")
-        print("  2. Rotate all PSKs")
-        print("  3. View PSK details")
+        print("  1. View expiring PSKs")
+        print("  2. View undistributed PSKs")
+        print("  3. View rotation history")
         print("  q. Back")
         print()
 
         action = input("  Choice: ").strip()
 
+        if not action:
+            return
         if action == '1':
-            count = mgr.generate_missing_psks()
-            print(f"\n  Generated {count} new PSKs.")
+            expiring = mgr.get_expiring_psks(days_ahead=30)
+            print(f"\n  {len(expiring)} PSKs expiring in next 30 days:")
+            for entry in expiring[:10]:
+                print(f"    - {entry.peer1_type}:{entry.peer1_id} <-> "
+                      f"{entry.peer2_type}:{entry.peer2_id} expires {entry.expires_at}")
         elif action == '2':
-            confirm = input("  Rotate all PSKs? [y/N]: ").strip().lower()
-            if confirm == 'y':
-                count = mgr.rotate_all_psks()
-                print(f"\n  Rotated {count} PSKs.")
+            undist = mgr.get_undistributed_psks()
+            print(f"\n  {len(undist)} PSKs not fully distributed:")
+            for item in undist[:10]:
+                missing = ', '.join([f"{m['type']}:{m['id']}" for m in item['missing_distribution']])
+                print(f"    - Entry {item['entry_id']}: missing {missing}")
         elif action == '3':
-            entries = mgr.list_psk_entries()
-            print(f"\n  {len(entries)} PSK entries found.")
-            for entry in entries[:10]:
-                print(f"    - {entry.entity_type}:{entry.entity_id} -> "
-                      f"peer:{entry.peer_entity_type}:{entry.peer_entity_id}")
+            history = mgr.get_rotation_history(limit=10)
+            print(f"\n  Recent PSK rotations:")
+            for h in history:
+                print(f"    - {h['rotated_at']}: {h['peer1_type']}:{h['peer1_id']} <-> "
+                      f"{h['peer2_type']}:{h['peer2_id']} ({h['trigger']})")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -344,7 +352,7 @@ def show_audit_log(db_path: str):
     clear_screen()
     try:
         logger = AuditLogger(db_path)
-        entries = logger.get_recent_entries(limit=20)
+        entries = logger.get_entries(limit=20)
 
         if RICH_AVAILABLE:
             table = Table(title="Recent Security Events", box=box.ROUNDED)
@@ -354,10 +362,10 @@ def show_audit_log(db_path: str):
             table.add_column("Operator")
 
             for entry in entries:
-                ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else ""
+                ts = entry.timestamp[:19] if entry.timestamp else ""
                 table.add_row(
                     ts,
-                    entry.event_type.value if hasattr(entry.event_type, 'value') else str(entry.event_type),
+                    entry.event_type,
                     f"{entry.entity_type}:{entry.entity_id}" if entry.entity_type else "-",
                     entry.operator or "system"
                 )
@@ -368,7 +376,7 @@ def show_audit_log(db_path: str):
             print("\nRecent Security Events:")
             print("-" * 70)
             for entry in entries:
-                ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else ""
+                ts = entry.timestamp[:19] if entry.timestamp else ""
                 print(f"{ts} | {entry.event_type} | {entry.entity_type}:{entry.entity_id}")
 
     except Exception as e:
@@ -380,6 +388,7 @@ def show_audit_log(db_path: str):
 def export_audit_log(db_path: str):
     """Export audit log for compliance."""
     from v1.audit_log import AuditLogger
+    from datetime import timedelta
 
     clear_screen()
     try:
@@ -391,10 +400,11 @@ def export_audit_log(db_path: str):
         days = input("  Days to export [90]: ").strip()
         days = int(days) if days else 90
 
+        start_time = datetime.now() - timedelta(days=days)
         output_path = Path(f"audit_log_export_{datetime.now().strftime('%Y%m%d')}.json")
-        logger.export_json(output_path, days=days)
+        count = logger.export_json(output_path, start_time=start_time)
 
-        print(f"\n  Exported to: {output_path}")
+        print(f"\n  Exported {count} entries to: {output_path}")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -441,7 +451,7 @@ def show_backup_menu(db_path: str):
 
 def create_backup(db_path: str):
     """Create a new backup."""
-    from v1.disaster_recovery import DisasterRecovery
+    from v1.disaster_recovery import DisasterRecovery, BackupType
 
     clear_screen()
     try:
@@ -464,17 +474,12 @@ def create_backup(db_path: str):
                 print("\nPress any key..."); getch()
                 return
 
-        output_dir = Path("backups")
-        output_dir.mkdir(exist_ok=True)
-
-        backup_id = dr.create_backup(
-            output_dir=output_dir,
-            encrypt=encrypt,
-            passphrase=passphrase
+        backup_path = dr.create_backup(
+            backup_type=BackupType.FULL,
+            password=passphrase if encrypt else None
         )
 
-        print(f"\n  Backup created: {backup_id}")
-        print(f"  Location: {output_dir / backup_id}")
+        print(f"\n  Backup created: {backup_path}")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -497,15 +502,21 @@ def list_backups(db_path: str):
             table.add_column("Created", style="dim")
             table.add_column("Type")
             table.add_column("Size", justify="right")
-            table.add_column("Verified", justify="center")
+            table.add_column("Encrypted", justify="center")
 
             for b in backups:
+                backup_id = b.get('backup_id', '')
+                created_at = b.get('created_at', '')[:16] if b.get('created_at') else ""
+                backup_type = b.get('backup_type', '')
+                file_size = b.get('file_size')
+                is_encrypted = b.get('is_encrypted', False)
+
                 table.add_row(
-                    b.backup_id[:20] + "...",
-                    b.created_at.strftime("%Y-%m-%d %H:%M") if b.created_at else "",
-                    b.backup_type,
-                    f"{b.size_bytes / 1024:.1f} KB" if b.size_bytes else "-",
-                    "[green]Yes[/green]" if b.verified else "[yellow]No[/yellow]"
+                    backup_id[:25] + "..." if len(backup_id) > 25 else backup_id,
+                    created_at,
+                    backup_type,
+                    f"{file_size / 1024:.1f} KB" if file_size else "-",
+                    "[green]Yes[/green]" if is_encrypted else "[dim]No[/dim]"
                 )
 
             console.print()
@@ -514,7 +525,7 @@ def list_backups(db_path: str):
             print("\nBackup History:")
             print("-" * 70)
             for b in backups:
-                print(f"  {b.backup_id[:30]} | {b.created_at} | {b.backup_type}")
+                print(f"  {b.get('backup_id', '')[:30]} | {b.get('created_at', '')} | {b.get('backup_type', '')}")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -594,14 +605,20 @@ def verify_backup(db_path: str):
             import getpass
             passphrase = getpass.getpass("  Backup passphrase: ")
 
-        is_valid = dr.verify_backup(backup_file, passphrase=passphrase)
+        result = dr.verify_backup(str(backup_file), password=passphrase)
 
-        if is_valid:
+        if result.get('valid'):
             print("\n  [green]Backup verified successfully.[/green]" if RICH_AVAILABLE
                   else "\n  Backup verified successfully.")
+            if result.get('metadata'):
+                meta = result['metadata']
+                print(f"  Type: {meta.get('backup_type', 'unknown')}")
+                print(f"  Created: {meta.get('created_at', 'unknown')}")
         else:
             print("\n  [red]Backup verification FAILED![/red]" if RICH_AVAILABLE
                   else "\n  Backup verification FAILED!")
+            for err in result.get('errors', []):
+                print(f"    - {err}")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -666,6 +683,8 @@ def generate_compliance_report(db_path: str):
         print()
 
         report_choice = input("  Report type [1]: ").strip()
+        if not report_choice:
+            report_choice = '1'
         report_types = {
             '1': ReportType.EXECUTIVE_SUMMARY,
             '2': ReportType.FULL_COMPLIANCE,
@@ -683,6 +702,8 @@ def generate_compliance_report(db_path: str):
         print()
 
         format_choice = input("  Format [1]: ").strip()
+        if not format_choice:
+            format_choice = '1'
         formats = {
             '1': OutputFormat.MARKDOWN,
             '2': OutputFormat.JSON,
@@ -690,14 +711,22 @@ def generate_compliance_report(db_path: str):
         }
         output_format = formats.get(format_choice, OutputFormat.MARKDOWN)
 
+        # Generate report (returns ComplianceReport object)
+        report = reporter.generate_report(report_type=report_type)
+
+        # Determine file extension and export
+        ext_map = {
+            OutputFormat.MARKDOWN: 'md',
+            OutputFormat.JSON: 'json',
+            OutputFormat.CSV: 'csv',
+        }
+        ext = ext_map.get(output_format, 'md')
+
         output_dir = Path("reports")
         output_dir.mkdir(exist_ok=True)
+        output_path = output_dir / f"compliance_{report_type.value}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.{ext}"
 
-        report_path = reporter.generate_report(
-            report_type=report_type,
-            output_format=output_format,
-            output_dir=output_dir
-        )
+        report_path = reporter.export_report(report, str(output_path), output_format)
 
         print(f"\n  Report generated: {report_path}")
 
@@ -720,7 +749,7 @@ def generate_compliance_report(db_path: str):
 
 def show_rotation_policies(db_path: str):
     """Manage rotation policies."""
-    from v1.rotation_policies import RotationPolicyManager, PolicyType, PolicyScope
+    from v1.rotation_policies import RotationPolicyManager, PolicyType, EntityScope
 
     clear_screen()
     try:
@@ -740,9 +769,9 @@ def show_rotation_policies(db_path: str):
                 table.add_row(
                     str(p.id),
                     p.name,
-                    p.policy_type.value if hasattr(p.policy_type, 'value') else str(p.policy_type),
-                    str(p.days_threshold) if p.days_threshold else "-",
-                    p.scope.value if hasattr(p.scope, 'value') else str(p.scope),
+                    p.policy_type if isinstance(p.policy_type, str) else str(p.policy_type),
+                    str(p.threshold_value) if p.threshold_value else "-",
+                    p.applies_to if isinstance(p.applies_to, str) else str(p.applies_to),
                     "[green]Yes[/green]" if p.enabled else "[dim]No[/dim]"
                 )
 
@@ -752,7 +781,7 @@ def show_rotation_policies(db_path: str):
             print("\nRotation Policies:")
             print("-" * 70)
             for p in policies:
-                print(f"  [{p.id}] {p.name} | {p.policy_type} | {p.days_threshold} days | {p.scope}")
+                print(f"  [{p.id}] {p.name} | {p.policy_type} | {p.threshold_value} days | {p.applies_to}")
 
         print()
         print("  1. Create new policy")
@@ -762,6 +791,8 @@ def show_rotation_policies(db_path: str):
         print()
 
         action = input("  Choice: ").strip()
+        if not action:
+            return
 
         if action == '1':
             name = input("\n  Policy name: ").strip()
@@ -777,17 +808,27 @@ def show_rotation_policies(db_path: str):
 
             print("  Scope: 1=All, 2=Remotes, 3=Routers")
             scope_input = input("  Scope [1]: ").strip()
-            scopes = {'1': PolicyScope.ALL, '2': PolicyScope.REMOTES, '3': PolicyScope.ROUTERS}
-            scope = scopes.get(scope_input, PolicyScope.ALL)
+            scopes = {'1': EntityScope.ALL, '2': EntityScope.REMOTES, '3': EntityScope.ROUTERS}
+            scope = scopes.get(scope_input, EntityScope.ALL)
 
-            policy_id = mgr.create_policy(name, policy_type, days, scope)
+            policy_id = mgr.create_policy(
+                name=name,
+                policy_type=policy_type,
+                threshold_value=days,
+                applies_to=scope
+            )
             print(f"\n  Created policy: {name} (ID: {policy_id})")
 
         elif action == '2' and policies:
             policy_id = input("\n  Policy ID to toggle: ").strip()
             if policy_id:
-                mgr.toggle_policy(int(policy_id))
-                print("\n  Policy toggled.")
+                pid = int(policy_id)
+                policy = mgr.get_policy(pid)
+                if policy:
+                    mgr.update_policy(pid, enabled=not policy.enabled)
+                    print("\n  Policy toggled.")
+                else:
+                    print("\n  Policy not found.")
 
         elif action == '3' and policies:
             policy_id = input("\n  Policy ID to delete: ").strip()
@@ -812,31 +853,40 @@ def show_policy_status(db_path: str):
         mgr = RotationPolicyManager(db_path)
         summary = mgr.get_compliance_summary()
 
+        total = summary.get('total_scheduled', 0)
+        overdue_count = summary.get('overdue_count', 0)
+        compliant = total - overdue_count
+        upcoming = summary.get('upcoming_count', 0)
+        pct = summary.get('compliance_percentage', 100)
+
         if RICH_AVAILABLE:
             console.print(Panel(
                 f"[bold]Compliance Summary[/bold]\n\n"
-                f"Total Entities: {summary.get('total_entities', 0)}\n"
-                f"Compliant: [green]{summary.get('compliant', 0)}[/green]\n"
-                f"Due Soon: [yellow]{summary.get('due_soon', 0)}[/yellow]\n"
-                f"Overdue: [red]{summary.get('overdue', 0)}[/red]\n"
-                f"Never Rotated: {summary.get('never_rotated', 0)}",
+                f"Total Scheduled: {total}\n"
+                f"Compliant: [green]{compliant}[/green]\n"
+                f"Due Soon (7d): [yellow]{upcoming}[/yellow]\n"
+                f"Overdue: [red]{overdue_count}[/red]\n"
+                f"Compliance: {pct}%",
                 border_style="cyan"
             ))
         else:
             print("\nCompliance Summary:")
             print("-" * 40)
-            print(f"  Total Entities: {summary.get('total_entities', 0)}")
-            print(f"  Compliant: {summary.get('compliant', 0)}")
-            print(f"  Due Soon: {summary.get('due_soon', 0)}")
-            print(f"  Overdue: {summary.get('overdue', 0)}")
+            print(f"  Total Scheduled: {total}")
+            print(f"  Compliant: {compliant}")
+            print(f"  Due Soon (7d): {upcoming}")
+            print(f"  Overdue: {overdue_count}")
+            print(f"  Compliance: {pct}%")
 
-        # Show overdue entities
-        overdue = mgr.get_overdue_entities()
+        # Show overdue entities using get_pending_rotations with no future days
+        pending = mgr.get_pending_rotations(include_upcoming_days=0)
+        overdue = [p for p in pending if p.is_overdue]
         if overdue:
             print()
             print("Overdue entities:")
             for entity in overdue[:10]:
-                print(f"  - {entity.entity_type}:{entity.entity_id} ({entity.hostname}) - {entity.days_since_rotation} days")
+                days_overdue = abs(entity.days_until_rotation)
+                print(f"  - {entity.entity_type}:{entity.entity_id} ({entity.entity_hostname}) - {days_overdue} days overdue")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -938,35 +988,35 @@ def show_drift_detection(db_path: str):
 
         action = input("  Choice: ").strip()
 
+        if not action:
+            return
         if action == '1':
-            print("\n  Running drift scan...")
-            results = detector.scan_all()
-            print(f"\n  Scanned {len(results)} entities.")
+            print("\n  Running drift check...")
+            summary = detector.get_drift_summary()
+            total = summary.get('total_entities', 0)
+            drifted_count = summary.get('entities_with_drift', 0)
+            print(f"\n  Checked {total} entities.")
 
-            drifted = [r for r in results if r.is_drifted]
-            if drifted:
-                print(f"\n  [yellow]DRIFT DETECTED on {len(drifted)} entities![/yellow]" if RICH_AVAILABLE
-                      else f"\n  DRIFT DETECTED on {len(drifted)} entities!")
-                for r in drifted:
-                    print(f"    - {r.entity_name}: {r.critical_count} critical, {r.warning_count} warning")
+            if drifted_count > 0:
+                print(f"\n  [yellow]DRIFT DETECTED on {drifted_count} entities![/yellow]" if RICH_AVAILABLE
+                      else f"\n  DRIFT DETECTED on {drifted_count} entities!")
             else:
                 print("\n  All configs match database.")
 
         elif action == '2':
-            results = detector.get_last_scan_results()
-            if results:
-                print(f"\n  Last scan: {len(results)} entities")
-                for r in results:
-                    status = "[red]DRIFT[/red]" if r.is_drifted else "[green]OK[/green]"
-                    print(f"    {r.entity_name}: {status if RICH_AVAILABLE else ('DRIFT' if r.is_drifted else 'OK')}")
-            else:
-                print("\n  No scan results found.")
+            summary = detector.get_drift_summary()
+            total = summary.get('total_entities', 0)
+            drifted_count = summary.get('entities_with_drift', 0)
+            print(f"\n  Drift Summary:")
+            print(f"    Total entities: {total}")
+            print(f"    With drift: {drifted_count}")
+            print(f"    Last checked: {summary.get('last_scan', 'Never')}")
 
         elif action == '3':
-            history = detector.get_drift_history(limit=10)
+            history = detector.get_drift_history(days=30)
             print(f"\n  Recent drift events: {len(history)}")
-            for h in history:
-                print(f"    {h.scan_time} | {h.entity_name} | {h.drift_type}")
+            for h in history[:10]:  # Show first 10
+                print(f"    {h.get('scan_time', '-')} | {h.get('entity_name', '-')} | {h.get('drift_type', '-')}")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -992,18 +1042,21 @@ def show_prometheus_menu(db_path: str):
         print()
 
         action = input("  Choice: ").strip()
+        if not action:
+            return
 
         if action == '1':
-            metrics = collector.collect_all()
-            output = collector.format_prometheus()
+            metrics = collector.collect_all_metrics()
+            output = collector.format_prometheus(metrics)
             print()
             print(output[:2000])
             if len(output) > 2000:
                 print("\n  ... (truncated)")
 
         elif action == '2':
+            metrics = collector.collect_all_metrics()
             output_path = Path(f"metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.prom")
-            metrics_text = collector.format_prometheus()
+            metrics_text = collector.format_prometheus(metrics)
             output_path.write_text(metrics_text)
             print(f"\n  Exported to: {output_path}")
 
@@ -1038,22 +1091,29 @@ def show_bandwidth_stats(db_path: str):
         print()
 
         action = input("  Choice: ").strip()
+        if not action:
+            return
 
         if action == '1':
-            count = tracker.collect_local_samples()
+            count = tracker.collect_samples()
             print(f"\n  Collected {count} bandwidth samples.")
 
         elif action == '2':
-            top = tracker.get_top_consumers(hours=24, limit=10)
+            top = tracker.get_top_consumers(days=1, limit=10)  # 1 day = 24h
             print("\n  Top Bandwidth Consumers (24h):")
             for entry in top:
-                total = entry.bytes_received + entry.bytes_sent
-                print(f"    {entry.hostname}: {_format_bytes(total)}")
+                if isinstance(entry, dict):
+                    total_bytes = entry.get('bytes_received', 0) + entry.get('bytes_sent', 0)
+                    hostname = entry.get('hostname', entry.get('entity_id', 'unknown'))
+                else:
+                    total_bytes = getattr(entry, 'bytes_received', 0) + getattr(entry, 'bytes_sent', 0)
+                    hostname = getattr(entry, 'hostname', str(entry))
+                print(f"    {hostname}: {_format_bytes(total_bytes)}")
 
         elif action == '3':
-            stats = tracker.get_aggregate_stats()
+            stats = tracker.get_statistics()
             print(f"\n  Total samples: {stats.get('total_samples', 0)}")
-            print(f"  Date range: {stats.get('earliest')} to {stats.get('latest')}")
+            print(f"  Date range: {stats.get('first_sample', 'N/A')} to {stats.get('last_sample', 'N/A')}")
 
     except Exception as e:
         print(f"\nError: {e}")
@@ -1096,30 +1156,57 @@ def show_troubleshooting_menu(db_path: str):
         print()
 
         action = input("  Choice: ").strip()
+        if not action:
+            return
 
         if action == '1':
-            print("\n  Running quick diagnostics...")
-            results = wizard.run_quick_diagnostic()
-            _display_diagnostic_results(results)
+            print("\n  Running full diagnostics...")
+            session = wizard.run_full_diagnostic()
+            if session and hasattr(session, 'results') and session.results:
+                _display_diagnostic_results(session.results)
+            else:
+                print("\n  Diagnostics completed. No issues found.")
 
         elif action == '2':
             print("\n  Running connectivity checks...")
-            results = wizard.run_diagnostic('connectivity')
-            _display_diagnostic_results(results)
+            session = wizard.run_full_diagnostic()
+            if session and hasattr(session, 'results'):
+                conn_results = [r for r in session.results if 'connect' in str(r).lower()]
+                if conn_results:
+                    _display_diagnostic_results(conn_results)
+                else:
+                    print("\n  No connectivity issues found.")
+            else:
+                print("\n  No connectivity issues found.")
 
         elif action == '3':
             print("\n  Running handshake diagnostics...")
-            results = wizard.run_diagnostic('handshake')
-            _display_diagnostic_results(results)
+            session = wizard.run_full_diagnostic()
+            if session and hasattr(session, 'results'):
+                hs_results = [r for r in session.results if 'handshake' in str(r).lower()]
+                if hs_results:
+                    _display_diagnostic_results(hs_results)
+                else:
+                    print("\n  No handshake issues found.")
+            else:
+                print("\n  No handshake issues found.")
 
         elif action == '4':
             print("\n  Running DNS checks...")
-            results = wizard.run_diagnostic('dns')
-            _display_diagnostic_results(results)
+            session = wizard.run_full_diagnostic()
+            if session and hasattr(session, 'results'):
+                dns_results = [r for r in session.results if 'dns' in str(r).lower()]
+                if dns_results:
+                    _display_diagnostic_results(dns_results)
+                else:
+                    print("\n  No DNS issues found.")
+            else:
+                print("\n  No DNS issues found.")
 
         elif action == '5':
             output_path = Path(f"diagnostic_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt")
-            report = wizard.generate_report()
+            session = wizard.run_full_diagnostic()
+            report = wizard.export_report(session)
             output_path.write_text(report)
             print(f"\n  Report exported to: {output_path}")
 
@@ -1192,6 +1279,8 @@ def show_webhooks_menu(db_path: str):
         print()
 
         action = input("  Choice: ").strip()
+        if not action:
+            return
 
         if action == '1':
             name = input("\n  Endpoint name: ").strip()
@@ -1224,8 +1313,13 @@ def show_webhooks_menu(db_path: str):
         elif action == '3' and endpoints:
             ep_id = input("\n  Endpoint ID to toggle: ").strip()
             if ep_id:
-                notifier.toggle_endpoint(int(ep_id))
-                print("\n  Endpoint toggled.")
+                pid = int(ep_id)
+                endpoint = notifier.get_endpoint(pid)
+                if endpoint:
+                    notifier.update_endpoint(pid, enabled=not endpoint.enabled)
+                    print("\n  Endpoint toggled.")
+                else:
+                    print("\n  Endpoint not found.")
 
         elif action == '4' and endpoints:
             ep_id = input("\n  Endpoint ID to delete: ").strip()
