@@ -147,7 +147,7 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
 
             # Get exit node info if assigned
             exit_node_info = None
-            if row.get('exit_node_id'):
+            if row['exit_node_id']:
                 cursor.execute("""
                     SELECT hostname, endpoint FROM exit_node WHERE id = ?
                 """, (row['exit_node_id'],))
@@ -176,7 +176,7 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
                     'updated_at': row['updated_at'],
                     'is_provisional': row['private_key'] is None,
                     'comments': comments,
-                    'exit_node_id': row.get('exit_node_id'),
+                    'exit_node_id': row['exit_node_id'],
                     'exit_node_info': exit_node_info,
                 }
             ))
