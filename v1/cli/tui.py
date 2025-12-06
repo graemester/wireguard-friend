@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import List, Dict, Optional
 
 # Version info (keep in sync with wg-friend)
-VERSION = "1.1.0"
-BUILD_NAME = "merlin"  # Exit Node Support
+VERSION = "1.4.0"
+BUILD_NAME = "peregrine"  # Phase 4 Experience Complete
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
@@ -32,6 +32,8 @@ from v1.cli.documentation import documentation_menu
 from v1.cli.status import show_network_overview, show_recent_rotations, show_state_history, show_entity_history
 from v1.cli.manage_peers import manage_peers_menu
 from v1.exit_node_ops import ExitNodeOps, record_add_exit_node, record_remove_exit_node, record_assign_exit_node, record_clear_exit_node
+from v1.cli.dashboard import show_dashboard_menu, AlertManager
+from v1.cli.operations import show_operations_menu
 
 
 # =============================================================================
@@ -70,12 +72,18 @@ def getch() -> str:
     return ch
 
 
-def get_keypress_choice(max_choice: int, allow_quit: bool = True) -> Optional[int]:
+def get_keypress_choice(max_choice: int, allow_quit: bool = True,
+                        letter_map: Dict[str, int] = None) -> Optional[int]:
     """
     Get a single keypress menu choice.
 
+    Args:
+        max_choice: Maximum numeric choice (1-9)
+        allow_quit: Allow 'q' to quit
+        letter_map: Optional dict mapping letters to choice numbers, e.g. {'d': 10}
+
     Returns:
-        Choice number (1-max_choice), None for quit, -1 for other keys
+        Choice number (1-max_choice or from letter_map), None for quit, -1 for other keys
     """
     sys.stdout.flush()
     ch = getch()
@@ -88,8 +96,12 @@ def get_keypress_choice(max_choice: int, allow_quit: bool = True) -> Optional[in
     if ch == '\x1b':  # Escape
         return None
 
-    # Number keys
-    if ch.isdigit():
+    # Letter mappings (case insensitive)
+    if letter_map and ch.lower() in letter_map:
+        return letter_map[ch.lower()]
+
+    # Number keys (1-9 only for single keypress)
+    if ch.isdigit() and ch != '0':
         num = int(ch)
         if 1 <= num <= max_choice:
             return num
@@ -134,12 +146,19 @@ def get_keypress_list_choice(max_choice: int, allow_letters: str = 'b') -> Optio
 # MENU DISPLAY
 # =============================================================================
 
-def print_menu(title: str, options: List[str], include_quit: bool = True):
+def print_menu(title: str, options: List[str], include_quit: bool = True,
+               letter_items: Dict[str, str] = None):
     """
     Print a menu with Rich styling if available.
 
     Options can include hints in brackets: "Option Name [hint text]"
     The hint will be displayed in dim style after a dash.
+
+    Args:
+        title: Menu title
+        options: List of menu options (numbered 1-9)
+        include_quit: Whether to show quit option
+        letter_items: Optional dict mapping letters to option text, e.g. {'d': "Dashboard [alerts]"}
     """
     if RICH_AVAILABLE:
         # Build menu content
@@ -152,6 +171,17 @@ def print_menu(title: str, options: List[str], include_quit: bool = True):
                 menu_lines.append(f"  [cyan]{i}.[/cyan] {main_text:28} [dim]- {hint}[/dim]")
             else:
                 menu_lines.append(f"  [cyan]{i}.[/cyan] {option}")
+
+        # Letter items
+        if letter_items:
+            for letter, option in letter_items.items():
+                if '[' in option and ']' in option and not option.startswith('['):
+                    main_text = option.split('[')[0].strip()
+                    hint = option.split('[')[1].split(']')[0]
+                    menu_lines.append(f"  [cyan]{letter}.[/cyan] {main_text:28} [dim]- {hint}[/dim]")
+                else:
+                    menu_lines.append(f"  [cyan]{letter}.[/cyan] {option}")
+
         if include_quit:
             menu_lines.append(f"  [dim]q. Quit[/dim]")
 
@@ -177,6 +207,17 @@ def print_menu(title: str, options: List[str], include_quit: bool = True):
                 print(f"  {i}. {main_text:28} - {hint}")
             else:
                 print(f"  {i}. {option}")
+
+        # Letter items
+        if letter_items:
+            for letter, option in letter_items.items():
+                if '[' in option and ']' in option and not option.startswith('['):
+                    main_text = option.split('[')[0].strip()
+                    hint = option.split('[')[1].split(']')[0]
+                    print(f"  {letter}. {main_text:28} - {hint}")
+                else:
+                    print(f"  {letter}. {option}")
+
         if include_quit:
             print(f"  q. Quit")
         print()
@@ -231,6 +272,14 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
     exit_nodes = ops.list_exit_nodes()
     exit_hint = f"manage {len(exit_nodes)} exit nodes" if exit_nodes else "add internet egress"
 
+    # Check for alerts
+    try:
+        alert_mgr = AlertManager(db_path)
+        alert_count = len(alert_mgr.get_active_alerts(limit=100))
+        alert_hint = f"{alert_count} active alerts" if alert_count > 0 else "all clear"
+    except:
+        alert_hint = "monitoring"
+
     print_menu(
         f"WIREGUARD FRIEND v{VERSION} ({BUILD_NAME})",
         [
@@ -243,11 +292,12 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
             "Extramural [manage commercial VPN configs]",
             "Generate Configs [create .conf files from database]",
             "Deploy Configs [push configs via SSH]",
-        ]
+        ],
+        letter_items={'d': f"Dashboard [{alert_hint}]", 'o': "Operations [security, backup, compliance]"}
     )
 
     print("  Select: ", end="", flush=True)
-    choice = get_keypress_choice(9)
+    choice = get_keypress_choice(9, letter_map={'d': 10, 'o': 11})
 
     # Quit
     if choice is None:
@@ -292,6 +342,14 @@ def main_menu(db: WireGuardDBv2, db_path: str = 'wireguard.db') -> bool:
     elif choice == 9:
         # Deploy Configs
         deploy_configs_menu(db, db_path)
+
+    elif choice == 10:
+        # Dashboard - monitoring, topology, alerts
+        show_dashboard_menu(db_path)
+
+    elif choice == 11:
+        # Operations - security, backup, compliance
+        show_operations_menu(db_path)
 
     return True
 

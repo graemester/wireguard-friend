@@ -22,8 +22,8 @@ import sys
 import argparse
 from pathlib import Path
 
-VERSION = "1.1.0"
-BUILD_NAME = "merlin"  # Exit Node Support
+VERSION = "1.4.0"
+BUILD_NAME = "peregrine"  # Phase 4 Experience Complete
 
 # Add v1 to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -50,6 +50,8 @@ from v1.cli.tui import run_tui
 from v1.cli.ssh_setup import ssh_setup
 from v1.cli import extramural
 from v1.config_detector import ConfigDetector
+from v1.rest_api import run_api_server, APIConfig
+from v1.web_dashboard import run_dashboard_server, DashboardConfig
 
 
 def main():
@@ -310,6 +312,57 @@ Examples:
     em_switch = extramural_sub.add_parser('switch-peer', help='Switch active server endpoint')
     em_switch.add_argument('config', help='Config spec (peer/sponsor or config_id)')
     em_switch.add_argument('peer_name', help='Name of peer to make active')
+
+    # api - REST API server
+    api_parser = subparsers.add_parser('api',
+        help='Start REST API server for programmatic access',
+        description='''
+Start the REST API server for programmatic access.
+
+The API provides endpoints for:
+  - Network status and health checks
+  - Peer listing, creation, and management
+  - Key rotation
+  - Configuration generation
+  - Deployment triggers
+  - Audit log access
+  - Prometheus metrics
+
+Examples:
+  wg-friend api                           # Start on localhost:8080
+  wg-friend api --port 9000               # Different port
+  wg-friend api --host 0.0.0.0 --port 443 # Public with SSL
+  wg-friend api --token secret123         # With authentication
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    api_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+    api_parser.add_argument('--port', type=int, default=8080, help='Port to listen on (default: 8080)')
+    api_parser.add_argument('--token', help='API authentication token')
+    api_parser.add_argument('--ssl-cert', help='SSL certificate file')
+    api_parser.add_argument('--ssl-key', help='SSL private key file')
+    api_parser.add_argument('--no-cors', action='store_true', help='Disable CORS headers')
+
+    # dashboard - Web dashboard
+    dashboard_parser = subparsers.add_parser('dashboard',
+        help='Start web-based dashboard',
+        description='''
+Start a web-based dashboard for monitoring your WireGuard network.
+
+Features:
+  - Real-time network status
+  - Peer list with filtering
+  - Alert monitoring
+  - Interactive topology view
+
+Examples:
+  wg-friend dashboard                     # Start on localhost:8080
+  wg-friend dashboard --port 9000         # Different port
+  wg-friend dashboard --host 0.0.0.0      # Listen on all interfaces
+        ''',
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    dashboard_parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+    dashboard_parser.add_argument('--port', type=int, default=8080, help='Port to listen on (default: 8080)')
+    dashboard_parser.add_argument('--refresh', type=int, default=30, help='Refresh interval in seconds (default: 30)')
 
     # Parse args
     args = parser.parse_args()
@@ -579,6 +632,27 @@ Examples:
             else:
                 extramural_parser.print_help()
                 return 1
+        elif args.command == 'api':
+            config = APIConfig(
+                host=args.host,
+                port=args.port,
+                db_path=args.db,
+                api_token=args.token,
+                enable_cors=not args.no_cors,
+                ssl_cert=args.ssl_cert,
+                ssl_key=args.ssl_key,
+            )
+            run_api_server(config)
+            return 0
+        elif args.command == 'dashboard':
+            config = DashboardConfig(
+                host=args.host,
+                port=args.port,
+                db_path=args.db,
+                refresh_interval=args.refresh,
+            )
+            run_dashboard_server(config)
+            return 0
         else:
             parser.print_help()
             return 1
