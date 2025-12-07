@@ -100,7 +100,8 @@ def extract_entity_details(entity: DetectedEntity) -> None:
         value = value.strip()
 
         if key == 'address':
-            entity.addresses = [a.strip() for a in value.split(',')]
+            # Append to addresses list (config may have multiple Address lines)
+            entity.addresses.extend([a.strip() for a in value.split(',')])
         elif key == 'privatekey':
             entity.private_key = value
             try:
