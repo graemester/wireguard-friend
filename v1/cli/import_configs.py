@@ -47,6 +47,78 @@ def rprint(msg: str = "", style: str = None):
         print(plain)
 
 
+def validate_endpoint(endpoint: str) -> bool:
+    """
+    Validate endpoint format (hostname:port or IP:port).
+
+    Args:
+        endpoint: String in format "host:port" or "host" (port optional)
+
+    Returns:
+        True if valid format, False otherwise
+    """
+    if not endpoint:
+        return False
+
+    # Split host and optional port
+    if ':' in endpoint:
+        parts = endpoint.rsplit(':', 1)
+        if len(parts) != 2:
+            return False
+        host, port = parts
+        # Validate port is numeric and in valid range
+        try:
+            port_num = int(port)
+            if port_num < 1 or port_num > 65535:
+                return False
+        except ValueError:
+            return False
+    else:
+        host = endpoint
+
+    # Validate host is not empty and has reasonable characters
+    if not host:
+        return False
+
+    # Allow alphanumeric, dots, hyphens (valid for hostnames and IPs)
+    import re
+    if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9.\-]*[a-zA-Z0-9])?$', host):
+        return False
+
+    return True
+
+
+def prompt_for_endpoint(hostname: str) -> str:
+    """
+    Prompt user for coordination server endpoint.
+
+    Args:
+        hostname: CS hostname for display context
+
+    Returns:
+        Validated endpoint string (host:port format)
+    """
+    rprint(f"\n  [yellow]Note:[/yellow] Coordination server requires a public endpoint")
+    rprint(f"  This is the address clients use to connect (e.g., cs.example.com:51820)")
+
+    while True:
+        endpoint = input(f"  Enter endpoint for '{hostname}': ").strip()
+
+        if not endpoint:
+            rprint("  [red]Endpoint is required[/red]")
+            continue
+
+        # Add default port if not specified
+        if ':' not in endpoint:
+            endpoint = f"{endpoint}:51820"
+            rprint(f"  [dim]Using default port: {endpoint}[/dim]")
+
+        if validate_endpoint(endpoint):
+            return endpoint
+        else:
+            rprint("  [red]Invalid format. Use hostname:port or IP:port[/red]")
+
+
 def separate_allowed_ips(allowed_ips: List[str]) -> tuple:
     """
     Separate AllowedIPs into VPN IPs and advertised networks.
@@ -275,6 +347,11 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
     if not hostname:
         hostname = 'coordination-server'
 
+    # Don't prompt here - endpoint will be extracted from SNR/remote configs
+    # during their import (they have the CS endpoint in their [Peer] section)
+    if not endpoint:
+        endpoint = 'PENDING'  # Will be updated from other configs
+
     # Insert into database
     with db._connection() as conn:
         cursor = conn.cursor()
@@ -291,7 +368,7 @@ def import_coordination_server(config_path: Path, db: WireGuardDBv2, hostname: s
             permanent_guid,
             public_key,
             hostname,
-            endpoint or 'UNKNOWN',  # TODO: prompt
+            endpoint,
             listen_port,
             interface.get('mtu'),
             network_ipv4,
@@ -526,7 +603,7 @@ def import_subnet_router(config_path: Path, db: WireGuardDBv2, hostname: str = N
             cursor.execute("""
                 UPDATE coordination_server
                 SET endpoint = ?
-                WHERE id = ? AND (endpoint IS NULL OR endpoint = 'UNKNOWN')
+                WHERE id = ? AND (endpoint IS NULL OR endpoint IN ('UNKNOWN', 'PENDING'))
             """, (cs_endpoint, cs_id))
 
             if cursor.rowcount > 0:
@@ -801,7 +878,7 @@ def import_remote(config_path: Path, db: WireGuardDBv2, hostname: str = None,
             cursor.execute("""
                 UPDATE coordination_server
                 SET endpoint = ?
-                WHERE id = ? AND (endpoint IS NULL OR endpoint = 'UNKNOWN')
+                WHERE id = ? AND (endpoint IS NULL OR endpoint IN ('UNKNOWN', 'PENDING'))
             """, (cs_endpoint, cs_id))
 
             if cursor.rowcount > 0:
@@ -1132,6 +1209,28 @@ def run_import(args) -> int:
             except Exception as e:
                 peer_name = cs_peer.get('hostname', pubkey[:20] + '...')
                 rprint(f"\n  [red]Error:[/red] creating provisional remote {peer_name}: {e}")
+
+        # Check if CS endpoint was extracted from other configs
+        # If still PENDING, prompt user now (after all configs imported)
+        with db._connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT endpoint FROM coordination_server WHERE id = ?", (cs_id,))
+            row = cursor.fetchone()
+            cs_endpoint = row[0] if row else 'PENDING'
+
+            if cs_endpoint == 'PENDING':
+                rprint()
+                rprint("[yellow]Note:[/yellow] CS endpoint not found in imported configs")
+                if sys.stdin.isatty():
+                    endpoint = prompt_for_endpoint('coordination-server')
+                    cursor.execute("""
+                        UPDATE coordination_server SET endpoint = ? WHERE id = ?
+                    """, (endpoint, cs_id))
+                else:
+                    cursor.execute("""
+                        UPDATE coordination_server SET endpoint = 'UNKNOWN' WHERE id = ?
+                    """, (cs_id,))
+                    rprint("  [dim]Set to 'UNKNOWN' - update later via maintenance mode[/dim]")
 
         # Record initial state snapshot
         state_id = record_import(str(db_path), db, len(cs_peers))

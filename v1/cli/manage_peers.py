@@ -220,8 +220,8 @@ def get_all_peers(db: WireGuardDBv2) -> List[PeerInfo]:
     return peers
 
 
-def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
-    """Render the peer list with optional filtering"""
+def render_peer_list(peers: List[PeerInfo], filter_text: str = "", max_lines: int = None) -> str:
+    """Render the peer list with optional filtering and height limit"""
     # Filter peers
     if filter_text:
         filter_lower = filter_text.lower()
@@ -235,6 +235,14 @@ def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
     remotes = [p for p in filtered if p.peer_type == 'remote']
     exit_nodes = [p for p in filtered if p.peer_type == 'exit_node']
 
+    # Determine if we need compact mode
+    # Each peer in normal mode = 2 lines, each section header = 2 lines
+    total_peers = len(filtered)
+    estimated_lines = total_peers * 2 + 8  # headers + spacing
+
+    # Use compact mode if we'd exceed max_lines
+    compact = max_lines is not None and estimated_lines > max_lines
+
     # Build display with sequential numbering
     lines = []
     peer_map = {}  # number -> peer
@@ -243,25 +251,29 @@ def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
     if cs_peers:
         lines.append("")
         lines.append("[COORDINATION SERVER]")
-        lines.append("")
         for p in cs_peers:
             peer_map[num] = p
-            lines.append(f"  [{num:2}] {p.hostname}")
-            lines.append(f"       IP: {p.ipv4_address:20}  Key: {p.public_key[:24]}...")
+            if compact:
+                lines.append(f"  [{num:2}] {p.hostname:20} {p.ipv4_address}")
+            else:
+                lines.append(f"  [{num:2}] {p.hostname}")
+                lines.append(f"       IP: {p.ipv4_address:20}  Key: {p.public_key[:24]}...")
             num += 1
 
     if routers:
         lines.append("")
         lines.append(f"[SUBNET ROUTERS] ({len(routers)})")
-        lines.append("")
-        for i, p in enumerate(routers):
+        for p in routers:
             peer_map[num] = p
-            is_last = (i == len(routers) - 1)
-            connector = " L" if is_last else " |"
-            lines.append(f"  [{num:2}] {p.hostname}")
-            nets = p.extras.get('advertised_networks', [])
-            net_str = ', '.join(n[0] for n in nets[:2]) if nets else 'none'
-            lines.append(f"       IP: {p.ipv4_address:20}  Nets: {net_str}")
+            if compact:
+                nets = p.extras.get('advertised_networks', [])
+                net_str = nets[0][0] if nets else ''
+                lines.append(f"  [{num:2}] {p.hostname:20} {p.ipv4_address:18} {net_str}")
+            else:
+                lines.append(f"  [{num:2}] {p.hostname}")
+                nets = p.extras.get('advertised_networks', [])
+                net_str = ', '.join(n[0] for n in nets[:2]) if nets else 'none'
+                lines.append(f"       IP: {p.ipv4_address:20}  Nets: {net_str}")
             num += 1
 
     if remotes:
@@ -272,28 +284,32 @@ def render_peer_list(peers: List[PeerInfo], filter_text: str = "") -> str:
             lines.append(f"[REMOTE CLIENTS] ({len(remotes) - provisional_count} full, {provisional_count} provisional)")
         else:
             lines.append(f"[REMOTE CLIENTS] ({len(remotes)})")
-        lines.append("")
-        for i, p in enumerate(remotes):
+        for p in remotes:
             peer_map[num] = p
             access = p.extras.get('access_level', 'unknown')
-            status = " [provisional]" if p.extras.get('is_provisional') else ""
+            status = " [prov]" if p.extras.get('is_provisional') else ""
             exit_info = ""
             if p.extras.get('exit_node_info'):
                 exit_info = f" -> {p.extras['exit_node_info']['hostname']}"
-            lines.append(f"  [{num:2}] {p.hostname}{status}{exit_info}")
-            lines.append(f"       IP: {p.ipv4_address:20}  Access: {access}")
+            if compact:
+                lines.append(f"  [{num:2}] {p.hostname:20} {p.ipv4_address:18}{status}")
+            else:
+                lines.append(f"  [{num:2}] {p.hostname}{status}{exit_info}")
+                lines.append(f"       IP: {p.ipv4_address:20}  Access: {access}")
             num += 1
 
     if exit_nodes:
         lines.append("")
         lines.append(f"[EXIT NODES] ({len(exit_nodes)})")
-        lines.append("")
-        for i, p in enumerate(exit_nodes):
+        for p in exit_nodes:
             peer_map[num] = p
-            remote_count = p.extras.get('remote_count', 0)
-            client_str = f"{remote_count} clients" if remote_count != 1 else "1 client"
-            lines.append(f"  [{num:2}] {p.hostname}")
-            lines.append(f"       Endpoint: {p.extras.get('endpoint', 'unknown')}:{p.extras.get('listen_port', 51820)}  ({client_str})")
+            if compact:
+                lines.append(f"  [{num:2}] {p.hostname:20} {p.extras.get('endpoint', 'unknown')}")
+            else:
+                remote_count = p.extras.get('remote_count', 0)
+                client_str = f"{remote_count} clients" if remote_count != 1 else "1 client"
+                lines.append(f"  [{num:2}] {p.hostname}")
+                lines.append(f"       Endpoint: {p.extras.get('endpoint', 'unknown')}:{p.extras.get('listen_port', 51820)}  ({client_str})")
             num += 1
 
     if not filtered:
@@ -315,8 +331,18 @@ def show_peer_list(db: WireGuardDBv2) -> Optional[PeerInfo]:
 
     while True:
         clear_screen()
-        # Render list
-        list_content, peer_map = render_peer_list(peers, filter_text)
+
+        # Get terminal height and calculate available space
+        # Panel uses ~6 lines (borders, title, subtitle, padding, prompt)
+        if RICH_AVAILABLE:
+            term_height = console.height
+        else:
+            import shutil
+            term_height = shutil.get_terminal_size().lines
+        available_lines = term_height - 8  # Leave room for panel chrome + prompt
+
+        # Render list with height limit
+        list_content, peer_map = render_peer_list(peers, filter_text, max_lines=available_lines)
         total = len(peers)
         shown = len(peer_map)
 
