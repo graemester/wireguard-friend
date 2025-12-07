@@ -248,8 +248,15 @@ class WireGuardFriendAPI:
         finally:
             conn.close()
 
+    # Columns that should never be exposed via API (contain sensitive key material)
+    SENSITIVE_COLUMNS = {'private_key', 'preshared_key', 'new_private_key', 'local_private_key'}
+
+    def _filter_sensitive(self, row_dict: Dict) -> Dict:
+        """Remove sensitive columns (private keys) from API response."""
+        return {k: v for k, v in row_dict.items() if k not in self.SENSITIVE_COLUMNS}
+
     def get_peer(self, peer_type: str, peer_id: int) -> Dict:
-        """Get peer details."""
+        """Get peer details (excludes private keys for security)."""
         conn = self._get_conn()
         try:
             table_map = {
@@ -266,7 +273,8 @@ class WireGuardFriendAPI:
             if not row:
                 raise APIError(f"Peer not found: {peer_type}/{peer_id}", 404)
 
-            return {"peer": dict(row)}
+            # Filter out private keys - use /config endpoint for full config
+            return {"peer": self._filter_sensitive(dict(row))}
         finally:
             conn.close()
 

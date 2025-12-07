@@ -18,6 +18,7 @@ from typing import List, Dict, Optional
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from v1.schema_semantic import WireGuardDBv2
+from v1.encryption import decrypt_value
 
 
 def generate_cs_config(db: WireGuardDBv2) -> str:
@@ -68,7 +69,7 @@ def generate_cs_config(db: WireGuardDBv2) -> str:
     # [Interface]
     lines.append("[Interface]")
     lines.append(f"Address = {cs['ipv4_address']}, {cs['ipv6_address']}")
-    lines.append(f"PrivateKey = {cs['private_key']}")
+    lines.append(f"PrivateKey = {decrypt_value(cs['private_key'])}")
     lines.append(f"ListenPort = {cs['listen_port']}")
 
     if cs.get('mtu'):
@@ -133,7 +134,7 @@ def generate_cs_config(db: WireGuardDBv2) -> str:
 
         # PresharedKey (if configured)
         if remote.get('preshared_key'):
-            lines.append(f"PresharedKey = {remote['preshared_key']}")
+            lines.append(f"PresharedKey = {decrypt_value(remote['preshared_key'])}")
 
         # AllowedIPs
         allowed_ips = [remote['ipv4_address'], remote['ipv6_address']]
@@ -195,7 +196,7 @@ def generate_router_config(db: WireGuardDBv2, router_id: int) -> str:
     # [Interface]
     lines.append("[Interface]")
     lines.append(f"Address = {router['ipv4_address']}, {router['ipv6_address']}")
-    lines.append(f"PrivateKey = {router['private_key']}")
+    lines.append(f"PrivateKey = {decrypt_value(router['private_key'])}")
 
     if router.get('mtu'):
         lines.append(f"MTU = {router['mtu']}")
@@ -274,7 +275,7 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
     # [Interface]
     lines.append("[Interface]")
     lines.append(f"Address = {remote['ipv4_address']}, {remote['ipv6_address']}")
-    lines.append(f"PrivateKey = {remote['private_key']}")
+    lines.append(f"PrivateKey = {decrypt_value(remote['private_key'])}")
 
     if remote.get('dns_servers'):
         lines.append(f"DNS = {remote['dns_servers']}")
@@ -293,7 +294,7 @@ def generate_remote_config(db: WireGuardDBv2, remote_id: int) -> str:
 
         # PresharedKey (symmetric - same key on both sides)
         if remote.get('preshared_key'):
-            lines.append(f"PresharedKey = {remote['preshared_key']}")
+            lines.append(f"PresharedKey = {decrypt_value(remote['preshared_key'])}")
 
         lines.append(f"Endpoint = {cs['endpoint']}:{cs['listen_port']}")
 
@@ -360,7 +361,7 @@ def generate_exit_node_config(db: WireGuardDBv2, exit_node_id: int) -> str:
     # [Interface]
     lines.append("[Interface]")
     lines.append(f"Address = {exit_node['ipv4_address']}, {exit_node['ipv6_address']}")
-    lines.append(f"PrivateKey = {exit_node['private_key']}")
+    lines.append(f"PrivateKey = {decrypt_value(exit_node['private_key'])}")
     lines.append(f"ListenPort = {exit_node['listen_port']}")
 
     # PostUp/PostDown for NAT and IP forwarding
@@ -386,7 +387,7 @@ def generate_exit_node_config(db: WireGuardDBv2, exit_node_id: int) -> str:
         lines.append(f"PublicKey = {remote['current_public_key']}")
 
         if remote.get('preshared_key'):
-            lines.append(f"PresharedKey = {remote['preshared_key']}")
+            lines.append(f"PresharedKey = {decrypt_value(remote['preshared_key'])}")
 
         # AllowedIPs = just this remote's VPN addresses
         lines.append(f"AllowedIPs = {remote['ipv4_address']}, {remote['ipv6_address']}")

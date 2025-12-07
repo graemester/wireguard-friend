@@ -14,6 +14,8 @@ import logging
 from pathlib import Path
 from typing import Optional, List
 
+from v1.encryption import decrypt_value
+
 logger = logging.getLogger(__name__)
 
 
@@ -93,7 +95,7 @@ class ExtramuralConfigGenerator:
 
         # [Interface] section
         lines.append("[Interface]")
-        lines.append(f"PrivateKey = {config.local_private_key}")
+        lines.append(f"PrivateKey = {decrypt_value(config.local_private_key)}")
 
         # Address
         addresses = []
@@ -136,7 +138,7 @@ class ExtramuralConfigGenerator:
         lines.append(f"PublicKey = {active_peer.public_key}")
 
         if active_peer.preshared_key:
-            lines.append(f"PresharedKey = {active_peer.preshared_key}")
+            lines.append(f"PresharedKey = {decrypt_value(active_peer.preshared_key)}")
 
         if active_peer.endpoint:
             lines.append(f"Endpoint = {active_peer.endpoint}")

@@ -43,6 +43,8 @@ try:
 except ImportError:
     PARAMIKO_AVAILABLE = False
 
+from v1.encryption import decrypt_value
+
 
 class BackupType(Enum):
     """Types of backups."""
@@ -433,7 +435,7 @@ class DisasterRecovery:
         # Interface section
         lines.append("[Interface]")
         if entity.get('private_key'):
-            lines.append(f"PrivateKey = {entity['private_key']}")
+            lines.append(f"PrivateKey = {decrypt_value(entity['private_key'])}")
         # Handle different column naming conventions
         vpn_ip = entity.get('vpn_ip') or entity.get('ipv4_address', '').replace('/32', '')
         if vpn_ip:
@@ -556,7 +558,7 @@ class DisasterRecovery:
                         "entity_type": entity_type,
                         "hostname": row['hostname'],
                         "guid": row['guid'],
-                        "private_key": row['private_key'],
+                        "private_key": decrypt_value(row['private_key']),
                     }
 
             # Encrypt and save
@@ -652,8 +654,18 @@ class DisasterRecovery:
                         raise ValueError("No database in backup")
 
                 elif mode == RestoreMode.MERGE:
-                    # Merge with existing - TODO: implement merge logic
-                    warnings.append("Merge mode not fully implemented")
+                    # Merge backup data with existing database
+                    db_backup = temp_path / "wireguard_friend.db"
+                    if db_backup.exists():
+                        merge_result = self._merge_databases(db_backup)
+                        entities_restored = merge_result['merged']
+                        if merge_result['conflicts']:
+                            for conflict in merge_result['conflicts']:
+                                warnings.append(conflict)
+                        if merge_result['skipped']:
+                            warnings.append(f"Skipped {merge_result['skipped']} entities (current is newer)")
+                    else:
+                        raise ValueError("No database in backup")
 
                 elif mode == RestoreMode.KEYS_ONLY:
                     # Restore just private keys
@@ -721,6 +733,139 @@ class DisasterRecovery:
 
         finally:
             conn.close()
+
+    def _merge_databases(self, backup_db_path: Path) -> dict:
+        """
+        Merge backup database with current database.
+
+        Strategy:
+        - Match entities by permanent_guid (unique identifier)
+        - If GUID not in current DB: INSERT from backup
+        - If GUID exists: compare updated_at, keep newer version
+        - Preserve current data not in backup
+
+        Args:
+            backup_db_path: Path to backup database file
+
+        Returns:
+            Dict with 'merged' (counts by entity type),
+            'conflicts' (list of conflict messages),
+            'skipped' (count of entities skipped due to being older)
+        """
+        merged = {
+            'coordination_server': 0,
+            'subnet_router': 0,
+            'remote': 0,
+            'exit_node': 0
+        }
+        conflicts = []
+        skipped = 0
+
+        # Open both databases
+        backup_conn = sqlite3.connect(backup_db_path)
+        backup_conn.row_factory = sqlite3.Row
+        current_conn = self._get_conn()
+
+        try:
+            # Entity tables to merge (table_name, has_permanent_guid)
+            entity_tables = [
+                ('coordination_server', True),
+                ('subnet_router', True),
+                ('remote', True),
+                ('exit_node', True),
+            ]
+
+            for table_name, has_guid in entity_tables:
+                # Check if table exists in backup
+                backup_tables = backup_conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                    (table_name,)
+                ).fetchone()
+
+                if not backup_tables:
+                    continue
+
+                # Get all entities from backup
+                backup_entities = backup_conn.execute(
+                    f"SELECT * FROM {table_name}"
+                ).fetchall()
+
+                for backup_row in backup_entities:
+                    backup_entity = dict(backup_row)
+                    guid = backup_entity.get('permanent_guid')
+
+                    if not guid:
+                        # Entity has no GUID, skip
+                        conflicts.append(f"{table_name}: Entity without GUID skipped")
+                        continue
+
+                    # Check if exists in current DB
+                    current_entity = current_conn.execute(
+                        f"SELECT * FROM {table_name} WHERE permanent_guid = ?",
+                        (guid,)
+                    ).fetchone()
+
+                    if current_entity is None:
+                        # New entity - INSERT
+                        columns = list(backup_entity.keys())
+                        # Exclude 'id' to let it auto-increment
+                        columns = [c for c in columns if c != 'id']
+                        values = [backup_entity[c] for c in columns]
+
+                        placeholders = ', '.join(['?' for _ in columns])
+                        column_names = ', '.join(columns)
+
+                        current_conn.execute(
+                            f"INSERT INTO {table_name} ({column_names}) VALUES ({placeholders})",
+                            values
+                        )
+                        merged[table_name] += 1
+                    else:
+                        # Existing entity - compare timestamps
+                        current_dict = dict(current_entity)
+                        backup_updated = backup_entity.get('updated_at', '')
+                        current_updated = current_dict.get('updated_at', '')
+
+                        # Parse timestamps for comparison
+                        try:
+                            backup_time = datetime.fromisoformat(backup_updated) if backup_updated else datetime.min
+                            current_time = datetime.fromisoformat(current_updated) if current_updated else datetime.min
+                        except (ValueError, TypeError):
+                            backup_time = datetime.min
+                            current_time = datetime.min
+
+                        if backup_time > current_time:
+                            # Backup is newer - UPDATE
+                            columns = [c for c in backup_entity.keys() if c not in ('id', 'permanent_guid')]
+                            set_clause = ', '.join([f"{c} = ?" for c in columns])
+                            values = [backup_entity[c] for c in columns]
+                            values.append(guid)
+
+                            current_conn.execute(
+                                f"UPDATE {table_name} SET {set_clause} WHERE permanent_guid = ?",
+                                values
+                            )
+                            merged[table_name] += 1
+                        else:
+                            # Current is newer or same - skip
+                            skipped += 1
+
+            current_conn.commit()
+
+        except Exception as e:
+            current_conn.rollback()
+            conflicts.append(f"Merge error: {str(e)}")
+            raise
+
+        finally:
+            backup_conn.close()
+            current_conn.close()
+
+        return {
+            'merged': merged,
+            'conflicts': conflicts,
+            'skipped': skipped
+        }
 
     def _record_restore(self, backup_id: str, mode: RestoreMode,
                         entities: dict, success: bool, error: str):
