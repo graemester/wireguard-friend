@@ -124,21 +124,58 @@ class CommentExtractor:
 
         return comments
 
+    def _find_comment_start(self, line: str) -> int:
+        """
+        Find index of # that starts a comment (not inside quotes).
+
+        Handles:
+        - Double quotes: "string with # inside"
+        - Single quotes: 'string with # inside'
+        - Escaped quotes: "string with \\" escaped"
+
+        Returns:
+            Index of comment-starting #, or -1 if no comment found.
+        """
+        in_single_quote = False
+        in_double_quote = False
+        escape_next = False
+
+        for i, char in enumerate(line):
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"' and not in_single_quote:
+                in_double_quote = not in_double_quote
+            elif char == "'" and not in_double_quote:
+                in_single_quote = not in_single_quote
+            elif char == '#' and not in_single_quote and not in_double_quote:
+                return i
+
+        return -1
+
     def _extract_inline_comment(self, line: str, line_num: int) -> Optional[str]:
         """
-        Extract inline comment from a line.
+        Extract inline comment from a line, handling quoted strings.
 
         Example:
             ListenPort = 51820  # Main WireGuard port
             Returns: "Main WireGuard port"
+
+            Description = "Test # value"  # actual comment
+            Returns: "actual comment"
         """
-        # Simple approach: look for # outside of quotes
-        # TODO: Handle # inside quoted strings properly
-        parts = line.split('#', 1)
-        if len(parts) > 1:
-            # Make sure there's actual content before the #
-            if parts[0].strip():
-                return parts[1].strip()
+        comment_start = self._find_comment_start(line)
+
+        if comment_start > 0:  # Must have content before #
+            before_comment = line[:comment_start].strip()
+            if before_comment:  # Ensure there's actual content
+                return line[comment_start + 1:].strip()
+
         return None
 
     def _get_indent_level(self, line: str) -> int:

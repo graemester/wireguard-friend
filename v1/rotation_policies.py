@@ -35,6 +35,8 @@ Usage:
 import sqlite3
 import json
 import logging
+import shutil
+import tempfile
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
@@ -851,10 +853,97 @@ class RotationPolicyManager:
 
         # Auto-deploy if requested and any rotations succeeded
         if auto_deploy and any(r.success for r in results):
-            # TODO: Integrate with deploy module
-            pass
+            deploy_result = self._deploy_after_rotation()
+            if deploy_result:
+                logger.info(f"Auto-deploy completed: {deploy_result}")
+            else:
+                logger.warning("Auto-deploy failed or skipped")
 
         return results
+
+    def _deploy_after_rotation(self) -> Optional[Dict[str, Any]]:
+        """
+        Generate and deploy configs after key rotation.
+
+        Returns:
+            Dict with deployment results, or None if deployment failed/skipped
+        """
+        try:
+            # Import deploy modules here to avoid circular imports
+            from v1.schema_semantic import WireGuardDBv2
+            from v1.cli.config_generator import (
+                generate_cs_config,
+                generate_router_config,
+                generate_remote_config,
+                generate_exit_node_config
+            )
+            from v1.cli.deploy import deploy_all
+
+            db = WireGuardDBv2(self.db_path)
+
+            # Create temp directory for generated configs
+            output_dir = Path(tempfile.mkdtemp(prefix='wgf-rotation-deploy-'))
+
+            try:
+                # Generate all configs
+                configs_written = []
+
+                # Coordination server config
+                cs_config = generate_cs_config(db)
+                cs_file = output_dir / "coordination.conf"
+                cs_file.write_text(cs_config)
+                configs_written.append('coordination.conf')
+
+                # Subnet router configs
+                with db._connection() as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id, hostname FROM subnet_router")
+                    for row in cursor.fetchall():
+                        router_id, hostname = row['id'], row['hostname']
+                        config = generate_router_config(db, router_id)
+                        config_file = output_dir / f"{hostname}.conf"
+                        config_file.write_text(config)
+                        configs_written.append(f"{hostname}.conf")
+
+                    # Remote configs
+                    cursor.execute("SELECT id, hostname FROM remote")
+                    for row in cursor.fetchall():
+                        remote_id, hostname = row['id'], row['hostname']
+                        config = generate_remote_config(db, remote_id)
+                        config_file = output_dir / f"{hostname}.conf"
+                        config_file.write_text(config)
+                        configs_written.append(f"{hostname}.conf")
+
+                    # Exit node configs
+                    cursor.execute("SELECT id, hostname FROM exit_node")
+                    for row in cursor.fetchall():
+                        exit_id, hostname = row['id'], row['hostname']
+                        config = generate_exit_node_config(db, exit_id)
+                        config_file = output_dir / f"{hostname}.conf"
+                        config_file.write_text(config)
+                        configs_written.append(f"{hostname}.conf")
+
+                logger.info(f"Generated {len(configs_written)} configs for deployment")
+
+                # Deploy to all hosts (restart to apply new keys)
+                failures = deploy_all(db, output_dir, restart=True)
+
+                return {
+                    'configs_generated': len(configs_written),
+                    'deployment_failures': failures,
+                    'success': failures == 0
+                }
+
+            finally:
+                # Clean up temp directory
+                shutil.rmtree(output_dir, ignore_errors=True)
+
+        except ImportError as e:
+            logger.error(f"Deploy module not available: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Deployment failed: {e}")
+            return None
 
     def get_compliance_summary(self) -> Dict[str, Any]:
         """
